@@ -9,19 +9,10 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes AlwaysPullImages.
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes AlwaysPullImages.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -- "--enable-admission-plugins" | grep -q "AlwaysPullImages"; then
 		a_output+=(" - Check Passed: AlwaysPullImages is enabled")
 	else
-		a_output2+=(" - Check Failed: AlwaysPullImages is not enabled")
+		a_output2+=(" - Check Failed: AlwaysPullImages is NOT enabled")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

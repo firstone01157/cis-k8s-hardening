@@ -9,16 +9,7 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Fetch hostPID from each pod with get pods -A -o=jsonpath=$'{range .items[*]}{@.metadata.name}: {@.spec.hostPID}\n{end}'
-	##
-	## Command hint: Fetch hostPID from each pod with get pods -A -o=jsonpath=$'{range .items[*]}{@.metadata.name}: {@.spec.hostPID}\n{end}'
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	a_output+=(" - Manual Check: Minimize admission of containers sharing host PID.")
+	a_output+=(" - Manual Check: Minimize admission of containers with hostPID.")
 	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@.spec.hostPID}{\"\\n\"}{end}' | grep true")
 	return 0
 

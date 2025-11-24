@@ -10,17 +10,7 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Where possible, remove the impersonate, bind, and escalate rights from subjects.
-	##
-	## Command hint: Where possible, remove the impersonate, bind, and escalate rights from subjects.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
-	a_output+=(" - Remediation: This is a manual check. Remove unnecessary Bind, Impersonate, or Escalate permissions.")
+	a_output+=(" - Remediation: This is a manual check. Remove impersonate, bind, and escalate rights where possible.")
 	return 0
 }
 

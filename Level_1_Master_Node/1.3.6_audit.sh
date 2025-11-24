@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-controller-manager Verify that RotateKubeletServerCertificate argument exists and is set to true.
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-controller-manager Verify that RotateKubeletServerCertificate argument exists and is set to true.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-controller-manager | grep -v grep | grep -q "RotateKubeletServerCertificate=true"; then
 		a_output+=(" - Check Passed: RotateKubeletServerCertificate is set to true")
 	else

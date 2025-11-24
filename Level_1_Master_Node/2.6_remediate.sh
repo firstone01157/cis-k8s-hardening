@@ -10,19 +10,11 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Edit the etcd pod specification file /etc/kubernetes/manifests/etcd.yaml on the master node and either remove the --peer-auto-tls parameter or set it to false. --peer-auto-tls=false
-	##
-	## Command hint: Edit the etcd pod specification file /etc/kubernetes/manifests/etcd.yaml on the master node and either remove the --peer-auto-tls parameter or set it to false. --peer-auto-tls=false
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/manifests/etcd.yaml"
 	if [ -e "$l_file" ]; then
 		if grep -q "\--peer-auto-tls=true" "$l_file"; then
+			# Backup
+			cp "$l_file" "$l_file.bak_$(date +%s)"
 			# Remove it or set to false (default is false)
 			sed -i 's/--peer-auto-tls=true/--peer-auto-tls=false/g' "$l_file"
 			a_output+=(" - Remediation applied: --peer-auto-tls set to false in $l_file")

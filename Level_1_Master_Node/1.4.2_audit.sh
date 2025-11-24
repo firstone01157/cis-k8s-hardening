@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-scheduler Verify that the --bind-address argument is set to 127.0.0.1
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-scheduler Verify that the --bind-address argument is set to 127.0.0.1
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-scheduler | grep -v grep | grep -q -- "--bind-address=127.0.0.1"; then
 		a_output+=(" - Check Passed: --bind-address is set to 127.0.0.1")
 	else

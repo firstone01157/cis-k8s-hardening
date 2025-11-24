@@ -10,28 +10,21 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Follow the Kubernetes documentation and set up the TLS connection between the apiserver and etcd. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the 
-	##
-	## Command hint: Follow the Kubernetes documentation and set up the TLS connection between the apiserver and etcd. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the master node and set the etcd certificate authority file parameter. --etcd-cafile=<path/to/ca-file>
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
 	if [ -e "$l_file" ]; then
-		if grep -q "\--etcd-cafile" "$l_file"; then
-			a_output+=(" - Remediation not needed: --etcd-cafile is present in $l_file")
-			return 0
+		if grep -q -- "--etcd-cafile" "$l_file"; then
+			a_output+=(" - Remediation not needed: --etcd-cafile is present")
 		else
-			a_output2+=(" - Remediation required: --etcd-cafile missing in $l_file. Please add it manually.")
-			return 1
+			a_output2+=(" - Remediation Required: Please MANUALLY add '--etcd-cafile' to $l_file")
 		fi
 	else
 		a_output+=(" - Remediation not needed: $l_file not found")
+	fi
+
+	if [ "${#a_output2[@]}" -le 0 ]; then
 		return 0
+	else
+		return 1
 	fi
 }
 

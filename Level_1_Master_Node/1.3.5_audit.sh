@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-controller-manager Verify that the --root-ca-file argument exists and is set to a certificate bundle file containing the root ce
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-controller-manager Verify that the --root-ca-file argument exists and is set to a certificate bundle file containing the root certificate for the API server's serving certificate.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-controller-manager | grep -v grep | grep -q -- "--root-ca-file"; then
 		a_output+=(" - Check Passed: --root-ca-file is set")
 	else

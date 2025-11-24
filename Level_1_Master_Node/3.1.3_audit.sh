@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Review user access to the cluster and ensure that users are not making use of bootstrap token authentication.
-	##
-	## Command hint: Review user access to the cluster and ensure that users are not making use of bootstrap token authentication.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--enable-bootstrap-token-auth=true"; then
 		a_output2+=(" - Check Failed: --enable-bootstrap-token-auth is set to true")
 	else

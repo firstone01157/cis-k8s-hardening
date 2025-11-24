@@ -10,17 +10,7 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Configure the Admission Controller to restrict the admission of hostPID containers.
-	##
-	## Command hint: Configure the Admission Controller to restrict the admission of hostPID containers.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
-	a_output+=(" - Remediation: This is a manual check. Remove hostPID: true from pods where not required.")
+	a_output+=(" - Remediation: This is a manual check. Add policies to restrict admission of hostPID containers.")
 	return 0
 }
 
