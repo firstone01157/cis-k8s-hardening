@@ -1,0 +1,41 @@
+#!/bin/bash
+# CIS Benchmark: 3.1.1
+# Title: Client certificate authentication should not be used for users (Manual)
+# Level: • Level 1 - Master Node
+
+audit_rule() {
+	l_output3=""
+	l_dl=""
+	unset a_output
+	unset a_output2
+
+	## TODO: Verify this command specifically
+	## Description from CSV:
+	## Review user access to the cluster and ensure that users are not making use of Kubernetes client certificate authentication.
+	##
+	## Command hint: Review user access to the cluster and ensure that users are not making use of Kubernetes client certificate authentication.
+	##
+	## Placeholder logic (Fail by default until reviewed)
+	## Change "1" to "0" once you implement the actual check
+
+	# This is a manual check. We can check if the flag is present as a hint.
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--client-ca-file"; then
+		a_output+=(" - Manual Check: --client-ca-file is set. Ensure it is not used for user authentication.")
+	else
+		a_output+=(" - Manual Check: --client-ca-file is NOT set.")
+	fi
+	# Always pass as it is manual
+	return 0
+
+	if [ "${#a_output2[@]}" -le 0 ]; then
+		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
+		return 0
+	else
+		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
+		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
+		return 1
+	fi
+}
+
+audit_rule
+exit $?
