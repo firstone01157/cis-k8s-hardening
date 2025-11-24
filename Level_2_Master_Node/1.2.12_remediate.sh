@@ -10,18 +10,21 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Follow the documentation and create ServiceAccount objects as per your environment. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the master node an
-	##
-	## Command hint: Follow the documentation and create ServiceAccount objects as per your environment. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the master node and ensure that the --disable-admission-plugins parameter is set to a value that does not include ServiceAccount.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
-	a_output+=(" - Remediation: Manual intervention required. Remove 'ServiceAccount' from '--disable-admission-plugins' in /etc/kubernetes/manifests/kube-apiserver.yaml")
-	return 0
+	file="/etc/kubernetes/manifests/kube-apiserver.yaml"
+	if [ -f "$file" ]; then
+		if grep -q "\--disable-admission-plugins" "$file" && grep -q "ServiceAccount" "$file"; then
+			cp "$file" "$file.bak_$(date +%s)"
+			# Remove ServiceAccount from the list (handling start, middle, end, or only item)
+			sed -i -E 's/(--disable-admission-plugins=.*)ServiceAccount,/\1/g' "$file"
+			sed -i -E 's/(--disable-admission-plugins=.*),ServiceAccount/\1/g' "$file"
+			sed -i -E 's/(--disable-admission-plugins=.*)ServiceAccount/\1/g' "$file"
+			a_output+=(" - Remediation: Removed ServiceAccount from --disable-admission-plugins in $file")
+		else
+			a_output+=(" - Remediation: ServiceAccount not found in --disable-admission-plugins or flag not set")
+		fi
+	else
+		a_output2+=(" - Remediation Failed: $file not found")
+	fi
 }
 
 remediate_rule

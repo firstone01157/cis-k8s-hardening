@@ -10,21 +10,25 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## If using a Kubelet config file, edit the file to set eventRecordQPS: to an appropriate level.  Internal Only - General If using command line arguments, edit the kubelet service file /etc/systemd/syste
-	##
-	## Command hint: If using a Kubelet config file, edit the file to set eventRecordQPS: to an appropriate level.  Internal Only - General If using command line arguments, edit the kubelet service file /etc/systemd/system/kubelet.service.d/10-kubeadm.conf on each worker node and set the below parameter in KUBELET_ARGS variable. Based on your system, restart the kubelet service. For example: systemctl daemon-reload systemctl restart kubelet.service
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
+	config_file="/var/lib/kubelet/config.yaml"
+	
+	if [ -f "$config_file" ]; then
+		if ! grep -q "eventRecordQPS" "$config_file"; then
+			cp "$config_file" "$config_file.bak_$(date +%s)"
+			# Add eventRecordQPS: 5 to the end of the file (simple append, might need better YAML handling but grep/sed is standard here)
+			echo "eventRecordQPS: 5" >> "$config_file"
+			a_output+=(" - Remediation: Added 'eventRecordQPS: 5' to $config_file")
+			echo "Requires: systemctl daemon-reload && systemctl restart kubelet"
+		else
+			a_output+=(" - Remediation: eventRecordQPS already set in $config_file")
+		fi
+	else
+		a_output2+=(" - Remediation Failed: $config_file not found")
+	fi
 
-	if [ 1 -eq 0 ]; then
-		a_output+=(" - Remediation applied successfully")
+	if [ "${#a_output2[@]}" -le 0 ]; then
 		return 0
 	else
-		a_output2+=(" - Remediation not applied (Logic not yet implemented)")
 		return 1
 	fi
 }

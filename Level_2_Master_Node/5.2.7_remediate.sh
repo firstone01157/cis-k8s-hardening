@@ -4,6 +4,12 @@
 # Level: • Level 2 - Master Node
 # Remediation Script
 
+#!/bin/bash
+# CIS Benchmark: 5.2.7
+# Title: Minimize the admission of root containers (Manual)
+# Level: • Level 2 - Master Node
+# Remediation Script
+
 remediate_rule() {
 	l_output3=""
 	l_dl=""
@@ -20,7 +26,7 @@ remediate_rule() {
 	## Placeholder logic (No-op by default until reviewed)
 	## Change "1" to "0" once you implement the actual remediation
 
-	a_output+=(" - Remediation: This is a manual check. Enforce runAsNonRoot: true in pods/policies.")
+	a_output+=(" - Remediation: Manual intervention required. Enforce 'runAsNonRoot: true' in PodSecurityPolicies, AdmissionPolicies, or workload manifests.")
 	return 0
 }
 

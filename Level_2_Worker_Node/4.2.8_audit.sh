@@ -9,19 +9,24 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on each node: sudo grep "eventRecordQPS" /etc/systemd/system/kubelet.service.d/10- kubeadm.conf or If using command line arguments, kubelet service file is located /etc/syste
-	##
-	## Command hint: Run the following command on each node: sudo grep "eventRecordQPS" /etc/systemd/system/kubelet.service.d/10- kubeadm.conf or If using command line arguments, kubelet service file is located /etc/systemd/system/kubelet.service.d/10-kubelet-args.conf sudo grep "eventRecordQPS" /etc/systemd/system/kubelet.service.d/10-kubelet- args.conf Review the value set for the argument and determine whether this has been set to an appropriate level for the cluster. If the argument does not exist, check that there is a Kubelet config file specified by -- config and review the value in this location. If using command line arguments
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	if [ 1 -eq 0 ]; then
-		a_output+=(" - Check Passed")
+	# Check if eventRecordQPS is set in Kubelet config or arguments
+	config_file="/var/lib/kubelet/config.yaml"
+	
+	if [ -f "$config_file" ]; then
+		if grep -q "eventRecordQPS" "$config_file"; then
+			val=$(grep "eventRecordQPS" "$config_file" | awk '{print $2}')
+			a_output+=(" - Check Passed: eventRecordQPS is set to $val in $config_file")
+		else
+			# Check process arguments if not in config
+			if ps -ef | grep kubelet | grep -v grep | grep -q "\--event-qps"; then
+				val=$(ps -ef | grep kubelet | grep -v grep | grep -oP '(?<=--event-qps=)[^ ]+')
+				a_output+=(" - Check Passed: eventRecordQPS is set to $val via command line argument")
+			else
+				a_output2+=(" - Check Failed: eventRecordQPS is NOT set in $config_file or command line arguments (Default is 5)")
+			fi
+		fi
 	else
-		a_output2+=(" - Check Failed (Logic not yet implemented)")
+		a_output2+=(" - Check Failed: Kubelet config file $config_file not found")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

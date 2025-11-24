@@ -10,18 +10,22 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Follow the Kubernetes documentation and configure NodeRestriction plug-in on kubelets. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the master node
-	##
-	## Command hint: Follow the Kubernetes documentation and configure NodeRestriction plug-in on kubelets. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the master node and set the --enable-admission-plugins parameter to a value that includes NodeRestriction. --enable-admission-plugins=...,NodeRestriction,...
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
-	a_output+=(" - Remediation: Manual intervention required. Add 'NodeRestriction' to '--enable-admission-plugins' in /etc/kubernetes/manifests/kube-apiserver.yaml")
-	return 0
+	file="/etc/kubernetes/manifests/kube-apiserver.yaml"
+	if [ -f "$file" ]; then
+		if grep -q "\--enable-admission-plugins" "$file"; then
+			if ! grep -q "NodeRestriction" "$file"; then
+				cp "$file" "$file.bak_$(date +%s)"
+				sed -i '/--enable-admission-plugins=/ s/$/,NodeRestriction/' "$file"
+				a_output+=(" - Remediation: Added NodeRestriction to --enable-admission-plugins in $file")
+			else
+				a_output+=(" - Remediation: NodeRestriction already present")
+			fi
+		else
+			a_output2+=(" - Remediation: --enable-admission-plugins flag not found. Please add '--enable-admission-plugins=NodeRestriction' manually.")
+		fi
+	else
+		a_output2+=(" - Remediation Failed: $file not found")
+	fi
 }
 
 remediate_rule
