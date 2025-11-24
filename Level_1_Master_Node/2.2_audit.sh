@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the etcd server node: ps -ef | grep etcd Verify that the --client-cert-auth argument is set to true.
-	##
-	## Command hint: Run the following command on the etcd server node: ps -ef | grep etcd Verify that the --client-cert-auth argument is set to true.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep etcd | grep -v grep | grep -q -- "--client-cert-auth=true"; then
 		a_output+=(" - Check Passed: --client-cert-auth is set to true")
 	else

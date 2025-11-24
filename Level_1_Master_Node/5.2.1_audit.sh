@@ -9,16 +9,7 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Review the workloads deployed to the cluster to understand if Pod Security Admission or external admission control systems are in place.
-	##
-	## Command hint: Review the workloads deployed to the cluster to understand if Pod Security Admission or external admission control systems are in place.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	a_output+=(" - Manual Check: Ensure at least one policy control mechanism is in place (e.g., Pod Security Admission).")
+	a_output+=(" - Manual Check: Ensure at least one active policy control mechanism is in place (e.g., Pod Security Admission).")
 	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

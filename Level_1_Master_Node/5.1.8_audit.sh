@@ -9,17 +9,8 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Review the users who have access to cluster roles or roles which provide the impersonate, bind, or escalate privileges.
-	##
-	## Command hint: Review the users who have access to cluster roles or roles which provide the impersonate, bind, or escalate privileges.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	a_output+=(" - Manual Check: Limit use of Bind, Impersonate, and Escalate permissions.")
-	a_output+=(" - Command: kubectl get clusterroles -o=custom-columns=NAME:.metadata.name,VERBS:.rules[*].verbs | grep -E 'bind|impersonate|escalate'")
+	a_output+=(" - Manual Check: Limit use of Bind, Impersonate and Escalate permissions.")
+	a_output+=(" - Command: Review roles with impersonate, bind, or escalate privileges.")
 	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
