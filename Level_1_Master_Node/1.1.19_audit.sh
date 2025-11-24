@@ -9,28 +9,25 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the below command (based on the file location on your system) on the Control Plane node. For example, ls -laR /etc/kubernetes/pki/ Verify that the ownership of all files and directories in this hi
-	##
-	## Command hint: (based on the file location on your system) on the Control Plane node. For example, ls -laR /etc/kubernetes/pki/ Verify that the ownership of all files and directories in this hierarchy is set to root:root.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
+	l_dir="/etc/kubernetes/pki"
+	if [ -d "$l_dir" ]; then
+		# Recursively check ownership
+		# Finding files/dirs NOT owned by root:root
+		# If any output, check failed.
 
-	if [ -d "/etc/kubernetes/pki" ]; then
-		# Check if any file or directory in /etc/kubernetes/pki is NOT owned by root:root
-		if find /etc/kubernetes/pki -not -user root -o -not -group root | grep -q .; then
-			a_output2+=(" - Check Failed: Found files or directories in /etc/kubernetes/pki not owned by root:root")
-			# Optional: List specific files (limited to first 5 to avoid flooding output)
-			while IFS= read -r l_file; do
-				a_output2+=("   * $l_file")
-			done < <(find /etc/kubernetes/pki -not -user root -o -not -group root | head -n 5)
+		# Using find to list non-compliant files
+		l_files=$(find "$l_dir" -not -user root -o -not -group root)
+
+		if [ -z "$l_files" ]; then
+			a_output+=(" - Check Passed: All files and directories in $l_dir are owned by root:root")
 		else
-			a_output+=(" - Check Passed: All files and directories in /etc/kubernetes/pki are owned by root:root")
+			# Limit output to first few
+			l_head=$(echo "$l_files" | head -n 5)
+			a_output2+=(" - Check Failed: Some files/directories in $l_dir are not owned by root:root")
+			a_output2+=("   Examples: $l_head ...")
 		fi
 	else
-		a_output+=(" - Check Passed: /etc/kubernetes/pki directory not found")
+		a_output+=(" - Check Passed: $l_dir not found")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
