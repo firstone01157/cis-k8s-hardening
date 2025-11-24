@@ -9,25 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## On the etcd server node, get the etcd data directory, passed as an argument --data- dir, from the below command: ps -ef | grep etcd Run the below command (based on the etcd data directory found above)
-	##
-	## Command hint: (based on the etcd data directory found above). For example, stat -c %U:%G /var/lib/etcd Verify that the ownership is set to etcd:etcd.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	# Check if /var/lib/etcd exists
-	if [ -d "/var/lib/etcd" ]; then
-		l_owner=$(stat -c %U:%G /var/lib/etcd)
+	l_dir="/var/lib/etcd"
+	if [ -d "$l_dir" ]; then
+		l_owner=$(stat -c %U:%G "$l_dir")
 		if [ "$l_owner" == "etcd:etcd" ]; then
-			a_output+=(" - Check Passed: Ownership on /var/lib/etcd is $l_owner")
+			a_output+=(" - Check Passed: Ownership on $l_dir is $l_owner")
 		else
-			a_output2+=(" - Check Failed: Ownership on /var/lib/etcd is $l_owner (should be etcd:etcd)")
+			a_output2+=(" - Check Failed: Ownership on $l_dir is $l_owner (should be etcd:etcd)")
 		fi
 	else
-		a_output+=(" - Check Passed: /var/lib/etcd directory not found")
+		a_output+=(" - Check Passed: $l_dir directory not found")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

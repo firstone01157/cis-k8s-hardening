@@ -9,16 +9,8 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the below command (based on the file location on your system) on the Control Plane node. For example, stat -c '%a' /etc/kubernetes/pki/*.key Verify that the permissions are 600 or more restrictive
-	##
-	## Command hint: (based on the file location on your system) on the Control Plane node. For example, stat -c '%a' /etc/kubernetes/pki/*.key Verify that the permissions are 600 or more restrictive. or ls -l /etc/kubernetes/pki/*.key Verify that the permissions are -rw------
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	if [ -d "/etc/kubernetes/pki" ]; then
+	l_dir="/etc/kubernetes/pki"
+	if [ -d "$l_dir" ]; then
 		while IFS= read -r -d '' l_file; do
 			l_mode=$(stat -c %a "$l_file")
 			if [ "$l_mode" -le 600 ]; then
@@ -26,13 +18,13 @@ audit_rule() {
 			else
 				a_output2+=(" - Check Failed: Permissions on $l_file are $l_mode (should be 600 or more restrictive)")
 			fi
-		done < <(find /etc/kubernetes/pki -name "*.key" -print0)
+		done < <(find "$l_dir" -name "*.key" -print0)
 		
 		if [ ${#a_output[@]} -eq 0 ] && [ ${#a_output2[@]} -eq 0 ]; then
-             a_output+=(" - Check Passed: No .key files found in /etc/kubernetes/pki")
+             a_output+=(" - Check Passed: No .key files found in $l_dir")
         fi
 	else
-		a_output+=(" - Check Passed: /etc/kubernetes/pki directory not found")
+		a_output+=(" - Check Passed: $l_dir directory not found")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
