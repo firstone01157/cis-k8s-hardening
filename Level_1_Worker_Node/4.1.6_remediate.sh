@@ -10,16 +10,6 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Run the below command (based on the file location on your system) on the each worker node. For example, chown root:root /etc/kubernetes/kubelet.conf
-	##
-	## Command hint: (based on the file location on your system) on the each worker node. For example, chown root:root /etc/kubernetes/kubelet.conf
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	kubelet_config=$(ps -ef | grep kubelet | grep -v grep | grep -o ' --kubeconfig=[^ ]*' | awk -F= '{print $2}')
 	[ -z "$kubelet_config" ] && kubelet_config="/etc/kubernetes/kubelet.conf"
 

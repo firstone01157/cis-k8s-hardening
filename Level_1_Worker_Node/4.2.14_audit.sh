@@ -9,19 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Review the Kubelet's start-up parameters for the value of --seccomp-default, and check the Kubelet configuration file for the seccompDefault . If neither of these values is set, then the seccomp profi
-	##
-	## Command hint: Review the Kubelet's start-up parameters for the value of --seccomp-default, and check the Kubelet configuration file for the seccompDefault . If neither of these values is set, then the seccomp profile is not in use.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--seccomp-default=true"; then
 		a_output+=(" - Check Passed: --seccomp-default is set to true")
 	else
-		a_output2+=(" - Check Failed: --seccomp-default is NOT set to true")
+		# Check config file
+		config_file="/var/lib/kubelet/config.yaml"
+		if [ -f "$config_file" ] && grep -q "seccompDefault: true" "$config_file"; then
+			a_output+=(" - Check Passed: seccompDefault is set to true in $config_file")
+		else
+			a_output2+=(" - Check Failed: --seccomp-default is NOT set to true")
+		fi
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

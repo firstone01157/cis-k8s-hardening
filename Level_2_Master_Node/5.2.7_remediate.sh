@@ -4,11 +4,6 @@
 # Level: • Level 2 - Master Node
 # Remediation Script
 
-#!/bin/bash
-# CIS Benchmark: 5.2.7
-# Title: Minimize the admission of root containers (Manual)
-# Level: • Level 2 - Master Node
-# Remediation Script
 
 remediate_rule() {
 	l_output3=""

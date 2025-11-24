@@ -9,19 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## The set of cryptographic ciphers currently considered secure is the following: • TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY130
-	##
-	## Command hint: The set of cryptographic ciphers currently considered secure is the following: • TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 • TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 • TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305 • TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 Run the following command on each node: ps -ef | grep kubelet If the --tls-cipher-suites argument is present, ensure it only contains values included in this set. If it is not present check that there is a Kubelet config file specified by --config, and that file sets tlsCipherSuites: to only include values from this set.  Internal Only - General
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	if ps -ef | grep kubelet | grep -v grep | grep "\--feature-gates" | grep -q "RotateKubeletServerCertificate=true"; then
-		a_output+=(" - Check Passed: RotateKubeletServerCertificate is enabled")
+	if ps -ef | grep kubelet | grep -v grep | grep -q "\--tls-cipher-suites"; then
+		a_output+=(" - Check Passed: --tls-cipher-suites is set")
 	else
-		a_output2+=(" - Check Failed: RotateKubeletServerCertificate is NOT enabled")
+		# Check config file
+		config_file="/var/lib/kubelet/config.yaml"
+		if [ -f "$config_file" ] && grep -q "tlsCipherSuites" "$config_file"; then
+			a_output+=(" - Check Passed: tlsCipherSuites is set in $config_file")
+		else
+			a_output2+=(" - Check Failed: --tls-cipher-suites is NOT set")
+		fi
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
