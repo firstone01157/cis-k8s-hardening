@@ -10,17 +10,7 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Ensure that either Pod Security Admission or an external policy control system is in place for every namespace which contains user workloads.
-	##
-	## Command hint: Ensure that either Pod Security Admission or an external policy control system is in place for every namespace which contains user workloads.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
-	a_output+=(" - Remediation: This is a manual check. Enable Pod Security Admission or another policy controller.")
+	a_output+=(" - Remediation: This is a manual check. Enable Pod Security Admission or other policy control.")
 	return 0
 }
 

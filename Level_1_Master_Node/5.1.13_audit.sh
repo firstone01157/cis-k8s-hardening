@@ -9,17 +9,8 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Review the users who have access to create the token sub-resource of serviceaccount objects in the Kubernetes API.
-	##
-	## Command hint: Review the users who have access to create the token sub-resource of serviceaccount objects in the Kubernetes API.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	a_output+=(" - Manual Check: Minimize access to service account token creation.")
-	a_output+=(" - Command: kubectl get clusterroles -o=custom-columns=NAME:.metadata.name,RESOURCES:.rules[*].resources,VERBS:.rules[*].verbs | grep serviceaccounts/token")
+	a_output+=(" - Command: Review users with access to create token sub-resource of serviceaccounts.")
 	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

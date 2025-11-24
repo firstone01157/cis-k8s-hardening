@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## List the policies in use for each namespace in the cluster, ensure that each policy disallows the admission of containers which allow privilege escalation. To fetch a list of pods which allowPrivilege
-	##
-	## Command hint: List the policies in use for each namespace in the cluster, ensure that each policy disallows the admission of containers which allow privilege escalation. To fetch a list of pods which allowPrivilegeEscalation run this command :- get pods -A -o=jsonpath=$'{range .items[*]}{@.metadata.name}: {@..securityContext}\n{end}'
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	a_output+=(" - Manual Check: Minimize admission of containers with allowPrivilegeEscalation.")
 	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@..allowPrivilegeEscalation}{\"\\n\"}{end}' | grep true")
 	return 0

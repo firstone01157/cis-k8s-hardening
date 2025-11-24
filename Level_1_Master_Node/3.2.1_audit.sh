@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on one of the cluster master nodes: ps -ef | grep kube-apiserver Verify that the --audit-policy-file is set. Review the contents of the file specified and ensure that it cont
-	##
-	## Command hint: Run the following command on one of the cluster master nodes: ps -ef | grep kube-apiserver Verify that the --audit-policy-file is set. Review the contents of the file specified and ensure that it contains a valid audit policy.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--audit-policy-file"; then
 		a_output+=(" - Check Passed: --audit-policy-file is set")
 	else

@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-scheduler Verify that the --profiling argument is set to false.
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-scheduler Verify that the --profiling argument is set to false.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-scheduler | grep -v grep | grep -q -- "--profiling=false"; then
 		a_output+=(" - Check Passed: --profiling is set to false")
 	else
