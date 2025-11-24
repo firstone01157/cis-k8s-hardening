@@ -9,24 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the below command (based on the file location on your system) on the Control Plane node. For example, stat -c %a /etc/kubernetes/manifests/etcd.yaml Verify that the permissions are 600 or more res
-	##
-	## Command hint: (based on the file location on your system) on the Control Plane node. For example, stat -c %a /etc/kubernetes/manifests/etcd.yaml Verify that the permissions are 600 or more restrictive.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	if [ -e "/etc/kubernetes/manifests/etcd.yaml" ]; then
-		l_mode=$(stat -c %a /etc/kubernetes/manifests/etcd.yaml)
+	l_file="/etc/kubernetes/manifests/etcd.yaml"
+	if [ -e "$l_file" ]; then
+		l_mode=$(stat -c %a "$l_file")
 		if [ "$l_mode" -le 600 ]; then
-			a_output+=(" - Check Passed: Permissions on /etc/kubernetes/manifests/etcd.yaml are $l_mode")
+			a_output+=(" - Check Passed: Permissions on $l_file are $l_mode")
 		else
-			a_output2+=(" - Check Failed: Permissions on /etc/kubernetes/manifests/etcd.yaml are $l_mode (should be 600 or more restrictive)")
+			a_output2+=(" - Check Failed: Permissions on $l_file are $l_mode (should be 600 or more restrictive)")
 		fi
 	else
-		a_output+=(" - Check Passed: /etc/kubernetes/manifests/etcd.yaml not found")
+		a_output+=(" - Check Passed: $l_file not found")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
