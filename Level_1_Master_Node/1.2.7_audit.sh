@@ -9,19 +9,10 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --authorization-mode argument exists and is set to a value to include Node.
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --authorization-mode argument exists and is set to a value to include Node.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -- "--authorization-mode" | grep -q "Node"; then
 		a_output+=(" - Check Passed: --authorization-mode includes Node")
 	else
-		a_output2+=(" - Check Failed: --authorization-mode does not include Node")
+		a_output2+=(" - Check Failed: --authorization-mode does NOT include Node")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

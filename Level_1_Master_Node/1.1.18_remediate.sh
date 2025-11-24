@@ -10,16 +10,6 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Run the below command (based on the file location on your system) on the Control Plane node. For example, chown root:root /etc/kubernetes/controller-manager.conf
-	##
-	## Command hint: (based on the file location on your system) on the Control Plane node. For example, chown root:root /etc/kubernetes/controller-manager.conf
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/controller-manager.conf"
 	if [ -e "$l_file" ]; then
 		l_owner=$(stat -c %U:%G "$l_file")
