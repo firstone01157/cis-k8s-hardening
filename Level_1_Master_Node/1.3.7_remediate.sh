@@ -10,31 +10,27 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Edit the Controller Manager pod specification file /etc/kubernetes/manifests/kube- controller-manager.yaml on the Control Plane node and ensure the correct value for the --bind-address parameter
-	##
-	## Command hint: Edit the Controller Manager pod specification file /etc/kubernetes/manifests/kube- controller-manager.yaml on the Control Plane node and ensure the correct value for the --bind-address parameter
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/manifests/kube-controller-manager.yaml"
 	if [ -e "$l_file" ]; then
-		if grep -q "\--bind-address" "$l_file"; then
-			# Ensure it is set to 127.0.0.1
-			sed -i 's/--bind-address=[^ "]*/--bind-address=127.0.0.1/g' "$l_file"
-			a_output+=(" - Remediation applied: --bind-address set to 127.0.0.1 in $l_file")
-			return 0
+		if grep -q -- "--bind-address" "$l_file"; then
+			if grep -q -- "--bind-address=127.0.0.1" "$l_file"; then
+				a_output+=(" - Remediation not needed: --bind-address is already 127.0.0.1")
+			else
+				cp "$l_file" "$l_file.bak_$(date +%s)"
+				sed -i 's/--bind-address=[^ "]*\s*/--bind-address=127.0.0.1/g' "$l_file"
+				a_output+=(" - Remediation applied: Set --bind-address to 127.0.0.1")
+			fi
 		else
-			# Default is 0.0.0.0 (bad). Add it.
-			a_output2+=(" - Remediation required: --bind-address missing in $l_file. Please add '--bind-address=127.0.0.1' manually.")
-			return 1
+			a_output2+=(" - Remediation Required: Please MANUALLY add '--bind-address=127.0.0.1' to $l_file")
 		fi
 	else
 		a_output+=(" - Remediation not needed: $l_file not found")
+	fi
+
+	if [ "${#a_output2[@]}" -le 0 ]; then
 		return 0
+	else
+		return 1
 	fi
 }
 

@@ -10,28 +10,21 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Follow the Kubernetes documentation and configure a EncryptionConfig file. In this file, choose aescbc, kms, or secretbox as the encryption provider.
-	##
-	## Command hint: Follow the Kubernetes documentation and configure a EncryptionConfig file. In this file, choose aescbc, kms, or secretbox as the encryption provider.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
 	if [ -e "$l_file" ]; then
-		if grep -q "\--encryption-provider-config" "$l_file"; then
-			a_output+=(" - Remediation not needed: --encryption-provider-config is present (Manual verification of config content required)")
-			return 0
+		if grep -q -- "--encryption-provider-config" "$l_file"; then
+			a_output+=(" - Remediation not needed: --encryption-provider-config is present (Manual verification of content needed)")
 		else
-			a_output2+=(" - Remediation required: --encryption-provider-config missing in $l_file. Please add it manually.")
-			return 1
+			a_output2+=(" - Remediation Required: Please MANUALLY add '--encryption-provider-config' to $l_file and configure encryption providers")
 		fi
 	else
 		a_output+=(" - Remediation not needed: $l_file not found")
+	fi
+
+	if [ "${#a_output2[@]}" -le 0 ]; then
 		return 0
+	else
+		return 1
 	fi
 }
 
