@@ -9,24 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the below command (based on the file location on your system) on the Control Plane node. For example, stat -c %U:%G /etc/kubernetes/manifests/kube-apiserver.yaml Verify that the ownership is set t
-	##
-	## Command hint: (based on the file location on your system) on the Control Plane node. For example, stat -c %U:%G /etc/kubernetes/manifests/kube-apiserver.yaml Verify that the ownership is set to root:root.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	if [ -e "/etc/kubernetes/manifests/kube-apiserver.yaml" ]; then
-		l_owner=$(stat -c %U:%G /etc/kubernetes/manifests/kube-apiserver.yaml)
+	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
+	if [ -e "$l_file" ]; then
+		l_owner=$(stat -c %U:%G "$l_file")
 		if [ "$l_owner" == "root:root" ]; then
-			a_output+=(" - Check Passed: Ownership on /etc/kubernetes/manifests/kube-apiserver.yaml is $l_owner")
+			a_output+=(" - Check Passed: Ownership on $l_file is $l_owner")
 		else
-			a_output2+=(" - Check Failed: Ownership on /etc/kubernetes/manifests/kube-apiserver.yaml is $l_owner (should be root:root)")
+			a_output2+=(" - Check Failed: Ownership on $l_file is $l_owner (should be root:root)")
 		fi
 	else
-		a_output+=(" - Check Passed: /etc/kubernetes/manifests/kube-apiserver.yaml not found")
+		a_output+=(" - Check Passed: $l_file not found")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

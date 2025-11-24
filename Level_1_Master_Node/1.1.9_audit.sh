@@ -9,16 +9,8 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the below command (based on the file location on your system) on the Control Plane node. For example, stat -c %a <path/to/cni/files> Verify that the permissions are 600 or more restrictive.
-	##
-	## Command hint: (based on the file location on your system) on the Control Plane node. For example, stat -c %a <path/to/cni/files> Verify that the permissions are 600 or more restrictive.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	if [ -d "/etc/cni/net.d" ]; then
+	l_cni_dir="/etc/cni/net.d"
+	if [ -d "$l_cni_dir" ]; then
 		while IFS= read -r -d '' l_file; do
 			l_mode=$(stat -c %a "$l_file")
 			if [ "$l_mode" -le 600 ]; then
@@ -26,13 +18,13 @@ audit_rule() {
 			else
 				a_output2+=(" - Check Failed: Permissions on $l_file are $l_mode (should be 600 or more restrictive)")
 			fi
-		done < <(find /etc/cni/net.d -maxdepth 1 -type f -print0)
+		done < <(find "$l_cni_dir" -maxdepth 1 -type f -print0)
 		
 		if [ ${#a_output[@]} -eq 0 ] && [ ${#a_output2[@]} -eq 0 ]; then
-             a_output+=(" - Check Passed: No CNI configuration files found in /etc/cni/net.d")
+             a_output+=(" - Check Passed: No CNI configuration files found in $l_cni_dir")
         fi
 	else
-		a_output+=(" - Check Passed: /etc/cni/net.d directory not found")
+		a_output+=(" - Check Passed: $l_cni_dir directory not found")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
