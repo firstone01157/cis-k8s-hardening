@@ -1,0 +1,11 @@
+# .gitignore
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+venv/
+env/
+*.log
+# ถ้าไม่อยากเอาไฟล์ CSV ขึ้น (เพราะอาจมีข้อมูล Sensitive) ให้ใส่บรรทัดล่างด้วย
+# แต่ถ้าจะให้ Jules อ่าน ต้องเอาขึ้นนะครับ
+# *.csv
