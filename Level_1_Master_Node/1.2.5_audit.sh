@@ -9,19 +9,10 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --kubelet-certificate-authority argument exists and is set as appropriate. Alternative Audit kubectl g
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --kubelet-certificate-authority argument exists and is set as appropriate. Alternative Audit kubectl get pod -nkube-system -lcomponent=kube-apiserver -o=jsonpath='{range .items[]}{.spec.containers[].command} {"\n"}{end}' | grep '--kubelet- certificate-Authority' | grep -i false If the exit code is '1', then the control isn't present / failed
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--kubelet-certificate-authority"; then
 		a_output+=(" - Check Passed: --kubelet-certificate-authority is set")
 	else
-		a_output2+=(" - Check Failed: --kubelet-certificate-authority is not set")
+		a_output2+=(" - Check Failed: --kubelet-certificate-authority is NOT set")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
