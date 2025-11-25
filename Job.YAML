@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: Custom-cis-audit
+spec:
+  template:
+    spec:
+      hostPID: true  # <--- สำคัญ 1: ให้มองเห็น Process เครื่องแม่
+      containers:
+      - name: audit
+        image: my-custom-cis:latest
+        imagePullPolicy: Never # หรือตาม registry ของคุณ
+        volumeMounts: # <--- สำคัญ 2: Map ไฟล์ Config เข้าไป
+        - name: etc-kubernetes
+          mountPath: /etc/kubernetes
+          readOnly: true
+        - name: var-lib-etcd
+          mountPath: /var/lib/etcd
+          readOnly: true
+        - name: var-lib-kubelet
+          mountPath: /var/lib/kubelet
+          readOnly: true
+        - name: etc-systemd
+          mountPath: /etc/systemd
+          readOnly: true
+      restartPolicy: Never
+      volumes:
+      - name: etc-kubernetes
+        hostPath:
+          path: /etc/kubernetes
+      - name: var-lib-etcd
+        hostPath:
+          path: /var/lib/etcd
+      - name: var-lib-kubelet
+        hostPath:
+          path: /var/lib/kubelet
+      - name: etc-systemd
+        hostPath:
+          path: /etc/systemd
