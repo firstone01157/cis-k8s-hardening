@@ -9,14 +9,11 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
 	## Description from CSV:
 	## Review the pod definitions in your cluster and verify that image provenance is configured as appropriate.
 	##
 	## Command hint: Review the pod definitions in your cluster and verify that image provenance is configured as appropriate.
 	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
 
 	a_output+=(" - Manual Check: Configure Image Provenance using ImagePolicyWebhook.")
 	return 0

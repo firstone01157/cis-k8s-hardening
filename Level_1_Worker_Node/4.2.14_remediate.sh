@@ -10,15 +10,12 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
 	## Description from CSV:
 	## Set the parameter, either via the --seccomp-default command line parameter or the seccompDefault configuration file setting.
 	##
 	## Command hint: Set the parameter, either via the --seccomp-default command line parameter or the seccompDefault configuration file setting.
 	##
 	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
 
 	a_output+=(" - Remediation: Manual intervention required. Set '--seccomp-default=true' in kubelet config or startup flags.")
 	return 0

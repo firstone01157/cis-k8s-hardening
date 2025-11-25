@@ -9,14 +9,11 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
 	## Description from CSV:
 	## Review the Kubelet's start-up parameters for the value of --pod-max-pids, and check the Kubelet configuration file for the PodPidsLimit . If neither of these values is set, then there is no limit in p
 	##
 	## Command hint: Review the Kubelet's start-up parameters for the value of --pod-max-pids, and check the Kubelet configuration file for the PodPidsLimit . If neither of these values is set, then there is no limit in place.
 	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
 
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--pod-max-pids"; then
 		a_output+=(" - Check Passed: --pod-max-pids is set")

@@ -9,14 +9,11 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
 	## Description from CSV:
 	## Run the following command on each node: ps -ef | grep kubelet Verify that the RotateKubeletServerCertificate argument is not present, or is set to true. If the RotateKubeletServerCertificate argument 
 	##
 	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that the RotateKubeletServerCertificate argument is not present, or is set to true. If the RotateKubeletServerCertificate argument is not present, verify that if there is a Kubelet config file specified by --config, that file does not contain RotateKubeletServerCertificate: false.
 	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
 
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--rotate-certificates=false"; then
 		a_output2+=(" - Check Failed: --rotate-certificates is set to false")

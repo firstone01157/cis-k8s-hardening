@@ -10,15 +10,12 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
 	## Description from CSV:
 	## Create a policy for each namespace in the cluster, ensuring that either MustRunAsNonRoot or MustRunAs with the range of UIDs not including 0, is set.
 	##
 	## Command hint: Create a policy for each namespace in the cluster, ensuring that either MustRunAsNonRoot or MustRunAs with the range of UIDs not including 0, is set.
 	##
 	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
 
 	a_output+=(" - Remediation: This is a manual check. Enforce runAsNonRoot: true in pods/policies.")
 	return 0

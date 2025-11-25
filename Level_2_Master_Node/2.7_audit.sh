@@ -9,14 +9,11 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
 	## Description from CSV:
 	## Review the CA used by the etcd environment and ensure that it does not match the CA certificate file used for the management of the overall Kubernetes cluster. Run the following command on the master 
 	##
 	## Command hint: Review the CA used by the etcd environment and ensure that it does not match the CA certificate file used for the management of the overall Kubernetes cluster. Run the following command on the master node: ps -ef | grep etcd Note the file referenced by the --trusted-ca-file argument. Run the following command on the master node: ps -ef | grep apiserver Verify that the file referenced by the --client-ca-file for apiserver is different from the --trusted-ca-file used by etcd.
 	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
 
 	a_output+=(" - Manual Check: Ensure unique Certificate Authority for etcd.")
 	a_output+=(" - Command: ps -ef | grep etcd (Check --trusted-ca-file) vs ps -ef | grep apiserver (Check --client-ca-file)")

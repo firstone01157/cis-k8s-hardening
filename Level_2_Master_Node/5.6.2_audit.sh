@@ -9,14 +9,11 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
 	## Description from CSV:
 	## Review the pod definitions in your cluster. It should create a line as below: securityContext: seccompProfile: type: RuntimeDefault
 	##
 	## Command hint: Review the pod definitions in your cluster. It should create a line as below: securityContext: seccompProfile: type: RuntimeDefault
 	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
 
 	a_output+=(" - Manual Check: Ensure seccomp profile is set to docker/default.")
 	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@..securityContext.seccompProfile.type}{\"\\n\"}{end}'")

@@ -10,15 +10,12 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
 	## Description from CSV:
 	## Run the below command (based on the file location on your system) on the each worker node. For example, chown root:root /etc/systemd/system/kubelet.service.d/kubeadm.conf
 	##
 	## Command hint: (based on the file location on your system) on the each worker node. For example, chown root:root /etc/systemd/system/kubelet.service.d/kubeadm.conf
 	##
 	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
 
 	file_path="/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"
 	if [ -f "$file_path" ]; then

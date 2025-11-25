@@ -9,14 +9,11 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
 	## Description from CSV:
 	## Run the below command and review the NetworkPolicy objects created in the cluster. kubectl get networkpolicy --all-namespaces Ensure that each namespace defined in the cluster has at least one Network
 	##
 	## Command hint: and review the NetworkPolicy objects created in the cluster. kubectl get networkpolicy --all-namespaces Ensure that each namespace defined in the cluster has at least one Network Policy.
 	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
 
 	a_output+=(" - Manual Check: Ensure all Namespaces have Network Policies defined.")
 	a_output+=(" - Command: kubectl get networkpolicy --all-namespaces")
