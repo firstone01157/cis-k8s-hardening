@@ -12,11 +12,6 @@ remediate_rule() {
 
 	l_file="/etc/kubernetes/manifests/kube-controller-manager.yaml"
 	if [ -e "$l_file" ]; then
-		# This is a feature gate. --feature-gates=...,RotateKubeletServerCertificate=true,...
-		# Or separate arg? No, usually feature gates.
-		# The check in audit was just grepping RotateKubeletServerCertificate=true.
-		# CSV says: "Edit the Controller Manager pod specification file ... and set the --feature-gates parameter to include RotateKubeletServerCertificate=true."
-		
 		if grep -q "RotateKubeletServerCertificate=true" "$l_file"; then
 			a_output+=(" - Remediation not needed: RotateKubeletServerCertificate=true is present")
 		else

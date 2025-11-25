@@ -14,20 +14,8 @@ remediate_rule() {
 	if [ -e "$l_file" ]; then
 		if grep -q "\--enable-admission-plugins" "$l_file"; then
 			if grep -q "AlwaysAdmit" "$l_file"; then
-				cp "$l_file" "$l_file.bak_$(date +%s)"
-				# Remove AlwaysAdmit from the comma separated list. 
-				# Cases: 
-				# 1. value,AlwaysAdmit,value
-				# 2. value,AlwaysAdmit
-				# 3. AlwaysAdmit,value
-				# 4. AlwaysAdmit
-				
-				# Simplest sed approach: remove AlwaysAdmit and surrounding commas.
-				sed -i 's/,AlwaysAdmit//g' "$l_file"
-				sed -i 's/AlwaysAdmit,//g' "$l_file"
-				sed -i 's/AlwaysAdmit//g' "$l_file"
-				
-				a_output+=(" - Remediation applied: Removed AlwaysAdmit from --enable-admission-plugins")
+				a_output2+=(" - Remediation required: AlwaysAdmit present in --enable-admission-plugins in $l_file. Please remove it manually.")
+				return 1
 			else
 				a_output+=(" - Remediation not needed: AlwaysAdmit not present in $l_file")
 			fi

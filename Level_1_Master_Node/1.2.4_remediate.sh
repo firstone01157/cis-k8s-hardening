@@ -19,7 +19,6 @@ remediate_rule() {
 		if ! grep -q "\--kubelet-client-key" "$l_file"; then
 			l_missing=1
 		fi
-		
 		if [ "$l_missing" -eq 1 ]; then
 			a_output2+=(" - Remediation required: --kubelet-client-certificate and/or --kubelet-client-key missing in $l_file. Please add them manually with correct paths.")
 		else
