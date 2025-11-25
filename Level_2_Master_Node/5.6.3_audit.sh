@@ -9,12 +9,24 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Review the pod definitions in your cluster and verify that you have security contexts defined as appropriate.
+	##
+	## Command hint: Review the pod definitions in your cluster and verify that you have security contexts defined as appropriate.
+	##
+
 	a_output+=(" - Manual Check: Apply Security Context to Your Pods and Containers.")
-	a_output+=(" - Note: This is a general best practice check. Verify that pods have securityContext defined (runAsNonRoot, readOnlyRootFilesystem, etc.).")
-	
-	# Always PASS this check as it's "Apply" (Manual/General)
-	printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
+	a_output+=(" - Command: Review pod definitions for securityContext.")
 	return 0
+
+	if [ "${#a_output2[@]}" -le 0 ]; then
+		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
+		return 0
+	else
+		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
+		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
+		return 1
+	fi
 }
 
 audit_rule

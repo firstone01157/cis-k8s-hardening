@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Ensure 'rotateCertificates' is NOT set to false in kubelet config.")
+	## Description from CSV:
+	## If using a Kubelet config file, edit the file to add the line rotateCertificates: true or remove it altogether to use the default value. If using command line arguments, edit the kubelet service file 
+	##
+	## Command hint: If using a Kubelet config file, edit the file to add the line rotateCertificates: true or remove it altogether to use the default value. If using command line arguments, edit the kubelet service file /etc/kubernetes/kubelet.conf on each worker node and remove --rotate- certificates=false argument from the KUBELET_CERTIFICATE_ARGS variable or set - -rotate-certificates=true .  Internal Only - General Based on your system, restart the kubelet service. For example: systemctl daemon-reload systemctl restart kubelet.service
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: Manual intervention required. Ensure '--rotate-certificates' is not set to false.")
 	return 0
 }
 

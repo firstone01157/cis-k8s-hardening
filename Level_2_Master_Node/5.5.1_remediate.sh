@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Set up ImagePolicyWebhook in kube-apiserver if image provenance is required.")
+	## Description from CSV:
+	## Follow the Kubernetes documentation and setup image provenance.
+	##
+	## Command hint: Follow the Kubernetes documentation and setup image provenance.
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Configure ImagePolicyWebhook.")
 	return 0
 }
 

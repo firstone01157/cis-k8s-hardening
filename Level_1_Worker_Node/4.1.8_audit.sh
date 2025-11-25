@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command: ps -ef | grep kubelet Find the file specified by the --client-ca-file argument. Run the following command: stat -c %U:%G <filename> Verify that the ownership is set to root:
+	##
+	## Command hint: Run the following command: ps -ef | grep kubelet Find the file specified by the --client-ca-file argument. Run the following command: stat -c %U:%G <filename> Verify that the ownership is set to root:root.
+	##
+
 	client_ca_file=$(ps -ef | grep kubelet | grep -v grep | grep -o ' --client-ca-file=[^ ]*' | awk -F= '{print $2}')
 	if [ -z "$client_ca_file" ]; then
 		a_output+=(" - Check Passed: --client-ca-file not set")

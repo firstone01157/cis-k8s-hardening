@@ -15,7 +15,7 @@ remediate_rule() {
 		# Check if any file/dir is NOT root:root
 		if find "$l_dir" -not -user root -o -not -group root | grep -q .; then
 			chown -R root:root "$l_dir"
-
+			
 			# Verify again
 			if find "$l_dir" -not -user root -o -not -group root | grep -q .; then
 				a_output2+=(" - Remediation failed: Could not change ownership on some files in $l_dir")

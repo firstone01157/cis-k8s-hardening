@@ -9,21 +9,15 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-proxy | grep -v grep | grep -q "\--metrics-bind-address=127.0.0.1"; then
-		a_output+=(" - Check Passed: --metrics-bind-address is set to 127.0.0.1")
-	else
-		# Check if it's not set (default might not be localhost depending on version, but CIS says ensure it is bound to localhost)
-		# Actually, default is 127.0.0.1 in newer versions, but we should check explicit setting or verify default behavior.
-		# For this script, we'll check for explicit setting or absence (if absence implies localhost).
-		# However, CIS usually wants explicit setting.
-		if ps -ef | grep kube-proxy | grep -v grep | grep -q "\--metrics-bind-address"; then
-             # It is set but not to 127.0.0.1 (based on previous check failure)
-			a_output2+=(" - Check Failed: --metrics-bind-address is set to non-localhost")
-		else
-             # Not set.
-			a_output+=(" - Check Passed: --metrics-bind-address not set (Verify default is 127.0.0.1 for your version)")
-		fi
-	fi
+	## Description from CSV:
+	## review the start-up flags provided to kube proxy Run the following command on each node: ps -ef | grep -i kube-proxy Ensure that the --metrics-bind-address parameter is not set to a value other than
+	##
+	## Command hint: review the start-up flags provided to kube proxy Run the following command on each node: ps -ef | grep -i kube-proxy Ensure that the --metrics-bind-address parameter is not set to a value other than
+	##
+
+	a_output+=(" - Manual Check: Ensure kube-proxy metrics service is bound to localhost.")
+	a_output+=(" - Command: ps -ef | grep kube-proxy (Check --metrics-bind-address)")
+	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

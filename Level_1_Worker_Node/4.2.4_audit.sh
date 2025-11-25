@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command on each node: ps -ef | grep kubelet Verify that the --read-only-port argument exists and is set to 0. If the --read-only-port argument is not present, check that there is a K
+	##
+	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that the --read-only-port argument exists and is set to 0. If the --read-only-port argument is not present, check that there is a Kubelet config file specified by --config. Check that if there is a readOnlyPort entry in the file, it is set to 0.
+	##
+
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--read-only-port=0"; then
 		a_output+=(" - Check Passed: --read-only-port is set to 0")
 	else

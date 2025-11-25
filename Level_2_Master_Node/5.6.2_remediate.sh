@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Set 'securityContext.seccompProfile.type' to 'RuntimeDefault' in pod manifests.")
+	## Description from CSV:
+	## Use security context to enable the docker/default seccomp profile in your pod definitions. An example is as below: securityContext: seccompProfile: type: RuntimeDefault
+	##
+	## Command hint: Use security context to enable the docker/default seccomp profile in your pod definitions. An example is as below: securityContext: seccompProfile: type: RuntimeDefault
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Set seccompProfile type to RuntimeDefault or localhost.")
 	return 0
 }
 

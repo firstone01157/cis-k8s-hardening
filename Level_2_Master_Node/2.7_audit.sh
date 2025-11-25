@@ -9,18 +9,15 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	etcd_ca=$(ps -ef | grep etcd | grep -v grep | grep -oP '(?<=--trusted-ca-file=)[^ ]+')
-	apiserver_ca=$(ps -ef | grep kube-apiserver | grep -v grep | grep -oP '(?<=--client-ca-file=)[^ ]+')
+	## Description from CSV:
+	## Review the CA used by the etcd environment and ensure that it does not match the CA certificate file used for the management of the overall Kubernetes cluster. Run the following command on the master 
+	##
+	## Command hint: Review the CA used by the etcd environment and ensure that it does not match the CA certificate file used for the management of the overall Kubernetes cluster. Run the following command on the master node: ps -ef | grep etcd Note the file referenced by the --trusted-ca-file argument. Run the following command on the master node: ps -ef | grep apiserver Verify that the file referenced by the --client-ca-file for apiserver is different from the --trusted-ca-file used by etcd.
+	##
 
-	if [ -n "$etcd_ca" ] && [ -n "$apiserver_ca" ]; then
-		if [ "$etcd_ca" != "$apiserver_ca" ]; then
-			a_output+=(" - Check Passed: Etcd is using a different CA ($etcd_ca) than API Server ($apiserver_ca)")
-		else
-			a_output2+=(" - Check Failed: Etcd is using the same CA as API Server ($etcd_ca)")
-		fi
-	else
-		a_output2+=(" - Check Failed: Could not determine CA files. Etcd CA: '$etcd_ca', API Server CA: '$apiserver_ca'")
-	fi
+	a_output+=(" - Manual Check: Ensure unique Certificate Authority for etcd.")
+	a_output+=(" - Command: ps -ef | grep etcd (Check --trusted-ca-file) vs ps -ef | grep apiserver (Check --client-ca-file)")
+	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

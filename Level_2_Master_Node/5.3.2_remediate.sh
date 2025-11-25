@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Create NetworkPolicy objects for namespaces: $(kubectl get ns -o jsonpath='{.items[*].metadata.name}').")
+	## Description from CSV:
+	## Follow the documentation and create NetworkPolicy objects as you need them.
+	##
+	## Command hint: Follow the documentation and create NetworkPolicy objects as you need them.
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Create NetworkPolicies for all namespaces.")
 	return 0
 }
 

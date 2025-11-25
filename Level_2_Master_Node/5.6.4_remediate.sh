@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Move resources from 'default' namespace to specific namespaces.")
+	## Description from CSV:
+	## Ensure that namespaces are created to allow for appropriate segregation of Kubernetes resources and that all new resources are created in a specific namespace.
+	##
+	## Command hint: Ensure that namespaces are created to allow for appropriate segregation of Kubernetes resources and that all new resources are created in a specific namespace.
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Move resources out of default namespace.")
 	return 0
 }
 

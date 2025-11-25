@@ -9,16 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kubelet | grep -v grep | grep "\--feature-gates" | grep -q "RotateKubeletServerCertificate=true"; then
-		a_output+=(" - Check Passed: RotateKubeletServerCertificate is enabled via flags")
+	## Description from CSV:
+	## Ignore this check if serverTLSBootstrap is true in the kubelet config file or if the --rotate- server-certificates parameter is set on kubelet Run the following command on each node: ps -ef | grep kub
+	##
+	## Command hint: Ignore this check if serverTLSBootstrap is true in the kubelet config file or if the --rotate- server-certificates parameter is set on kubelet Run the following command on each node: ps -ef | grep kubelet Verify that RotateKubeletServerCertificate argument exists and is set to true.
+	##
+
+	if ps -ef | grep kubelet | grep -v grep | grep -q "\--rotate-certificates=true"; then
+		a_output+=(" - Check Passed: --rotate-certificates is set to true")
 	else
-		# Check config file
-		config_file="/var/lib/kubelet/config.yaml"
-		if [ -f "$config_file" ] && grep -q "serverTLSBootstrap: true" "$config_file"; then
-			a_output+=(" - Check Passed: serverTLSBootstrap is true in $config_file (implies rotation)")
-		else
-			a_output2+=(" - Check Failed: RotateKubeletServerCertificate/serverTLSBootstrap is NOT enabled")
-		fi
+		a_output2+=(" - Check Failed: --rotate-certificates is NOT set to true")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Automated AAC auditing has been modified to allow CIS-CAT to input a variable for the <PATH>/<FILENAME> of the kubelet config yaml file. Please set $kubelet_config_yaml=<PATH> based on the file locati
+	##
+	## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /var/lib/kubelet/config.yaml ```Verify that the ownership is set to `root:root`.
+	##
+
 	kubelet_config_yaml=$(ps -ef | grep kubelet | grep -v grep | grep -o ' --config=[^ ]*' | awk -F= '{print $2}')
 	[ -z "$kubelet_config_yaml" ] && kubelet_config_yaml="/var/lib/kubelet/config.yaml"
 	

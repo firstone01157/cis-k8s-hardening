@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Modify application manifests to mount secrets as volumes instead of using 'env' with 'secretKeyRef'.")
+	## Description from CSV:
+	## If possible, rewrite application code to read secrets from mounted secret files, rather than from environment variables.
+	##
+	## Command hint: If possible, rewrite application code to read secrets from mounted secret files, rather than from environment variables.
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Mount secrets as files instead of env vars.")
 	return 0
 }
 

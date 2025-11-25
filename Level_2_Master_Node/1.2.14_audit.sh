@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction.
+	##
+	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction.
+	##
+
 	if ps -ef | grep kube-apiserver | grep -v grep | grep "\--enable-admission-plugins" | grep -q "NodeRestriction"; then
 		a_output+=(" - Check Passed: NodeRestriction is present in --enable-admission-plugins")
 	else

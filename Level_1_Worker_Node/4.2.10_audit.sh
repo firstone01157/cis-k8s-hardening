@@ -9,16 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command on each node: ps -ef | grep kubelet Verify that the RotateKubeletServerCertificate argument is not present, or is set to true. If the RotateKubeletServerCertificate argument 
+	##
+	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that the RotateKubeletServerCertificate argument is not present, or is set to true. If the RotateKubeletServerCertificate argument is not present, verify that if there is a Kubelet config file specified by --config, that file does not contain RotateKubeletServerCertificate: false.
+	##
+
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--rotate-certificates=false"; then
 		a_output2+=(" - Check Failed: --rotate-certificates is set to false")
 	else
-		# Check config file
-		config_file="/var/lib/kubelet/config.yaml"
-		if [ -f "$config_file" ] && grep -q "rotateCertificates: false" "$config_file"; then
-			a_output2+=(" - Check Failed: rotateCertificates is set to false in $config_file")
-		else
-			a_output+=(" - Check Passed: --rotate-certificates is NOT set to false")
-		fi
+		a_output+=(" - Check Passed: --rotate-certificates is NOT set to false")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

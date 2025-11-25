@@ -10,28 +10,25 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Follow the Kubernetes documentation and set up the TLS connection on the apiserver. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube- apiserver.yaml on the master node a
-	##
-	## Command hint: Follow the Kubernetes documentation and set up the TLS connection on the apiserver. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube- apiserver.yaml on the master node and set the TLS certificate and private key file parameters. --tls-cert-file=<path/to/tls-certificate-file> --tls-private-key-file=<path/to/tls-key-file>
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
 	if [ -e "$l_file" ]; then
-		if grep -q "\--tls-cert-file" "$l_file" && grep -q "\--tls-private-key-file" "$l_file"; then
-			a_output+=(" - Remediation not needed: TLS cert flags present in $l_file")
-			return 0
+		l_missing=0
+		if ! grep -q -- "--tls-cert-file" "$l_file"; then l_missing=1; fi
+		if ! grep -q -- "--tls-private-key-file" "$l_file"; then l_missing=1; fi
+		
+		if [ "$l_missing" -eq 1 ]; then
+			a_output2+=(" - Remediation Required: Please MANUALLY add '--tls-cert-file' and '--tls-private-key-file' to $l_file")
 		else
-			a_output2+=(" - Remediation required: --tls-cert-file and/or --tls-private-key-file missing in $l_file. Please add them manually.")
-			return 1
+			a_output+=(" - Remediation not needed: tls cert flags present")
 		fi
 	else
 		a_output+=(" - Remediation not needed: $l_file not found")
+	fi
+
+	if [ "${#a_output2[@]}" -le 0 ]; then
 		return 0
+	else
+		return 1
 	fi
 }
 

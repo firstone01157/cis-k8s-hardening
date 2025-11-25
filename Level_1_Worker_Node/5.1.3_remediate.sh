@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Review Roles and ClusterRoles to remove unnecessary wildcards ('*').")
+	## Description from CSV:
+	## Where possible replace any use of wildcards in ClusterRoles and Roles with specific objects or actions.
+	##
+	## Command hint: Where possible replace any use of wildcards in ClusterRoles and Roles with specific objects or actions.
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Review and restrict wildcards in Roles/ClusterRoles.")
 	return 0
 }
 

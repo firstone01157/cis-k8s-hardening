@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Configure 'tlsCertFile' and 'tlsPrivateKeyFile' in kubelet config.")
+	## Description from CSV:
+	## If using a Kubelet config file, edit the file to set tlsCertFile to the location of the certificate file to use to identify this Kubelet, and tlsPrivateKeyFile to the location of the corresponding pri
+	##
+	## Command hint: If using a Kubelet config file, edit the file to set tlsCertFile to the location of the certificate file to use to identify this Kubelet, and tlsPrivateKeyFile to the location of the corresponding private key file. If using command line arguments, edit the kubelet service file /etc/kubernetes/kubelet.conf on each worker node and set the below parameters in KUBELET_CERTIFICATE_ARGS variable. --tls-cert-file=<path/to/tls-certificate-file> --tls-private-key-file=<path/to/tls-key-file> Based on your system, restart the kubelet service. For example:  Internal Only - General systemctl daemon-reload systemctl restart kubelet.service
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: Manual intervention required. Set '--tls-cert-file' and '--tls-private-key-file' in kubelet config or startup flags.")
 	return 0
 }
 

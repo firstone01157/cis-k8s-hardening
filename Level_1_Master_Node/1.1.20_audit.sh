@@ -14,7 +14,7 @@ audit_rule() {
 		while IFS= read -r -d '' l_file; do
 			l_mode=$(stat -c %a "$l_file")
 			# 644 or more restrictive means user can be rw(6), group/other max r(4) and NO execute.
-			# Strictly <= 644 in octal isn't fully correct for "more restrictive" (e.g. 700 is restrictive for group/other but loose for user),
+			# Strictly <= 644 in octal isn't fully correct for "more restrictive" (e.g. 700 is restrictive for group/other but loose for user), 
 			# but for cert files, 644 or 600 or 444 or 400 are expected.
 			# We will assume "more restrictive" implies numerical comparison <= 644 is a good approximation for standard file modes.
 			if [ "$l_mode" -le 644 ]; then

@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Set '--metrics-bind-address=127.0.0.1' in kube-proxy flags.")
+	## Description from CSV:
+	## Modify or remove any values which bind the metrics service to a non-localhost address
+	##
+	## Command hint: Modify or remove any values which bind the metrics service to a non-localhost address
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Set --metrics-bind-address=127.0.0.1")
 	return 0
 }
 

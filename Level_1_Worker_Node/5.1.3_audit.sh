@@ -9,14 +9,14 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	# This is a manual check as it requires reviewing all roles.
-	# We can provide a helper command.
+	## Description from CSV:
+	## Retrieve the roles defined across each namespaces in the cluster and review for wildcards kubectl get roles --all-namespaces -o yaml Retrieve the cluster roles defined in the cluster and review for wi
+	##
+	## Command hint: Retrieve the roles defined across each namespaces in the cluster and review for wildcards kubectl get roles --all-namespaces -o yaml Retrieve the cluster roles defined in the cluster and review for wildcards kubectl get clusterroles -o yaml
+	##
+
 	a_output+=(" - Manual Check: Minimize wildcard use in Roles and ClusterRoles.")
-	a_output+=(" - Helper Command: kubectl get roles,clusterroles --all-namespaces -o yaml | grep -C 5 '*'")
-	
-	# We return 0 (Pass) with info, or we could try to detect wildcards.
-	# Detecting wildcards reliably in bash is hard without yq/jq.
-	# We'll stick to manual check notification.
+	a_output+=(" - Command: kubectl get roles --all-namespaces -o yaml | grep -C 5 '*'")
 	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

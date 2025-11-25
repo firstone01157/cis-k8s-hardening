@@ -14,10 +14,10 @@ audit_rule() {
 		# Recursively check ownership
 		# Finding files/dirs NOT owned by root:root
 		# If any output, check failed.
-
+		
 		# Using find to list non-compliant files
 		l_files=$(find "$l_dir" -not -user root -o -not -group root)
-
+		
 		if [ -z "$l_files" ]; then
 			a_output+=(" - Check Passed: All files and directories in $l_dir are owned by root:root")
 		else

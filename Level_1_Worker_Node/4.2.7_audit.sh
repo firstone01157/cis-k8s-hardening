@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command on each node: ps -ef | grep kubelet Verify that --hostname-override argument does not exist. Note This setting is not configurable via the Kubelet config file.
+	##
+	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that --hostname-override argument does not exist. Note This setting is not configurable via the Kubelet config file.
+	##
+
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--hostname-override"; then
 		a_output2+=(" - Check Failed: --hostname-override is set")
 	else

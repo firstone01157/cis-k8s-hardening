@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. You must generate a dedicated CA for etcd and update /etc/kubernetes/manifests/etcd.yaml to use it via --trusted-ca-file.")
+	## Description from CSV:
+	## Follow the etcd documentation and create a dedicated certificate authority setup for the etcd service.  Internal Only - General Then, edit the etcd pod specification file /etc/kubernetes/manifests/etc
+	##
+	## Command hint: Follow the etcd documentation and create a dedicated certificate authority setup for the etcd service.  Internal Only - General Then, edit the etcd pod specification file /etc/kubernetes/manifests/etcd.yaml on the master node and set the below parameter. --trusted-ca-file=</path/to/ca-file>
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Configure etcd with a unique CA.")
 	return 0
 }
 

@@ -10,7 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Remediation: Manual intervention required. Create/Update audit policy file and ensure --audit-policy-file is set in kube-apiserver.yaml. Requires volume mounts if file is new.")
+	## Description from CSV:
+	## Consider modification of the audit policy in use on the cluster to include these items, at a minimum.
+	##
+	## Command hint: Consider modification of the audit policy in use on the cluster to include these items, at a minimum.
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: This is a manual check. Update audit policy to cover required areas.")
 	return 0
 }
 

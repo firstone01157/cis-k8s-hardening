@@ -10,20 +10,11 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Alternative mechanisms provided by Kubernetes such as the use of OIDC should be implemented in place of bootstrap tokens.
-	##
-	## Command hint: Alternative mechanisms provided by Kubernetes such as the use of OIDC should be implemented in place of bootstrap tokens.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
 	if [ -e "$l_file" ]; then
 		if grep -q "\--enable-bootstrap-token-auth=true" "$l_file"; then
 			# Remove it or set to false
+			cp "$l_file" "$l_file.bak_$(date +%s)"
 			sed -i 's/--enable-bootstrap-token-auth=true/--enable-bootstrap-token-auth=false/g' "$l_file"
 			a_output+=(" - Remediation applied: --enable-bootstrap-token-auth set to false in $l_file")
 			return 0

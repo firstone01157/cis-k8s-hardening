@@ -10,18 +10,14 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	config_file="/var/lib/kubelet/config.yaml"
-	if [ -f "$config_file" ]; then
-		if ! grep -q "readOnlyPort" "$config_file"; then
-			echo "readOnlyPort: 0" >> "$config_file"
-			a_output+=(" - Remediation: Added 'readOnlyPort: 0' to $config_file")
-			echo "Requires: systemctl daemon-reload && systemctl restart kubelet"
-		else
-			a_output+=(" - Remediation: readOnlyPort already present in $config_file. Please verify value is 0.")
-		fi
-	else
-		a_output+=(" - Remediation: Manual intervention required. Set --read-only-port=0 in kubelet flags.")
-	fi
+	## Description from CSV:
+	## If using a Kubelet config file, edit the file to set readOnlyPort to 0. If using command line arguments, edit the kubelet service file /etc/kubernetes/kubelet.conf on each worker node and set the belo
+	##
+	## Command hint: If using a Kubelet config file, edit the file to set readOnlyPort to 0. If using command line arguments, edit the kubelet service file /etc/kubernetes/kubelet.conf on each worker node and set the below parameter in KUBELET_SYSTEM_PODS_ARGS variable. --read-only-port=0 Based on your system, restart the kubelet service. For example: systemctl daemon-reload systemctl restart kubelet.service
+	##
+	## Safety Check: Verify if remediation is needed before applying
+
+	a_output+=(" - Remediation: Manual intervention required. Set '--read-only-port=0' in kubelet config or startup flags.")
 	return 0
 }
 

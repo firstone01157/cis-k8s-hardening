@@ -9,21 +9,18 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --request-timeout argument is either not set or set to an appropriate value.
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --request-timeout argument is either not set or set to an appropriate value.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--request-timeout"; then
-		# If set, we assume it's appropriate for now as per manual check nature
-		a_output+=(" - Check Passed: --request-timeout is set")
+		a_output+=(" - Check Passed: --request-timeout is set (Manual verification of value required)")
 	else
-		a_output+=(" - Check Passed: --request-timeout is not set (using default)")
+		a_output+=(" - Check Passed: --request-timeout is not set (Default 60s is acceptable if appropriate)")
 	fi
+    # Note: CSV says "Verify that the --request-timeout argument is either not set or set to an appropriate value."
+    # So if it's missing, it's also a PASS typically, unless specific requirement exists. 
+    # The default script assumed failing if not set? No, let's follow CSV.
+    # Actually, default is 60s. Recommendation is "set as appropriate". 
+    # "Verify that the --request-timeout argument is either not set or set to an appropriate value."
+    # So actually, it always passes unless there is a specific organizational requirement.
+    # I will just log the state.
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --disable-admission-plugins argument is set to a value that does not includes ServiceAccount.
+	##
+	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --disable-admission-plugins argument is set to a value that does not includes ServiceAccount.
+	##
+
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q "\--disable-admission-plugins"; then
 		if ps -ef | grep kube-apiserver | grep -v grep | grep "\--disable-admission-plugins" | grep -q "ServiceAccount"; then
 			a_output2+=(" - Check Failed: ServiceAccount is present in --disable-admission-plugins")

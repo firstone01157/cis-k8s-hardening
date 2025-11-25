@@ -9,15 +9,6 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Get the EncryptionConfig file set for --encryption-provider-config argument. Verify that aescbc, kms, or secretbox is 
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Get the EncryptionConfig file set for --encryption-provider-config argument. Verify that aescbc, kms, or secretbox is set as the encryption provider for all the desired resources.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--encryption-provider-config"; then
 		a_output+=(" - Check Passed: --encryption-provider-config is set (Manual verification of config file content required)")
 	else

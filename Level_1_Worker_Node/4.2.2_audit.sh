@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command on each node: ps -ef | grep kubelet If the --authorization-mode argument is present check that it is not set to AlwaysAllow. If it is not present check that there is a Kubele
+	##
+	## Command hint: Run the following command on each node: ps -ef | grep kubelet If the --authorization-mode argument is present check that it is not set to AlwaysAllow. If it is not present check that there is a Kubelet config file specified by -- config, and that file sets authorization: mode to something other than AlwaysAllow. It is also possible to review the running configuration of a Kubelet via the /configz endpoint on the Kubelet API port (typically 10250/TCP). Accessing these with appropriate credentials will provide details of the Kubelet's configuration.
+	##
+
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--authorization-mode=AlwaysAllow"; then
 		a_output2+=(" - Check Failed: --authorization-mode is set to AlwaysAllow")
 	else

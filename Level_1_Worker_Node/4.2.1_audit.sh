@@ -9,6 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## If using a Kubelet configuration file, check that there is an entry for authentication: anonymous: enabled set to false. Run the following command on each node: ps -ef | grep kubelet Verify that the -
+	##
+	## Command hint: If using a Kubelet configuration file, check that there is an entry for authentication: anonymous: enabled set to false. Run the following command on each node: ps -ef | grep kubelet Verify that the --anonymous-auth argument is set to false. This executable argument may be omitted, provided there is a corresponding entry set to false in the Kubelet config file.
+	##
+
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--anonymous-auth=false"; then
 		a_output+=(" - Check Passed: --anonymous-auth is set to false")
 	else

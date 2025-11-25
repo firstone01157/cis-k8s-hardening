@@ -9,19 +9,13 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that if the --service-account-lookup argument exists it is set to true.
-	##
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that if the --service-account-lookup argument exists it is set to true.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=true"; then
-		a_output+=(" - Check Passed: --service-account-lookup is set to true")
+	# If argument exists, it must be true. If missing, default is true (so PASS).
+	# CSV: "Verify that if the --service-account-lookup argument exists it is set to true."
+	
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=false"; then
+		a_output2+=(" - Check Failed: --service-account-lookup is set to false")
 	else
-		a_output2+=(" - Check Failed: --service-account-lookup is not set to true")
+		a_output+=(" - Check Passed: --service-account-lookup is true or not set (default true)")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

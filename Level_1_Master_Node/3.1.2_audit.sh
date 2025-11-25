@@ -9,22 +9,12 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## Review user access to the cluster and ensure that users are not making use of service account token authentication.
-	##
-	## Command hint: Review user access to the cluster and ensure that users are not making use of service account token authentication.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
 	# This is a manual check.
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=true"; then
 		a_output+=(" - Manual Check: --service-account-lookup is set to true (Good). Ensure service account tokens are not used for users.")
 	else
 		a_output+=(" - Manual Check: --service-account-lookup is NOT set to true.")
 	fi
-	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # CIS Benchmark: 1.2.4
-# Title: Ensure that the --kubelet-client-certificate and --kubelet- client-key arguments are set as appropriate (Automated)
+# Title: Ensure that the --kubelet-client-certificate and --kubelet-client-key arguments are set as appropriate (Automated)
 # Level: • Level 1 - Master Node
 # Remediation Script
 
@@ -10,28 +10,29 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this remediation command specifically
-	## Description from CSV:
-	## Follow the Kubernetes documentation and set up the TLS connection between the apiserver and kubelets. Then, edit API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the 
-	##
-	## Command hint: Follow the Kubernetes documentation and set up the TLS connection between the apiserver and kubelets. Then, edit API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the Control Plane node and set the kubelet client certificate and key parameters as below. --kubelet-client-certificate=<path/to/client-certificate-file> --kubelet-client-key=<path/to/client-key-file>
-	##
-	## Safety Check: Verify if remediation is needed before applying
-	## Placeholder logic (No-op by default until reviewed)
-	## Change "1" to "0" once you implement the actual remediation
-
 	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
 	if [ -e "$l_file" ]; then
-		if grep -q "\--kubelet-client-certificate" "$l_file" && grep -q "\--kubelet-client-key" "$l_file"; then
-			a_output+=(" - Remediation not needed: kubelet client flags present in $l_file")
-			return 0
+		l_missing=0
+		if ! grep -q "\--kubelet-client-certificate" "$l_file"; then
+			l_missing=1
+		fi
+		if ! grep -q "\--kubelet-client-key" "$l_file"; then
+			l_missing=1
+		fi
+		
+		if [ "$l_missing" -eq 1 ]; then
+			a_output2+=(" - Remediation required: --kubelet-client-certificate and/or --kubelet-client-key missing in $l_file. Please add them manually with correct paths.")
 		else
-			a_output2+=(" - Remediation required: --kubelet-client-certificate and/or --kubelet-client-key missing in $l_file. Please add them manually.")
-			return 1
+			a_output+=(" - Remediation not needed: flags are present in $l_file")
 		fi
 	else
 		a_output+=(" - Remediation not needed: $l_file not found")
+	fi
+
+	if [ "${#a_output2[@]}" -le 0 ]; then
 		return 0
+	else
+		return 1
 	fi
 }
 

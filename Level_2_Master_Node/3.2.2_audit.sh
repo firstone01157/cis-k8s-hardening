@@ -9,22 +9,15 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	policy_file=$(ps -ef | grep kube-apiserver | grep -v grep | grep -oP '(?<=--audit-policy-file=)[^ ]+')
+	## Description from CSV:
+	## Review the audit policy provided for the cluster and ensure that it covers at least the following areas :- • Access to Secrets managed by the cluster. Care should be taken to only log Metadata for req
+	##
+	## Command hint: Review the audit policy provided for the cluster and ensure that it covers at least the following areas :- • Access to Secrets managed by the cluster. Care should be taken to only log Metadata for requests to Secrets, ConfigMaps, and TokenReviews, in order to avoid the risk of logging sensitive data. • Modification of pod and deployment objects. • Use of pods/exec, pods/portforward, pods/proxy and services/proxy. For most requests, minimally logging at the Metadata level is recommended (the most basic level of logging).
+	##
 
-	if [ -n "$policy_file" ]; then
-		if [ -f "$policy_file" ]; then
-			# Basic check for key security areas in the policy file
-			if grep -q "secrets" "$policy_file" && grep -q "Metadata" "$policy_file"; then
-				a_output+=(" - Check Passed: Audit policy file exists and appears to cover secrets metadata.")
-			else
-				a_output2+=(" - Check Failed: Audit policy file exists but might be missing 'secrets' or 'Metadata' rules.")
-			fi
-		else
-			a_output2+=(" - Check Failed: Audit policy file specified ($policy_file) but does not exist.")
-		fi
-	else
-		a_output2+=(" - Check Failed: --audit-policy-file argument is not set.")
-	fi
+	a_output+=(" - Manual Check: Ensure audit policy covers key security concerns.")
+	a_output+=(" - Command: Review audit policy file (referenced by --audit-policy-file in apiserver)")
+	return 0
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

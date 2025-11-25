@@ -9,16 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
+	## Description from CSV:
+	## Run the following command on each node: ps -ef | grep kubelet Verify that the --tls-cert-file and --tls-private-key-file arguments exist and they are set as appropriate. If these arguments are not pre
+	##
+	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that the --tls-cert-file and --tls-private-key-file arguments exist and they are set as appropriate. If these arguments are not present, check that there is a Kubelet config specified by -- config and that it contains appropriate settings for tlsCertFile and tlsPrivateKeyFile.
+	##
+
 	if ps -ef | grep kubelet | grep -v grep | grep -q "\--tls-cert-file" && ps -ef | grep kubelet | grep -v grep | grep -q "\--tls-private-key-file"; then
 		a_output+=(" - Check Passed: --tls-cert-file and --tls-private-key-file are set")
 	else
-		# Check config file
-		config_file="/var/lib/kubelet/config.yaml"
-		if [ -f "$config_file" ] && grep -q "tlsCertFile" "$config_file" && grep -q "tlsPrivateKeyFile" "$config_file"; then
-			a_output+=(" - Check Passed: tlsCertFile and tlsPrivateKeyFile are set in $config_file")
-		else
-			a_output2+=(" - Check Failed: --tls-cert-file and/or --tls-private-key-file are NOT set")
-		fi
+		a_output2+=(" - Check Failed: --tls-cert-file and/or --tls-private-key-file are NOT set")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
