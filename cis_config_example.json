@@ -1,0 +1,29 @@
+{
+    "excluded_rules": {
+        "1.1.12": "RISK_ACCEPTED - Legacy etcd API required for compliance scanning tool",
+        "1.2.25": "RISK_ACCEPTED - Metrics endpoint needed for Prometheus monitoring",
+        "4.1.2": "IGNORED - Not applicable to worker node architecture",
+        "5.1.1": "PLANNED_REMEDIATION - Network policy transition in progress, ETA Feb 15 2025",
+        "5.2.4": "ENVIRONMENT_CONSTRAINT - RBAC constraints required for multi-tenant setup"
+    },
+    "skip_rules": [],
+    "custom_parameters": {
+        "kube_config": "/etc/kubernetes/admin.conf"
+    },
+    "health_check": {
+        "check_services": [
+            "kubelet",
+            "containerd",
+            "etcd"
+        ],
+        "check_ports": [
+            6443,
+            10250
+        ],
+        "api_health_url": "https://localhost:6443/healthz"
+    },
+    "logging": {
+        "enabled": true,
+        "log_dir": "logs"
+    }
+}

@@ -1,0 +1,2429 @@
+#!/usr/bin/env python3
+"""
+CIS Oracle Linux 9 - Master Script Runner
+สคริปต์หลักสำหรับรัน audit และ remediation แบบอัตโนมัติ
+
+Main script for running CIS benchmark audits and remediations automatically
+
+Features / ฟีเจอร์:
+- Choose audit, remediation, or both / เลือกรัน audit, remediation หรือทั้งคู่
+- Skip specific CIS items / ข้ามข้อที่ไม่ต้องการตรวจสอบ
+- Level selection (L1, L2, or Both) / เลือก Level 1, 2 หรือทั้งคู่
+- Automatic report generation / สร้างรายงานอัตโนมัติ
+"""
+
+# Import libraries / นำเข้าไลบรารี่
+import os           # สำหรับจัดการไฟล์และโฟลเดอร์ / For file/folder operations
+import sys          # สำหรับ exit codes / For exit codes
+import subprocess   # สำหรับรันสคริปต์ bash / For running bash scripts
+import argparse     # สำหรับรับ command-line arguments / For command-line arguments
+import shutil       # สำหรับคัดลอกไฟล์ AIDE / For copying AIDE files
+from pathlib import Path          # สำหรับจัดการ path / For path management
+from datetime import datetime     # สำหรับ timestamp / For timestamps
+import json         # สำหรับอ่าน/เขียน JSON (ถ้าต้องการในอนาคต) / For JSON handling
+import csv          # สำหรับอ่านไฟล์ CSV / For reading CSV files
+
+class CISMasterRunner:
+    """
+    คลาสหลักสำหรับรัน CIS benchmark scripts
+    Main class for running CIS benchmark scripts
+    """
+    
+    def __init__(self, verbose=1, quiet=False):
+        """
+        เริ่มต้นตัวแปรและโฟลเดอร์ทั้งหมด
+        Initialize all variables and directories
+        
+        Args:
+            verbose: ระดับความละเอียด / Verbosity level (0=quiet, 1=normal, 2=verbose)
+            quiet: โหมดเงียบ (แสดงแค่สรุป) / Quiet mode (show summary only)
+        """
+        # กำหนดระดับ verbose / Set verbosity level
+        # 0 = quiet (แสดงแค่สรุป), 1 = normal (ปกติ), 2 = verbose (แสดงทุกอย่าง)
+        if quiet:
+            self.verbose_level = 0  # โหมดเงียบ / Quiet mode
+        else:
+            self.verbose_level = verbose  # ตามที่กำหนด / As specified
+        
+        # สร้าง timestamp สำหรับชื่อไฟล์รายงาน (เช่น 20251112_093925)
+        # Create timestamp for report filenames (e.g., 20251112_093925)
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # กำหนด path ของโฟลเดอร์ที่เก็บสคริปต์ (แยก L1/L2)
+        # Define paths for script directories (separate L1/L2)
+        self.audit_l1_dir = Path("./cis_audits_l1")              # สคริปต์ audit Level 1
+        self.audit_l2_dir = Path("./cis_audits_l2")              # สคริปต์ audit Level 2
+        self.remediation_l1_dir = Path("./cis_remediations_l1")  # สคริปต์ remediation Level 1
+        self.remediation_l2_dir = Path("./cis_remediations_l2")  # สคริปต์ remediation Level 2
+
+        # โฟลเดอร์สำหรับเก็บไฟล์รายงาน (แยกตามวันที่ -> ประเภท -> run timestamp)
+        # Directory for report files (organized by date -> type -> run timestamp)
+        # Structure: results/2025-11-12/audit/run_20251112_093925/
+        #            results/2025-11-12/remediation/run_20251112_093925/
+        #            results/2025-11-12/both/run_20251112_093925/
+        date_folder = datetime.now().strftime("%Y-%m-%d")  # เช่น 2025-11-12
+        self.run_type_folder = None  # จะถูก set ใน run() method (audit/remediation/both)
+        run_folder = f"run_{self.timestamp}"  # เช่น run_20251112_093925
+        self.report_dir = None  # จะถูก set หลังจากทราบ run type
+        self.date_folder = date_folder  # เก็บไว้สำหรับใช้ต่อ
+
+        # ไฟล์ config (สำหรับอนาคต) / Config file (for future use)
+        self.config_file = "cis_runner_config.json"
+        
+        # โหลด config file ถ้ามี / Load config file if exists
+        self.config = self._load_config()
+        
+        # เก็บผลลัพธ์การรัน / Store execution results
+        self.results = {
+            "audit": {"passed": [], "failed": [], "skipped": []},           # ผล audit: ผ่าน/ไม่ผ่าน/ข้าม
+            "remediation": {"success": [], "failed": [], "skipped": [], "manual": []},    # ผล remediation: สำเร็จ/ล้มเหลว/ข้าม/manual
+        }
+        
+        # รายการข้อที่ต้องการข้าม (user ระบุ) / List of items to skip (user specified)
+        self.skip_list = []
+        
+        # ระดับที่เลือก: "1"=L1, "2"=L2, "3"=Both / Selected level: "1"=L1, "2"=L2, "3"=Both
+        self.level_filter = "1"  # Default: Level 1 only
+        
+        # โหลด mapping ของ CIS items จาก CSV / Load CIS items mapping from CSV
+        self.level_map = self._load_level_map()
+
+        # Firewall selection state (default to firewalld)
+        self.selected_firewall = "firewalld"
+        self.firewall_choice_file = Path("/tmp/cis_firewall_choice")
+
+        # SELinux mode selection for L2
+        self.selected_selinux_mode = None
+
+        # Stateful compliance
+        self.state_file = Path("/etc/cis-compliance-state.json")
+        self.remediation_plan = None
+
+        self.error_analysis_patterns = {
+            # --- System & Permissions ---
+            "Permission denied": {
+                "summary": "Permission Denied Error",
+                "cause": "The script tried to modify a file or directory it doesn't have access to. This can happen if a file is locked (immutable) or has incorrect ownership.",
+                "solution": "Ensure the script is run with sudo. Check for immutable flags on the target file with 'lsattr <file>' and remove with 'chattr -i <file>' if necessary."
+            },
+            "No such file or directory": {
+                "summary": "File or Directory Not Found",
+                "cause": "A required file or directory is missing. This could be due to a non-standard installation or a previous script failing to create it.",
+                "solution": "Verify the file path in the script is correct for your system. Manually create the file/directory if it's safe to do so."
+            },
+            "Read-only file system": {
+                "summary": "Read-only Filesystem",
+                "cause": "The script attempted to write to a filesystem that is mounted as read-only.",
+                "solution": "Check your mount points with 'findmnt'. You may need to remount the filesystem as read-write ('mount -o remount,rw /')."
+            },
+            # --- Service Management (systemctl) ---
+            "Unit not found": {
+                "summary": "Service Unit Not Found",
+                "cause": "The script tried to manage a service (e.g., start, stop, enable) that is not installed or has a different name.",
+                "solution": "Verify the package providing this service is installed. Use 'systemctl list-unit-files' to check the correct service name."
+            },
+            "service is masked": {
+                "summary": "Service is Masked",
+                "cause": "The service has been permanently disabled (masked) and cannot be started. This is often intentional by another hardening script.",
+                "solution": "This is likely due to a policy conflict (e.g., trying to restart rsyslog after it was masked). Review the script logic. To manually unmask, run 'systemctl unmask <service>'."
+            },
+            # --- Package Management (dnf) ---
+            "Nothing to do.": {
+                "summary": "Package Already Installed/Removed",
+                "cause": "The package the script tried to install or remove was already in the desired state.",
+                "solution": "This is usually not a critical error. The system is already compliant for this check."
+            },
+            "Unable to find a match": {
+                "summary": "Package Not Found",
+                "cause": "The package name is incorrect, or the required repository is not enabled.",
+                "solution": "Check the package name for typos. Run 'dnf repolist' to ensure you have the correct repositories enabled."
+            },
+            # --- Scripting Errors ---
+            "command not found": {
+                "summary": "Command Not Found",
+                "cause": "A command used by the script is not installed or not in the system's PATH. This can also be caused by incorrect line endings (Windows CR/LF).",
+                "solution": "Install the missing command's package (e.g., 'dnf install dos2unix'). If the error shows a strange character like '^M', run 'dos2unix' on the script file."
+            }
+        }
+        self.script_map = {} # For interactive debugging
+
+    def _load_level_map(self):
+        """
+        โหลดข้อมูล CIS items จากไฟล์ CSV เพื่อแยก Level 1/2
+        Load CIS items data from CSV file to separate Level 1/2
+        
+        Returns:
+            dict: {cis_number: level} เช่น {"1.1.1.1": 1, "1.1.1.6": 2}
+        """
+        level_map = {}  # เก็บ mapping ของเลขข้อ -> level / Store item number -> level mapping
+        csv_file = Path("CIS_Oracle_Linux_9_Benchmark_v2.0.0.csv")
+
+        # ตรวจสอบว่าไฟล์ CSV มีหรือไม่ / Check if CSV file exists
+        if not csv_file.exists():
+            self.log("CSV file not found, skipping level filtering", "WARNING")
+            return level_map
+
+        try:
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                # ข้าม 4 บรรทัดแรก (หัวเรื่อง, เวอร์ชัน, บรรทัดว่าง, header)
+                # Skip first 4 lines (title, version, blank line, header)
+                for _ in range(4):
+                    next(f)
+                
+                reader = csv.reader(f)
+                for row in reader:
+                    # รูปแบบแต่ละแถว: [Compliance Status, Number, Level, Title, Profile Applicability, ...]
+                    # Row format: [Compliance Status, Number, Level, Title, Profile Applicability, ...]
+                    
+                    if len(row) >= 5 and row[1]:  # ต้องมีคอลัมน์ Number (index 1) / Must have Number column
+                        cis_num = row[1].strip()   # เลขข้อ เช่น 1.1.1.1 / Item number e.g., 1.1.1.1
+                        profile = row[4].strip() if len(row) > 4 else ""  # Profile Applicability
+
+                        # ข้ามแถวว่างหรือไม่มีข้อมูล / Skip empty rows or rows without data
+                        if not profile or not cis_num:
+                            continue
+
+                        # เลือกเฉพาะข้อที่เป็น "Server" profile (ไม่เอา Workstation)
+                        # Only include "Server" profile items (exclude Workstation)
+                        if "Server" not in profile:
+                            continue
+
+                        # แยก Level 1 หรือ Level 2 / Extract Level 1 or Level 2
+                        if "Level 1" in profile:
+                            level_map[cis_num] = 1  # บันทึกว่าข้อนี้เป็น L1 / Mark as L1
+                        elif "Level 2" in profile:
+                            level_map[cis_num] = 2  # บันทึกว่าข้อนี้เป็น L2 / Mark as L2
+                            
+        except Exception as e:
+            self.log(f"Error reading CSV: {str(e)}", "ERROR")
+
+        return level_map
+
+    def _load_config(self):
+        """
+        โหลดการตั้งค่าจากไฟล์ JSON / Load configuration from JSON file
+        
+        Returns:
+            dict: Configuration dictionary หรือ {} ถ้าไม่มีไฟล์ / or {} if no file
+        """
+        config_path = Path(self.config_file)
+        
+        # ถ้าไม่มีไฟล์ config ให้คืนค่า empty dict / If no config file, return empty dict
+        if not config_path.exists():
+            return {}
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            # ตรวจสอบว่ามี skip_items หรือไม่ / Check if skip_items exists
+            if 'skip_items' in config and isinstance(config['skip_items'], list):
+                self.log(f"Loaded config from {self.config_file}", "INFO")
+                self.log(f"Found {len(config['skip_items'])} items in skip list", "INFO")
+                return config
+            else:
+                self.log(f"Config file exists but no skip_items found", "WARNING")
+                return {}
+                
+        except json.JSONDecodeError as e:
+            self.log(f"Error parsing config file: {str(e)}", "ERROR")
+            return {}
+        except Exception as e:
+            self.log(f"Error loading config: {str(e)}", "ERROR")
+            return {}
+
+    def _read_compliance_state(self):
+        """
+        Reads the compliance state from the state file.
+        Returns a dictionary with {'completed_level': 0} if not found or invalid.
+        """
+        if not self.state_file.exists():
+            return {'completed_level': 0}
+        try:
+            with open(self.state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            if 'completed_level' not in state or not isinstance(state['completed_level'], int):
+                self.log(f"State file {self.state_file} is malformed. Assuming Level 0.", "WARNING")
+                return {'completed_level': 0}
+            return state
+        except (json.JSONDecodeError, IOError) as e:
+            self.log(f"Could not read state file {self.state_file}: {e}. Assuming Level 0.", "ERROR")
+            return {'completed_level': 0}
+
+    def _write_compliance_state(self, level_completed):
+        """
+        Writes the new compliance state to the state file.
+        """
+        state = {
+            "completed_level": level_completed,
+            "last_run_timestamp": datetime.utcnow().isoformat() + "Z",
+            "benchmark_version": "2.0.0"
+        }
+        try:
+            with open(self.state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2)
+            self.log(f"System compliance state updated to Level {level_completed}", "SUCCESS")
+        except IOError as e:
+            self.log(f"Could not write to state file {self.state_file}: {e}", "ERROR")
+
+    def _analyze_script_error(self, output):
+        """
+        Analyzes script output to find known error patterns and provide clear explanations.
+        """
+        if not output:
+            return None
+
+        for keyword, analysis in self.error_analysis_patterns.items():
+            if keyword in output:
+                return analysis # คืนค่า Dictionary ของปัญหานั้นๆ
+        
+        return None # ไม่เจอ Pattern ที่ตรงกัน
+
+    def log(self, msg, level="INFO", min_verbose=1):
+        """
+        แสดงข้อความ log พร้อมสี / Print colored log message
+        
+        Args:
+            msg: ข้อความที่ต้องการแสดง / Message to display
+            level: ระดับของ log (INFO/SUCCESS/WARNING/ERROR/DEBUG) / Log level
+            min_verbose: ระดับ verbose ขั้นต่ำที่จะแสดง / Minimum verbosity level to display
+        """
+        # เช็คว่าควรแสดงข้อความนี้หรือไม่ / Check if should display this message
+        if self.verbose_level < min_verbose:
+            return  # ไม่แสดง ถ้า verbose level ต่ำกว่าที่กำหนด / Don't show if verbosity too low
+        
+        # กำหนดสีสำหรับแต่ละระดับ (ANSI color codes)
+        # Define colors for each level (ANSI color codes)
+        colors = {
+            "INFO": "\033[94m",      # สีน้ำเงิน / Blue - ข้อมูลทั่วไป
+            "SUCCESS": "\033[92m",   # สีเขียว / Green - สำเร็จ
+            "WARNING": "\033[91m",   # สีแดง / Red - คำเตือน (เปลี่ยนจากเหลือง)
+            "ERROR": "\033[91m",     # สีแดง / Red - ข้อผิดพลาด
+            "DEBUG": "\033[90m",     # สีเทา / Gray - ข้อมูล debug
+        }
+        reset = "\033[0m"  # รีเซ็ตสีกลับเป็นปกติ / Reset color to normal
+        
+        # สร้าง timestamp แบบ HH:MM:SS / Create timestamp in HH:MM:SS format
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # แสดงผล: [เวลา] ระดับ ข้อความ / Display: [time] level message
+        # ต้องใช้ flush=True เพื่อแสดงผลลัพธ์ทันที ไม่งั้นจะติดในบัฟเฟอร์
+        # Must use flush=True to display immediately, otherwise stuck in buffer
+        print(f"[{timestamp}] {colors.get(level, '')}{level:8}{reset} {msg}", flush=True)
+
+    def check_critical_services(self):
+        """
+        ตรวจสอบสถานะของบริการสำคัญ (Health Check) / Check critical service status
+        
+        Returns:
+            bool: True ถ้าทั้งหมดทำงาน, False ถ้าพบปัญหา / True if all services healthy, False if issues
+        """
+        critical_services = ['dbus', 'sshd']  # บริการสำคัญที่ต้องตรวจสอบ / Critical services to monitor
+        failed_services = []
+        
+        for service in critical_services:
+            try:
+                result = subprocess.run(
+                    f"systemctl is-active --quiet {service}",
+                    shell=True,
+                    capture_output=True,
+                    timeout=5
+                )
+                if result.returncode != 0:
+                    failed_services.append(service)
+            except Exception as e:
+                self.log(f"[DEBUG] Could not check {service}: {str(e)}", "DEBUG", min_verbose=2)
+                failed_services.append(service)
+        
+        if failed_services:
+            self.log(f"EMERGENCY: Critical services inactive: {', '.join(failed_services)}", "ERROR")
+            return False
+        
+        return True
+
+    def attempt_service_recovery(self, service_name):
+        """
+        พยายาม recover service ที่ล้มเหลว / Attempt to recover failed service
+        
+        Args:
+            service_name: ชื่อ service ที่ต้อง recover / Service name to recover
+            
+        Returns:
+            bool: True ถ้า recovery สำเร็จ, False ถ้าล้มเหลว
+        """
+        self.log(f"Attempting to recover {service_name}...", "WARNING")
+        
+        try:
+            # Step 1: Try restart service
+            self.log(f"  [*] Attempting systemctl restart {service_name}...", "WARNING", min_verbose=1)
+            result = subprocess.run(
+                f"systemctl restart {service_name}",
+                shell=True,
+                capture_output=True,
+                timeout=10
+            )
+            
+            # Step 2: Check if service is now active
+            if subprocess.run(
+                f"systemctl is-active --quiet {service_name}",
+                shell=True,
+                timeout=5
+            ).returncode == 0:
+                self.log(f"  [+] {service_name} successfully restarted", "SUCCESS", min_verbose=1)
+                return True
+            else:
+                self.log(f"  [-] {service_name} still inactive after restart", "ERROR", min_verbose=1)
+                return False
+                
+        except Exception as e:
+            self.log(f"  [-] Recovery attempt failed: {str(e)}", "ERROR", min_verbose=1)
+            return False
+
+    def track_modified_files(self, cis_id, script_output):
+        """
+        ติดตามไฟล์ที่ถูกแก้ไข (File Integrity Monitor) / Track modified files
+        
+        Args:
+            cis_id: เลขข้อ CIS / CIS item number
+            script_output: output จากสคริปต์ / Script output
+        """
+        if not hasattr(self, 'modified_files_map'):
+            self.modified_files_map = {}  # {filepath: [cis_ids]}
+        
+        # ตรวจหาไฟล์ที่ถูกแก้ไข / Detect modified files
+        import re
+        # ตรวจหา paths ในรูป /etc/... /usr/... เป็นต้น
+        file_patterns = re.findall(r'\b(/\S+)\b', script_output)
+        
+        for filepath in file_patterns:
+            # ข้ามไฟล์ที่ไม่ใช่ config / Skip non-config files
+            if any(x in filepath for x in ['/var/lib/', '/tmp/', '/root/', '.tmp']):
+                continue
+            
+            if filepath not in self.modified_files_map:
+                self.modified_files_map[filepath] = []
+            self.modified_files_map[filepath].append(cis_id)
+
+    def setup_report_directory(self, run_type):
+        """
+        สร้าง report directory ตามประเภท run (audit/remediation/both)
+        Setup report directory based on run type (audit/remediation/both)
+        
+        Args:
+            run_type: 'audit', 'remediation', หรือ 'both'
+        """
+        self.run_type_folder = run_type  # บันทึกประเภท run
+        run_folder = f"run_{self.timestamp}"
+        self.report_dir = Path("./results") / self.date_folder / run_type / run_folder
+        
+        # สร้างโฟลเดอร์ถ้ายังไม่มี / Create if not exists
+        if not self.report_dir.exists():
+            self.report_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.log(f"Report directory: {self.report_dir}", "DEBUG", min_verbose=2)
+
+    def extract_script_metadata(self, script_path):
+        """
+        ดึงข้อมูล metadata จาก script header
+        Extract metadata from script header
+        
+        Returns: dict with 'cis_id', 'title', 'description'
+        """
+        try:
+            with open(script_path, 'r') as f:
+                lines = f.readlines()[:15]  # อ่านแค่ 15 บรรทัดแรก / Read first 15 lines
+                
+            metadata = {
+                'cis_id': '',
+                'title': '',
+                'description': '',
+                'type': 'Automated'
+            }
+            
+            for line in lines:
+                line = line.strip()
+                
+                # ดึง CIS ID: "# CIS 1.1.2.7.4" หรือ "# CIS Oracle Linux 9 Benchmark - 3.1.3"
+                if 'CIS' in line and '-' in line:
+                    # Format: "# CIS Oracle Linux 9 Benchmark - 3.1.3"
+                    parts = line.split(' - ')
+                    if len(parts) >= 2:
+                        metadata['cis_id'] = parts[-1].strip()
+                        
+                # ดึง title: "# Ensure bluetooth is disabled (Manual..."
+                if 'Ensure' in line or 'Enable' in line or 'Disable' in line or 'Audit' in line:
+                    metadata['title'] = line.replace('#', '').strip()
+                    
+                    # Check for type (Manual, Automated)
+                    if 'Manual' in line or 'manual' in line:
+                        metadata['type'] = 'Manual'
+                        
+            return metadata
+            
+        except Exception as e:
+            return {'cis_id': '', 'title': '', 'description': '', 'type': 'Unknown'}
+
+    def show_script_result(self, script_path, cis_id, result, elapsed_time, status):
+        """
+        แสดงผลลัพธ์ละเอียด หลังจาก script จบ (เวอร์ชันปรับปรุง)
+        Show detailed result after script execution (Enhanced version)
+        """
+        if self.verbose_level < 2: # แสดงเฉพาะในโหมด -vv
+            return
+            
+        metadata = self.extract_script_metadata(script_path)
+        
+        reset = "\033[0m"
+        cyan = "\033[96m"
+        red = "\033[91m"
+        yellow = "\033[93m"
+        
+        print(f"\n{cyan}{'='*70}{reset}")
+        print(f"{cyan}DETAILS - {status} - {cis_id} ({script_path.name}){reset}")
+        print(f"{cyan}{'='*70}{reset}")
+        
+        # CIS ID & Title
+        if metadata['cis_id']:
+            print(f"  CIS ID:        {metadata['cis_id']}")
+        if metadata['title']:
+            print(f"  Title:         {metadata['title']}")
+        
+        # Type
+        print(f"  Type:          {metadata['type']}")
+        
+        # Time taken
+        print(f"  Time:          {elapsed_time:.2f}s")
+        
+        # Exit code
+        if result:
+            print(f"  Exit Code:     {result.returncode}")
+
+        # --- ส่วนวิเคราะห์ปัญหาที่เพิ่มเข้ามา ---
+        if status == "FAILED" and result:
+            analysis = self._analyze_script_error(result.stdout + result.stderr)
+            if analysis:
+                print(f"\n{yellow}  [!] Automated Analysis:{reset}")
+                print(f"    Summary:  {analysis['summary']}")
+                print(f"    Cause:    {analysis['cause']}")
+                print(f"    Solution: {analysis['solution']}")
+
+        # --- แสดง Output ดิบ (เป็น Fallback) ---
+        print(f"\n{yellow}  [i] Raw Output (Last 5 lines):{reset}")
+        if result:
+            full_output = (result.stdout + result.stderr).strip()
+            if full_output:
+                output_lines = full_output.split('\n')[-5:] # แสดง 5 บรรทัดสุดท้าย
+                for line in output_lines:
+                    print(f"    {line}")
+            else:
+                print("    (No output)")
+        else:
+            print("    (No result object)")
+        
+        print(f"{cyan}{'='*70}{reset}\n")
+
+    def show_banner(self):
+        """
+        แสดงแบนเนอร์ข้อมูลโปรเจค / Display project information banner
+        """
+        # ข้ามถ้าเป็นโหมดเงียบ / Skip if quiet mode
+        if self.verbose_level == 0:
+            return
+        
+        # กรอบด้านบน / Top border
+        print("\n" + "=" * 72)
+        print("|" + " " * 70 + "|")
+        
+        # ชื่อโปรเจค / Project name
+        print("|" + " " * 15 + "CIS Oracle Linux 9 Benchmark v2.0.0" + " " * 19 + "|")
+        print("|" + " " * 21 + "Master Runner Script" + " " * 29 + "|")
+        
+        # กรอบด้านล่าง / Bottom border
+        print("|" + " " * 70 + "|")
+        print("=" * 72)
+        print()
+        
+        # ข้อมูลโปรเจค / Project information
+        print("  [*] Total Benchmarks: 297 (237 L1 + 60 L2)")  # จำนวนข้อทั้งหมด
+        print("  [*] Total Scripts: 594 (audit + remediation)")  # จำนวนสคริปต์ทั้งหมด
+        print("  [*] Profile: Server only")                     # รองรับ Server เท่านั้น
+        print("  [*] Version: v2.0.0 (Released: 06-25-2024)")   # เวอร์ชัน CIS benchmark
+        
+        # แสดงโหมด verbose ถ้าเป็น verbose mode / Show verbose mode if enabled
+        if self.verbose_level >= 2:
+            print("  [*] Verbose Mode: ENABLED (showing detailed output)")
+        print()
+
+    def show_menu(self):
+        """
+        แสดงเมนูหลักและรับคำตอบจากผู้ใช้ / Show main menu and get user selection
+        
+        Returns:
+            str: เลขที่เลือก '1'-'4' / Selected choice '1'-'4'
+        """
+        self.show_banner()  # แสดงแบนเนอร์ / Show banner
+        
+        # แสดงตัวเลือกโหมดการทำงาน / Display mode options
+        print("="*70)
+        print("SELECT MODE:")
+        print("="*70)
+        print("\n  1) Audit only")                            # รันเฉพาะ audit (ตรวจสอบ)
+        print("  2) Remediation only")                        # รันเฉพาะ remediation (แก้ไข)
+        print("  3) Both (Audit first, then Remediation)")    # รันทั้งคู่ (audit ก่อน แล้วค่อย remediation)
+        print("  4) Cancel")                                  # ยกเลิก
+        print()
+
+        # วนรับคำตอบจนกว่าจะถูกต้อง / Loop until valid choice
+        while True:
+            choice = input("Choose [1-4]: ").strip()
+            if choice in ['1', '2', '3', '4']:
+                return choice  # คืนค่าตัวเลือก / Return choice
+            print("Invalid choice. Try again.")  # เลือกผิด ให้เลือกใหม่ / Invalid, try again
+
+    def get_execution_plan(self, mode):
+        """
+        Determines the execution plan for both Audit and Remediation modes.
+        Sets self.level_filter and returns a plan string.
+        """
+        # --- AUDIT MODE ---
+        if mode == '1':
+            print("\n" + "="*70)
+            print("AUDIT COMPLIANCE LEVEL SELECTION")
+            print("="*70)
+            print("\n  1) Level 1 only (237 benchmarks)")
+            print("  2) Level 2 only (60 benchmarks)")
+            print("  3) Both Level 1 + Level 2 (297 benchmarks)")
+            print()
+            while True:
+                choice = input("Choose audit level [1-3]: ").strip()
+                if choice in ['1', '2', '3']:
+                    self.level_filter = choice
+                    return 'AUDIT'
+                print("Invalid choice.")
+
+        # --- REMEDIATION MODE ---
+        if mode in ['2', '3']:
+            state = self._read_compliance_state()
+            current_level = state.get('completed_level', 0)
+
+            print("\n" + "="*70)
+            print("REMEDIATION COMPLIANCE PLAN SELECTION")
+            print("="*70)
+            
+            if current_level == 0:
+                print("\n[i] System State: No previous CIS compliance level detected.")
+                print("    You can apply Level 1 hardening or go straight to Level 2 (includes L1).")
+                print("\n  1) Apply Level 1 Hardening (Recommended First Step)")
+                print("  2) Apply Full Level 1 + Level 2 Hardening")
+                print("  3) Cancel")
+                while True:
+                    choice = input("\nChoose plan [1-3]: ").strip()
+                    if choice == '1':
+                        self.level_filter = '1'
+                        self.remediation_plan = 'APPLY_L1'
+                        return self.remediation_plan
+                    elif choice == '2':
+                        self.level_filter = '3'
+                        self.remediation_plan = 'APPLY_L2_FULL'
+                        return self.remediation_plan
+                    elif choice == '3':
+                        return 'CANCEL'
+                    print("Invalid choice.")
+            
+            elif current_level == 1:
+                print(f"\n[i] System State: Level 1 compliance is already applied.")
+                print("    You can upgrade to Level 2 or re-apply the Level 1 hardening.")
+                print("\n  1) Upgrade to Level 2 (Applies only L2 scripts)")
+                print("  2) Re-apply Level 1 Hardening")
+                print("  3) Re-apply Full Level 1 + Level 2 Hardening")
+                print("  4) Cancel")
+                while True:
+                    choice = input("\nChoose plan [1-4]: ").strip()
+                    if choice == '1':
+                        self.level_filter = '2'
+                        self.remediation_plan = 'UPGRADE_TO_L2'
+                        return self.remediation_plan
+                    elif choice == '2':
+                        self.level_filter = '1'
+                        self.remediation_plan = 'REAPPLY_L1'
+                        return self.remediation_plan
+                    elif choice == '3':
+                        self.level_filter = '3'
+                        self.remediation_plan = 'REAPPLY_FULL'
+                        return self.remediation_plan
+                    elif choice == '4':
+                        return 'CANCEL'
+                    print("Invalid choice.")
+
+            elif current_level >= 2:
+                print(f"\n[i] System State: Full Level 2 compliance is already applied.")
+                print("    You can re-apply hardening if needed.")
+                print("\n  1) Re-apply Level 1 Hardening only")
+                print("  2) Re-apply Level 2 Hardening only")
+                print("  3) Re-apply Full Level 1 + Level 2 Hardening")
+                print("  4) Cancel")
+                while True:
+                    choice = input("\nChoose plan [1-4]: ").strip()
+                    if choice == '1':
+                        self.level_filter = '1'
+                        self.remediation_plan = 'REAPPLY_L1'
+                        return self.remediation_plan
+                    elif choice == '2':
+                        self.level_filter = '2'
+                        self.remediation_plan = 'REAPPLY_L2'
+                        return self.remediation_plan
+                    elif choice == '3':
+                        self.level_filter = '3'
+                        self.remediation_plan = 'REAPPLY_FULL'
+                        return self.remediation_plan
+                    elif choice == '4':
+                        return 'CANCEL'
+                    print("Invalid choice.")
+        
+        return 'CANCEL' # Failsafe
+
+    def get_skip_items(self):
+        """
+        รับรายการข้อที่ต้องการข้าม / Get list of CIS items to skip
+        ปรับ preset ตามที่เลือก Level / Adjust presets based on selected Level
+        
+        Returns:
+            list: รายการเลขข้อที่จะข้าม / List of item numbers to skip
+        """
+        # ตรวจสอบว่ามี config file พร้อม skip_items หรือไม่ / Check if config file has skip_items
+        if self.config and 'skip_items' in self.config and self.config['skip_items']:
+            print("\n" + "="*70)
+            print("SKIP CONFIGURATION DETECTED")
+            print("="*70)
+            print(f"\nFound skip list in {self.config_file}")
+            print(f"Items to skip: {len(self.config['skip_items'])}")
+            print("\nSkip list:")
+            for item in self.config['skip_items']:
+                reason = self.config.get('skip_reasons', {}).get(item, 'No reason specified')
+                print(f"  • {item}: {reason}")
+            
+            print("\nOptions:")
+            print("  1. Use config file skip list (recommended)")
+            print("  2. Add more items to skip")
+            print("  3. Ignore config and configure manually")
+            
+            choice = input("\nSelect option (1-3): ").strip()
+            
+            if choice == "1":
+                # ใช้ skip list จาก config / Use skip list from config
+                self.skip_list = self.config['skip_items'].copy()
+                self.log(f"Using skip list from config file ({len(self.skip_list)} items)", "INFO")
+                return self.skip_list
+                
+            elif choice == "2":
+                # เริ่มด้วย skip list จาก config แล้วให้ user เพิ่ม / Start with config skip list and let user add more
+                self.skip_list = self.config['skip_items'].copy()
+                print("\nCurrent skip list loaded from config.")
+                print("Enter additional CIS items to skip (comma-separated)")
+                print("Example: 1.1.1, 1.1.2, 2.3.4")
+                skip_input = input("Additional items to skip (or press Enter to skip): ").strip()
+                
+                if skip_input:
+                    additional_items = [item.strip() for item in skip_input.split(',')]
+                    self.skip_list.extend(additional_items)
+                    self.log(f"Added {len(additional_items)} more items to skip list", "INFO")
+                
+                self.log(f"Total items to skip: {len(self.skip_list)}", "WARNING")
+                return self.skip_list
+        
+        # ถ้าไม่มี config หรือเลือก option 3 ให้ทำแบบเดิม / If no config or chose option 3, use original flow
+        print("\n" + "="*60)
+        print("Skip Configuration")
+        print("="*60)
+        print("\nPreset skip lists:")
+        print("  1. No skip (run all items)")
+        
+        # แสดง option ข้าม GUI เฉพาะเมื่อเลือก Level 2 หรือ Both
+        # Show GUI skip option only for Level 2 or Both
+        if self.level_filter in ["2", "3"]:
+            print("  2. Skip GUI removal (1.8.1) - keep Server with GUI")
+            print("  3. Skip SSH configuration (Section 5.3.x) - avoid connection issues")
+            print("  4. Custom skip list")
+            choice = input("\nSelect preset (1-4): ").strip()
+            
+            if choice == "2":
+                self.log("Selected: Skip 1.8.1 (GUI removal) - Server will keep GUI", "WARNING")
+                self.skip_list = ["1.8.1","2.1.20"]
+                return self.skip_list
+            elif choice == "3":
+                # Skip ทุกข้อ SSH (Section 5.3.x) / Skip all SSH items
+                ssh_items = [
+                    "5.3.1.1", "5.3.1.2", "5.3.1.3",
+                    "5.3.2.1", "5.3.2.2", "5.3.2.3", "5.3.2.4", "5.3.2.5",
+                    "5.3.3.1.1", "5.3.3.1.2",
+                    "5.3.3.2.1", "5.3.3.2.2", "5.3.3.2.3", "5.3.3.2.4", 
+                    "5.3.3.2.5", "5.3.3.2.6", "5.3.3.2.7",
+                    "5.3.3.3.1", "5.3.3.3.2", "5.3.3.3.3",
+                    "5.3.3.4.1", "5.3.3.4.2", "5.3.3.4.3", "5.3.3.4.4"
+                ]
+                self.log(f"Selected: Skip all SSH items (Section 5.3.x) - {len(ssh_items)} items", "WARNING")
+                self.skip_list = ssh_items
+                return self.skip_list
+            elif choice == "4":
+                print("\nEnter CIS items to skip (comma-separated)")
+                print("Example: 1.1.1, 1.1.2, 2.3.4")
+                skip_input = input("Items to skip: ").strip()
+                
+                if skip_input:
+                    self.skip_list = [item.strip() for item in skip_input.split(',')]
+                    self.log(f"Will skip: {', '.join(self.skip_list)}", "WARNING")
+                else:
+                    self.log("No items will be skipped", "INFO")
+                    self.skip_list = []
+            else:
+                self.log("No items will be skipped", "INFO")
+                self.skip_list = []
+        else:
+            # Level 1 only - no GUI removal item
+            print("  2. Skip SSH configuration (Section 5.3.x) - avoid connection issues")
+            print("  3. Custom skip list")
+            choice = input("\nSelect preset (1-3): ").strip()
+            
+            if choice == "2":
+                # Skip ทุกข้อ SSH (Section 5.3.x) / Skip all SSH items
+                ssh_items = [
+                    "5.3.1.1", "5.3.1.2", "5.3.1.3",
+                    "5.3.2.1", "5.3.2.2", "5.3.2.3", "5.3.2.4", "5.3.2.5",
+                    "5.3.3.1.1", "5.3.3.1.2",
+                    "5.3.3.2.1", "5.3.3.2.2", "5.3.3.2.3", "5.3.3.2.4", 
+                    "5.3.3.2.5", "5.3.3.2.6", "5.3.3.2.7",
+                    "5.3.3.3.1", "5.3.3.3.2", "5.3.3.3.3",
+                    "5.3.3.4.1", "5.3.3.4.2", "5.3.3.4.3", "5.3.3.4.4"
+                ]
+                self.log(f"Selected: Skip all SSH items (Section 5.3.x) - {len(ssh_items)} items", "WARNING")
+                self.skip_list = ssh_items
+                return self.skip_list
+            elif choice == "3":
+                print("\nEnter CIS items to skip (comma-separated)")
+                print("Example: 1.1.1, 1.1.2, 2.3.4")
+                skip_input = input("Items to skip: ").strip()
+                
+                if skip_input:
+                    self.skip_list = [item.strip() for item in skip_input.split(',')]
+                    self.log(f"Will skip: {', '.join(self.skip_list)}", "WARNING")
+                else:
+                    self.log("No items will be skipped", "INFO")
+                    self.skip_list = []
+            else:
+                self.log("No items will be skipped", "INFO")
+                self.skip_list = []
+
+        return self.skip_list
+
+    def choose_firewall(self):
+        """Ask the user which firewall stack to activate before doing remediation"""
+        print("\n" + "="*70)
+        print("FIREWALL SELECTION")
+        print("="*70)
+        print("\n  1) Use and harden firewalld (Recommended default)")
+        print("  2) Use and harden nftables")
+        print()
+
+        while True:
+            choice = input("Choose firewall [1-2] (default 1): ").strip()
+            if choice in ["", "1"]:
+                self.selected_firewall = "firewalld"
+                break
+            if choice == "2":
+                self.selected_firewall = "nftables"
+                break
+            print("Invalid selection. Enter 1 or 2.")
+
+        self.log(f"Firewall target: {self.selected_firewall}", "INFO")
+        self.persist_firewall_choice()
+        self.ensure_firewall_services()
+
+    def choose_selinux_policy(self):
+        """
+        แสดงเมนูให้ผู้ใช้เลือก SELinux mode สำหรับ Level 2
+        Show menu for user to select SELinux mode for Level 2
+        """
+        print("\n" + "="*70)
+        print("SELINUX MODE SELECTION (LEVEL 2)")
+        print("="*70)
+        print("\n[!] WARNING: 'Enforcing' mode provides the highest security but may")
+        print("    cause existing applications to fail if they lack proper SELinux policies.")
+        print()
+        print("  1) Enforcing (Full Level 2 Compliance - Recommended for new systems)")
+        print("  2) Permissive (Safer for existing systems - Skips CIS 1.3.1.5)")
+        print()
+
+        while True:
+            choice = input("Choose SELinux mode [1-2] (default 2): ").strip()
+            if choice == "1":
+                self.selected_selinux_mode = "enforcing"
+                self.log("SELinux mode selected: Enforcing", "INFO")
+                break
+            elif choice in ["", "2"]:
+                self.selected_selinux_mode = "permissive"
+                self.log("SELinux mode selected: Permissive (will skip 1.3.1.5)", "WARNING")
+                break
+            else:
+                print("Invalid choice. Please enter 1 or 2.")
+        
+        try:
+            selinux_choice_file = Path("/tmp/cis_selinux_choice")
+            selinux_choice_file.write_text(self.selected_selinux_mode)
+            self.log(f"SELinux choice saved to {selinux_choice_file}", "DEBUG", min_verbose=2)
+        except Exception as exc:
+            self.log(f"Could not persist SELinux choice: {exc}", "WARNING")
+
+    def persist_firewall_choice(self):
+        """Write the selected firewall to a temporary file for helper scripts"""
+        try:
+            self.firewall_choice_file.parent.mkdir(parents=True, exist_ok=True)
+            self.firewall_choice_file.write_text(self.selected_firewall)
+            self.log(f"Firewall choice saved to {self.firewall_choice_file}", "DEBUG", min_verbose=2)
+        except Exception as exc:
+            self.log(f"Could not persist firewall choice: {exc}", "WARNING")
+
+    def ensure_firewall_services(self):
+        """Enable the selected firewall service and mask the other"""
+        if self.selected_firewall == "firewalld":
+            actions = [
+                (["systemctl", "enable", "--now", "firewalld"], "Enable firewalld"),
+                (["systemctl", "mask", "nftables"], "Mask nftables")
+            ]
+        else:
+            actions = [
+                (["systemctl", "enable", "--now", "nftables"], "Enable nftables"),
+                (["systemctl", "mask", "firewalld"], "Mask firewalld")
+            ]
+
+        for cmd, description in actions:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    self.log(f"{description} succeeded", "SUCCESS")
+                else:
+                    self.log(f"{description} failed: {result.stderr.strip()}", "WARNING")
+            except Exception as exc:
+                self.log(f"{description} error: {exc}", "WARNING")
+
+    def show_logging_policy_notice(self):
+        """
+        แสดงประกาศนโยบายการจัดการ Log / Display the logging policy notice.
+        """
+        # ข้ามถ้าเป็นโหมดเงียบ / Skip if quiet mode
+        if self.verbose_level == 0:
+            return
+
+        print("\n" + "="*70)
+        print("LOGGING SYSTEM POLICY NOTICE")
+        print("="*70)
+        
+        # === ภาษาไทย ===
+        print("\n[นโยบายการจัดการ Log]")
+        print("  [*] สคริปต์นี้จะตั้งค่าให้ 'systemd-journald' เป็นระบบ Log หลักเพียงหนึ่งเดียว")
+        print("  [*] นี่คือมาตรฐานของ Oracle Linux 9 และเป็นวิธีที่ทันสมัยและปลอดภัยที่สุด")
+        print("  [!] ดังนั้น บริการ 'rsyslog' จะถูกปิดการใช้งาน (disable & mask) โดยอัตโนมัติ")
+        print("  [>>] ข้อกำหนด CIS ที่เกี่ยวข้องกับ 'rsyslog' ทั้งหมดจะถูกข้าม (SKIP) เพื่อป้องกันความขัดแย้ง")
+        print("  [+] ข้อมูล Log ทั้งหมดจะยังคงถูกรวบรวมโดย journald และสามารถดูได้ด้วยคำสั่ง 'journalctl'")
+
+        # === English ===
+        print("\n[Logging System Policy]")
+        print("  [*] This script will enforce 'systemd-journald' as the sole, primary logging system.")
+        print("  [*] This is the modern standard for Oracle Linux 9 and the recommended best practice.")
+        print("  [!] As a result, the 'rsyslog' service will be automatically disabled and masked.")
+        print("  [>>] All CIS items related to 'rsyslog' configuration will be SKIPPED to prevent conflicts.")
+        print("  [+] All log data will continue to be collected by journald and can be viewed with 'journalctl'.")
+        print("="*70)
+
+    def apply_system_policies(self):
+        """Add policy-based CIS skips so incompatible scripts never run"""
+        
+        # --- Firewall Policy ---
+        firewall_skip_map = {
+            "firewalld": ["4.3.1", "4.3.2", "4.3.3", "4.3.4"],
+            "nftables": ["4.2.1", "4.2.2"],
+        }
+        firewall_skips = firewall_skip_map.get(self.selected_firewall, [])
+        
+        # --- Logging Policy ---
+        # Since we enforce journald, we must skip all rsyslog configuration items.
+        # เนื่องจากเราบังคับใช้ journald เราจึงต้องข้ามข้อที่เกี่ยวกับ rsyslog ทั้งหมด
+        logging_skips = [
+            "6.2.3.1", # Ensure rsyslog is installed
+            "6.2.3.2", # Ensure rsyslog service is enabled and active
+            "6.2.3.3", # Ensure journald does not forward to syslog (this is handled by policy)
+            "6.2.3.4", # Ensure rsyslog log file creation mode is configured
+            "6.2.3.5", # Ensure rsyslog logging is configured
+            "6.2.3.6", # Ensure rsyslog is configured to send logs to a remote log host
+            "6.2.3.7", # Ensure rsyslog is not configured to receive remote logs
+            "6.2.3.8", # Ensure rsyslog logrotate is configured
+            "7.2.4",   # Ensure logging is configured (rsyslog)
+            "7.2.5",   # Ensure logging is configured (rsyslog - journald)
+            "7.2.6",   # Ensure logging is configured (rsyslog - remote)
+        ]
+
+        # --- SELinux Policy ---
+        selinux_skips = []
+        if hasattr(self, 'selected_selinux_mode') and self.selected_selinux_mode == 'permissive':
+            selinux_skips = ["1.3.1.5"]
+            self.log("SELinux Policy: 'Permissive' mode selected, CIS 1.3.1.5 will be skipped.", "INFO")
+
+        # --- Combine all policy skips ---
+        policy_skips = firewall_skips + logging_skips + selinux_skips
+        newly_added = []
+        
+        for token in policy_skips:
+            if token not in self.skip_list:
+                self.skip_list.append(token)
+                newly_added.append(token)
+
+        if newly_added:
+            self.log(
+                f"System policies will automatically skip CIS items: {', '.join(newly_added)}", "INFO"
+            )
+
+    def is_skipped(self, cis_id):
+        """
+        ตรวจสอบว่าข้อนี้ควรข้ามหรือไม่ / Check if a CIS item should be skipped
+        
+        Args:
+            cis_id: เลขข้อ CIS เช่น "1.1.1.1" / CIS item number e.g., "1.1.1.1"
+            
+        Returns:
+            bool: True=ข้าม, False=ไม่ข้าม / True=skip, False=don't skip
+        """
+        # เช็คว่าเลขข้อนี้อยู่ใน skip list หรือไม่ / Check if item is in skip list
+        for skip_item in self.skip_list:
+            if skip_item in cis_id:
+                return True  # ข้ามข้อนี้ / Skip this item
+        return False  # ไม่ข้าม / Don't skip
+
+    def _count_remediation_scripts(self):
+        """
+        นับจำนวนสคริปต์ remediation ที่จะรัน / Count remediation scripts to run
+        
+        Returns:
+            int: จำนวนสคริปต์ / Number of scripts
+        """
+        scripts = []
+        if self.level_filter == "1":
+            scripts = list(self.remediation_l1_dir.glob("r*.sh"))
+        elif self.level_filter == "2":
+            scripts = list(self.remediation_l2_dir.glob("r*.sh"))
+        else:  # "3" = Both
+            scripts = list(self.remediation_l1_dir.glob("r*.sh")) + list(self.remediation_l2_dir.glob("r*.sh"))
+        return len(scripts)
+
+    def confirm_action(self, message):
+        """
+        ขอยืนยันจากผู้ใช้ / Get confirmation from user
+        
+        Args:
+            message: ข้อความที่ต้องการยืนยัน / Confirmation message
+            
+        Returns:
+            bool: True=ยืนยัน, False=ยกเลิก / True=confirm, False=cancel
+        """
+        while True:
+            choice = input(f"\n{message} [y/n]: ").strip().lower()
+            if choice in ['y', 'yes']:
+                return True   # ยืนยัน / Confirm
+            elif choice in ['n', 'no']:
+                return False  # ยกเลิก / Cancel
+
+    def run_audit_scripts(self):
+        """
+        รันสคริปต์ audit ทั้งหมด / Run all audit scripts
+        
+        ฟังก์ชันนี้จะ:
+        1. เลือกสคริปต์ตาม Level ที่เลือก (L1/L2/Both)
+        2. รันสคริปต์ทีละตัว พร้อม timeout 120 วินาที
+        3. บันทึกผลลัพธ์: ผ่าน/ไม่ผ่าน/ข้าม
+        4. แสดงสรุปผลการตรวจสอบ
+        
+        This function will:
+        1. Select scripts based on chosen Level (L1/L2/Both)
+        2. Run scripts one by one with 120 second timeout
+        3. Record results: passed/failed/skipped
+        4. Display audit summary
+        """
+        self.log("Starting AUDIT scripts...", "INFO")
+        print("\n" + "="*70)
+        print("AUDIT SCRIPTS")
+        print("="*70)
+
+        # เลือกโฟลเดอร์สคริปต์ตาม Level ที่เลือก / Select script directories based on level
+        scripts = []
+        if self.level_filter == "1":
+            level_name = "Level 1"
+            scripts = sorted(self.audit_l1_dir.glob("a*.sh"))  # เฉพาะ L1
+        elif self.level_filter == "2":
+            level_name = "Level 2"
+            scripts = sorted(self.audit_l2_dir.glob("a*.sh"))  # เฉพาะ L2
+        else:  # "3" = Both
+            level_name = "Level 1 + Level 2"
+            # รวม L1 + L2 / Combine L1 + L2
+            scripts = sorted(self.audit_l1_dir.glob("a*.sh")) + sorted(self.audit_l2_dir.glob("a*.sh"))
+
+        print(f"\n[>] Running: {level_name} (Server profile)\n")
+
+        # เริ่มนับผลลัพธ์ / Initialize counters
+        total = len(scripts)   # จำนวนสคริปต์ทั้งหมด / Total scripts
+        passed = 0             # จำนวนที่ผ่าน / Passed count
+        failed = 0             # จำนวนที่ไม่ผ่าน / Failed count
+        skipped = 0            # จำนวนที่ข้าม / Skipped count
+
+        # วนรันสคริปต์ทีละตัว / Loop through each script
+        for i, script_path in enumerate(scripts, 1):
+            script_name = script_path.name
+            # แปลงชื่อไฟล์เป็นเลขข้อ CIS / Convert filename to CIS number
+            # เช่น "a1.1.1.1.sh" => "1.1.1.1"
+            cis_id = script_name.replace("a", "").replace(".sh", "")
+
+            # ตรวจสอบว่าควรข้ามข้อนี้หรือไม่ / Check if should skip this item
+            if self.is_skipped(cis_id):
+                self.results["audit"]["skipped"].append(cis_id)
+                skipped += 1
+                self.log(f"[{i:4d}/{total}] SKIP  {cis_id} ({script_name})", "WARNING")
+                continue  # ข้ามไปข้อต่อไป / Skip to next
+
+            # รันสคริปต์ audit / Run audit script
+            try:
+                # แสดงคำสั่งที่รัน (verbose mode เท่านั้น) / Show command (verbose mode only)
+                self.log(f"Running: bash {script_path}", "DEBUG", min_verbose=2)
+                
+                # Prepare environment with verbose level
+                import os
+                import time
+                env = os.environ.copy()
+                env['CIS_VERBOSE'] = str(self.verbose_level)
+                env['CIS_FIREWALL_CHOICE'] = self.selected_firewall
+                
+                # เก็บเวลาเริ่มต้น / Capture start time
+                start_time = time.time()
+                
+                # Determine timeout based on script type
+                # AIDE init can take 5-10 minutes, package install with slow internet can take time
+                script_path_str = str(script_path)
+                if 'r6.1.2' in script_path_str:  # AIDE initialization
+                    script_timeout = 600
+                elif 'r4.1.1' in script_path_str or 'r6.2' in script_path_str:  # Kernel parameter or journald (may need package install)
+                    script_timeout = 600
+                else:
+                    script_timeout = 120  # Default timeout for other scripts
+                
+                result = subprocess.run(
+                    f"bash {script_path}",    # รันด้วย bash
+                    shell=True,               # ใช้ shell mode
+                    capture_output=True,      # เก็บ output
+                    text=True,                # แปลงเป็น text
+                    stdin=subprocess.DEVNULL, # ไม่รอ input (สำหรับ [MANUAL] check) / Don't wait for input
+                    timeout=script_timeout,   # timeout: 600 for AIDE, 120 for others
+                    env=env                   # ส่ง environment variables
+                )
+                
+                # คำนวณเวลาที่ใช้ / Calculate elapsed time
+                elapsed_time = time.time() - start_time
+
+                # แสดง output (verbose mode เท่านั้น) / Show output (verbose mode only)
+                if result.stdout and self.verbose_level >= 2:
+                    self.log(f"Output: {result.stdout.strip()[:100]}", "DEBUG", min_verbose=2)
+                if result.stderr and self.verbose_level >= 2:
+                    self.log(f"Error: {result.stderr.strip()[:100]}", "DEBUG", min_verbose=2)
+                self.log(f"Return code: {result.returncode}", "DEBUG", min_verbose=2)
+
+                # ตรวจสอบผลลัพธ์ / Check result
+                if result.returncode == 2:
+                    # returncode=2 หมายถึง MANUAL check / returncode=2 means MANUAL
+                    if "manual" not in self.results["audit"]:
+                        self.results["audit"]["manual"] = []
+                    self.results["audit"]["manual"].append(cis_id)
+                    status = "MANUAL"
+                    level = "INFO"
+                elif result.returncode == 0:
+                    # returncode=0 หมายถึงผ่าน / returncode=0 means PASS
+                    self.results["audit"]["passed"].append(cis_id)
+                    passed += 1
+                    status = "PASS"
+                    level = "SUCCESS"
+                else:
+                    # returncode อื่นหมายถึงไม่ผ่าน / Other returncode means FAIL
+                    self.results["audit"]["failed"].append(cis_id)
+                    failed += 1
+                    status = "FAIL"
+                    level = "WARNING"
+
+                # แสดงผลลัพธ์ / Display result
+                self.log(f"[{i:4d}/{total}] {status}  {cis_id} ({script_name})", level)
+                
+                # --- Show prominent notification for MANUAL items ---
+                if status == "MANUAL":
+                    print()
+                    print("!" * 70)
+                    print(f"[!] MANUAL CHECK DETECTED: CIS {cis_id}")
+                    print(f"[!] This item requires manual verification or configuration")
+                    print(f"[!] Script: {script_name}")
+                    print("!" * 70)
+                    print()
+                
+                # แสดงรายละเอียดถ้า verbose mode (เหมือน remediation) / Show details if verbose mode
+                import time
+                self.show_script_result(script_path, cis_id, result, elapsed_time, status)
+
+            except subprocess.TimeoutExpired:
+                # ถ้ารันเกิน 120 วินาที / If exceeds 120 seconds
+                self.results["audit"]["failed"].append(cis_id)
+                failed += 1
+                self.log(f"[{i:4d}/{total}] TIMEOUT {cis_id}", "ERROR")
+            except Exception as e:
+                # เกิด error อื่นๆ / Other errors
+                self.results["audit"]["failed"].append(cis_id)
+                failed += 1
+                self.log(f"[{i:4d}/{total}] ERROR {cis_id}: {str(e)[:50]}", "ERROR")
+
+        # แสดงสรุปผลการตรวจสอบ / Display audit summary
+        # แสดงเสมอ แม้ในโหมดเงียบ / Always show, even in quiet mode
+        manual_count = len(self.results['audit'].get('manual', []))
+        print("\n" + "="*70, flush=True)
+        print("AUDIT SUMMARY", flush=True)
+        print("="*70, flush=True)
+        print(f"[*] Total:   {total}", flush=True)      # จำนวนทั้งหมด / Total count
+        print(f"[+] Passed:  {passed}", flush=True)     # จำนวนที่ผ่าน / Passed count
+        if manual_count > 0:
+            print(f"[!] MANUAL:  {manual_count}", flush=True)  # MANUAL checks - highlight
+        else:
+            print(f"[!] Manual:  {manual_count}", flush=True)  # MANUAL checks
+        print(f"[-] Failed:  {failed}", flush=True)     # จำนวนที่ไม่ผ่าน / Failed count
+        print(f"[>>] Skipped: {skipped}", flush=True)   # จำนวนที่ข้าม / Skipped count
+        # คำนวณเปอร์เซ็นต์ความสำเร็จ / Calculate success percentage
+        print(f"[%] Success: {(passed*100//total) if total > 0 else 0}%", flush=True)
+        
+        # --- Show list of manual items if any ---
+        if manual_count > 0:
+            print("\n" + "-"*70, flush=True)
+            print("MANUAL ITEMS (require manual verification/configuration):", flush=True)
+            print("-"*70, flush=True)
+            for cis_id in sorted(self.results['audit'].get('manual', [])):
+                print(f"  [!] {cis_id}", flush=True)
+            print("="*70, flush=True)
+
+        # ส่งค่าผลลัพธ์กลับ / Return results
+        return passed, failed, skipped
+
+    def run_remediation_scripts(self, remediation_plan):
+        """
+        รันสคริปต์ remediation ทั้งหมดตามแผนที่เลือก / Run all remediation scripts based on the selected plan.
+        
+        ฟังก์ชันนี้จะ:
+        1. เลือกสคริปต์ตาม "แผนการทำงาน" (remediation_plan)
+        2. แสดงคำเตือนที่เหมาะสมกับแผน
+        3. ขอยืนยันก่อนรัน
+        4. รันสคริปต์และบันทึกผล
+        5. บันทึกสถานะ compliance ใหม่เมื่อทำสำเร็จ
+        
+        This function will:
+        1. Select scripts based on the "execution plan" (remediation_plan)
+        2. Display warnings appropriate to the plan
+        3. Ask for confirmation before running
+        4. Run scripts and record results
+        5. Write the new compliance state upon success
+        
+        Returns:
+            tuple: (success_count, failed, skipped) - จำนวนสำเร็จ/ไม่สำเร็จ/ข้าม
+        """
+        self.log(f"Starting REMEDIATION with plan: {remediation_plan}...", "INFO")
+        print("\n" + "="*70)
+        print("REMEDIATION SCRIPTS")
+        print("="*70)
+
+        # --- เลือกสคริปต์และตั้งค่าตามแผน ---
+        l1_scripts = sorted(self.remediation_l1_dir.glob("r*.sh"))
+        l2_scripts = sorted(self.remediation_l2_dir.glob("r*.sh"))
+        scripts = []
+        level_name = ""
+        target_level_to_write = 0
+
+        if remediation_plan in ['APPLY_L1', 'REAPPLY_L1']:
+            scripts = l1_scripts
+            level_name = "Level 1"
+            target_level_to_write = 1
+        elif remediation_plan == 'UPGRADE_TO_L2':
+            scripts = l2_scripts
+            level_name = "Level 2 Upgrade"
+            target_level_to_write = 2
+        elif remediation_plan == 'REAPPLY_L2':
+            scripts = l2_scripts
+            level_name = "Level 2 Re-application"
+            target_level_to_write = 2
+        elif remediation_plan in ['APPLY_L2_FULL', 'REAPPLY_FULL']:
+            scripts = l1_scripts + l2_scripts
+            level_name = "Full Level 1 + Level 2"
+            target_level_to_write = 2
+        
+        # Populate the script map for the interactive debugger
+        self.script_map = {script.name.replace("r", "").replace(".sh", ""): script for script in scripts}
+
+        if not scripts:
+            self.log("No scripts to run for the selected plan.", "ERROR")
+            return 0, 0, 0
+        
+        total_scripts_to_run = len(scripts)
+
+        # --- แสดงคำเตือน ---
+        print("\n" + "!"*70)
+        print("WARNING: REMEDIATION WILL MODIFY YOUR SYSTEM!")
+        print("!"*70)
+        print(f"\nSelected Plan: {remediation_plan} ({level_name})")
+        
+        # คำเตือนเฉพาะถ้ามีการรัน L2
+        if self.level_filter in ["2", "3"]:
+            print("\n! LEVEL 2 HARDENING WILL BE APPLIED !")
+            print("  [!] This will REMOVE the GUI and many network services.")
+            print("  [!] The system will boot to a command-line interface only.")
+            print("  [!] Ensure you have configured SSH access BEFORE proceeding.")
+        
+        print("\n" + "="*70)
+        print("Additional Information:")
+        print(f"  • Total scripts to run: {total_scripts_to_run}")
+        print(f"  • Estimated time: ~{total_scripts_to_run * 1.5:.0f} seconds") # Adjusted timing
+        print("  • Backup recommended: YES")
+        print("  • Reboot may be required: YES")
+        print("="*70)
+
+        # --- ขอยืนยัน ---
+        if not self.confirm_action("Do you want to proceed with remediation?"):
+            self.log("Remediation cancelled by user", "WARNING")
+            return 0, 0, 0
+
+        self.show_logging_policy_notice()
+        self.apply_system_policies()
+
+        print(f"\n[>] Running Plan: {remediation_plan} ({level_name}) (Server profile)\n")
+
+        # --- รันสคริปต์ ---
+        success_count, failed, skipped = 0, 0, 0
+        for i, script_path in enumerate(scripts, 1):
+            script_name = script_path.name
+            cis_id = script_name.replace("r", "").replace(".sh", "")
+
+            if self.is_skipped(cis_id):
+                self.results["remediation"]["skipped"].append(cis_id)
+                skipped += 1
+                self.log(f"[{i:4d}/{total_scripts_to_run}] SKIP  {cis_id} ({script_name})", "WARNING")
+                continue
+
+            try:
+                self.log(f"Running: bash {script_path}", "DEBUG", min_verbose=2)
+                env = os.environ.copy()
+                env['CIS_VERBOSE'] = str(self.verbose_level)
+                env['CIS_FIREWALL_CHOICE'] = self.selected_firewall
+                start_time = datetime.now().timestamp()
+
+                script_path_str = str(script_path)
+                if 'r6.1.1' in script_path_str or 'r6.1.2' in script_path_str:
+                    script_timeout = 900  # 15 นาทีสำหรับ AIDE
+                elif 'r1.2.2.1' in script_path_str or 'r2.1.2' in script_path_str or 'r2.1.11' in script_path_str or 'r7.1.12' in script_path_str:
+                    script_timeout = 300  # 5 นาทีสำหรับ dnf และ find
+                else:
+                    script_timeout = 180
+
+                result = subprocess.run(
+                    f"bash {script_path}", shell=True, capture_output=True, text=True,
+                    stdin=subprocess.DEVNULL, timeout=script_timeout, env=env
+                )
+                elapsed_time = datetime.now().timestamp() - start_time
+
+                if result.returncode == 2:
+                    self.results["remediation"]["manual"].append(cis_id)
+                    status, level = "MANUAL", "INFO"
+                elif result.returncode == 0:
+                    self.results["remediation"]["success"].append(cis_id)
+                    success_count += 1
+                    status, level = "SUCCESS", "SUCCESS"
+                else:
+                    self.results["remediation"]["failed"].append(cis_id)
+                    failed += 1
+                    status, level = "FAILED", "WARNING"
+
+                self.log(f"[{i:4d}/{total_scripts_to_run}] {status}  {cis_id} ({script_name})", level)
+                self.track_modified_files(cis_id, result.stdout + result.stderr)
+                
+                # --- Show prominent notification for MANUAL items ---
+                if status == "MANUAL":
+                    print()
+                    print("!" * 70)
+                    print(f"[!] MANUAL REMEDIATION REQUIRED: CIS {cis_id}")
+                    print(f"[!] This item requires manual configuration or verification")
+                    print(f"[!] Script: {script_name}")
+                    print("!" * 70)
+                    print()
+                
+                self.show_script_result(script_path, cis_id, result, elapsed_time, status)
+
+                if status == "SUCCESS" and not self.check_critical_services():
+                    self.log(f"ALERT: CIS {cis_id} caused service failure, attempting recovery...", "WARNING")
+                    recovery_success = all(self.attempt_service_recovery(svc) for svc in ['dbus', 'sshd'])
+                    if not recovery_success:
+                        self.log(f"EMERGENCY STOP: CIS {cis_id} caused unrecoverable service failure.", "ERROR")
+                        return success_count, failed + (total_scripts_to_run - i), skipped
+
+            except subprocess.TimeoutExpired:
+                self.results["remediation"]["failed"].append(cis_id)
+                failed += 1
+                self.log(f"[{i:4d}/{total_scripts_to_run}] TIMEOUT {cis_id}", "ERROR")
+            except Exception as e:
+                self.results["remediation"]["failed"].append(cis_id)
+                failed += 1
+                self.log(f"[{i:4d}/{total_scripts_to_run}] ERROR {cis_id}: {str(e)[:50]}", "ERROR")
+
+        # --- สรุปผลและบันทึกสถานะ ---
+        print("\n" + "="*70, flush=True)
+        print("REMEDIATION SUMMARY", flush=True)
+        print("="*70, flush=True)
+        print(f"[*] Total:    {total_scripts_to_run}", flush=True)
+        print(f"[+] Success:  {success_count}", flush=True)
+        manual_remediation_count = len(self.results['remediation']['manual'])
+        if manual_remediation_count > 0:
+            print(f"[!] MANUAL:   {manual_remediation_count}", flush=True)
+        else:
+            print(f"[!] Manual:   {manual_remediation_count}", flush=True)
+        print(f"[-] Failed:   {failed}", flush=True)
+        print(f"[>>] Skipped:  {skipped}", flush=True)
+        print(f"[%] Success: {(success_count*100//total_scripts_to_run) if total_scripts_to_run > 0 else 0}%", flush=True)
+        
+        # --- Show list of manual remediation items if any ---
+        if manual_remediation_count > 0:
+            print("\n" + "-"*70, flush=True)
+            print("MANUAL REMEDIATION ITEMS (require manual configuration/verification):", flush=True)
+            print("-"*70, flush=True)
+            for cis_id in sorted(self.results['remediation'].get('manual', [])):
+                print(f"  [!] {cis_id}", flush=True)
+            print("="*70, flush=True)
+
+        if hasattr(self, 'modified_files_map'):
+            conflicts = {f: ids for f, ids in self.modified_files_map.items() if len(ids) > 1}
+            if conflicts:
+                print("\n" + "!"*70, flush=True)
+                print("WARNING: File Integrity Conflicts Detected!", flush=True)
+                print("!"*70, flush=True)
+                for filepath, cis_ids in conflicts.items():
+                    print(f"  File: {filepath} modified by: {', '.join(cis_ids)}", flush=True)
+
+        # Write state if fully successful
+        if failed == 0 and success_count > 0:
+            self._write_compliance_state(target_level_to_write)
+        else:
+            self.log("Remediation did not complete successfully. Compliance state NOT updated.", "WARNING")
+
+        return success_count, failed, skipped
+
+    def run_interactive_debug(self, failed_scripts):
+        """
+        Runs a list of failed scripts one by one in an interactive debug mode.
+        """
+        if not failed_scripts:
+            self.log("No failed scripts to debug.", "INFO")
+            return
+
+        print("\n" + "="*70)
+        print("INTERACTIVE DEBUGGING MODE")
+        print("="*70)
+        print("\n[i] You will now step through each failed script one by one.")
+        print("    The script's output will be shown in real-time.")
+        print("\nControls:")
+        print("  - Press [Enter] to run the next script.")
+        print("  - Type 's' and press [Enter] to skip all remaining scripts.")
+        print("  - Type 'q' and press [Enter] to quit debugging.")
+        print("="*70)
+
+        for i, script_path in enumerate(failed_scripts, 1):
+            cis_id = script_path.name.replace("r", "").replace(".sh", "")
+            
+            prompt = f"\n[{i}/{len(failed_scripts)}] Ready to run '{script_path.name}' (CIS {cis_id}). Press Enter to continue..."
+            user_input = input(prompt).strip().lower()
+
+            if user_input == 'q':
+                self.log("Quitting debug mode.", "INFO")
+                return
+            if user_input == 's':
+                self.log("Skipping remaining debug scripts.", "INFO")
+                break
+
+            print("-" * 70)
+            self.log(f"Executing: bash {script_path}", "INFO")
+            print("-" * 70)
+
+            try:
+                # Execute the script with output directly sent to the console
+                # We don't capture output here so the user sees it live.
+                env = os.environ.copy()
+                env['CIS_VERBOSE'] = str(self.verbose_level)
+                env['CIS_FIREWALL_CHOICE'] = self.selected_firewall
+                
+                result = subprocess.run(
+                    f"bash {script_path}",
+                    shell=True,
+                    text=True,
+                    env=env,
+                    # No capture_output=True
+                )
+                
+                print("-" * 70)
+                if result.returncode == 0:
+                    self.log(f"Script '{script_path.name}' finished with exit code 0 (SUCCESS).", "SUCCESS")
+                else:
+                    self.log(f"Script '{script_path.name}' finished with exit code {result.returncode} (FAILED).", "WARNING")
+                print("-" * 70)
+
+            except Exception as e:
+                self.log(f"An error occurred while running '{script_path.name}': {e}", "ERROR")
+
+        self.log("Interactive debug session finished.", "INFO")
+
+    def get_remediation_advice(self, cis_id):
+        """
+        ให้คำแนะนำวิธีแก้ไขสำหรับข้อที่ fail / Provide remediation advice for failed items
+        
+        Args:
+            cis_id: เลขข้อ CIS เช่น "1.1.1.1" / CIS item number
+            
+        Returns:
+            str: คำแนะนำวิธีแก้ / Remediation advice
+        """
+        # คำแนะนำวิธีแก้สำหรับข้อที่พบบ่อย / Common remediation advice
+        advice_map = {
+            "1.1.1.1": "Run: sudo grub2-mkconfig -o /boot/grub2/grub.cfg && reboot",
+            "1.4.1": "Run: sudo grub2-setpassword && grub2-mkconfig -o /boot/grub2/grub.cfg && reboot",
+            "1.1.2.1.2": "Edit /etc/fstab and add 'nodev' option to /tmp, then: mount -o remount /tmp",
+            "1.1.2.1.3": "Edit /etc/fstab and add 'nosuid' option to /tmp, then: mount -o remount /tmp",
+            "1.1.2.1.4": "Edit /etc/fstab and add 'noexec' option to /tmp, then: mount -o remount /tmp",
+            "1.2.2.1": "Run: sudo dnf check-update --refresh && dnf upgrade -y",
+        }
+        
+        # ถ้ามีคำแนะนำเฉพาะ ให้ return / If specific advice exists, return it
+        if cis_id in advice_map:
+            return advice_map[cis_id]
+        
+        # ถ้าไม่มี ให้คำแนะนำทั่วไป / Otherwise, return generic advice
+        return f"Run remediation script: sudo bash cis_remediations*/r{cis_id}.sh"
+
+    def generate_csv_report(self):
+        """
+        Generates a CSV report of all executed items.
+        สร้างรายงานผลลัพธ์ทั้งหมดในรูปแบบไฟล์ CSV
+        """
+        if self.report_dir is None:
+            self.log("Cannot generate CSV report, directory not set.", "WARNING")
+            return None
+
+        csv_file_path = self.report_dir / f"report_{self.timestamp}.csv"
+        header = ['Run_Type', 'CIS_ID', 'Status', 'Level', 'Script_Name']
+        
+        try:
+            with open(csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(header)
+
+                # Process audit results
+                for status, cis_ids in self.results['audit'].items():
+                    if not isinstance(cis_ids, list): continue
+                    for cis_id in cis_ids:
+                        level = self.level_map.get(cis_id, 'N/A')
+                        script_name = f"a{cis_id}.sh"
+                        # Map internal status to a more user-friendly one
+                        if status == "passed": report_status = "Passed"
+                        elif status == "failed": report_status = "Failed"
+                        elif status == "manual": report_status = "Manual"
+                        else: report_status = "Skipped"
+                        writer.writerow(['Audit', cis_id, report_status, level, script_name])
+
+                # Process remediation results
+                for status, cis_ids in self.results['remediation'].items():
+                    if not isinstance(cis_ids, list): continue
+                    for cis_id in cis_ids:
+                        level = self.level_map.get(cis_id, 'N/A')
+                        script_name = f"r{cis_id}.sh"
+                        if status == "success": report_status = "Success"
+                        elif status == "failed": report_status = "Failed"
+                        elif status == "manual": report_status = "Manual"
+                        else: report_status = "Skipped"
+                        writer.writerow(['Remediation', cis_id, report_status, level, script_name])
+            
+            self.log(f"CSV report saved: {csv_file_path}", "SUCCESS")
+            # Make file readable by user
+            try:
+                os.chmod(csv_file_path, 0o644)
+            except Exception as e:
+                self.log(f"Could not set permissions on CSV report: {e}", "WARNING")
+            return csv_file_path
+        except Exception as e:
+            self.log(f"ERROR: Failed to write CSV report: {str(e)}", "ERROR")
+            return None
+
+    def generate_report(self):
+        """
+        สร้างรายงานผลการรัน (แยกไฟล์และมีคำแนะนำ) / Generate execution report (separate files with advice)
+        
+        ฟังก์ชันนี้จะสร้าง 3 ไฟล์:
+        1. Summary report - สรุปผลรวม
+        2. Failed items report - รายการที่ fail พร้อมวิธีแก้
+        3. Full report - รายงานแบบละเอียด
+        
+        This function will create 3 files:
+        1. Summary report - Overall summary
+        2. Failed items report - Failed items with remediation advice
+        3. Full report - Detailed report
+        
+        Returns:
+            tuple: (summary_file, failed_file, full_file) - paths ของไฟล์ทั้งหมด
+        """
+        # ตรวจสอบว่า report_dir ถูก setup แล้ว / Check if report_dir was set up
+        if self.report_dir is None:
+            self.log("ERROR: Report directory not initialized. This is a bug.", "ERROR")
+            return None
+        
+        # สร้างชื่อไฟล์รายงาน (แยก 3 ไฟล์) / Create report filenames (3 separate files)
+        summary_file = self.report_dir / f"summary_{self.timestamp}.txt"
+        failed_file = self.report_dir / f"failed_items_{self.timestamp}.txt"
+        full_file = self.report_dir / f"full_report_{self.timestamp}.txt"
+
+        # ตรวจสอบว่าสามารถเขียนไฟล์ได้หรือไม่ / Check if can write to report directory
+        try:
+            # ทดสอบสร้างไฟล์ชั่วคราว / Test creating temporary file
+            test_file = self.report_dir / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+        except PermissionError:
+            # ไม่มีสิทธิ์เขียนไฟล์ / No permission to write
+            self.log("="*70, "ERROR")
+            self.log("ERROR: Permission denied to write report file!", "ERROR")
+            self.log("="*70, "ERROR")
+            self.log("", "ERROR")
+            self.log("คุณต้องรันสคริปต์นี้ด้วย sudo หรือ root:", "ERROR")
+            self.log("  sudo python cis_master_runner.py", "ERROR")
+            self.log("  sudo python3 cis_master_runner.py", "ERROR")
+            self.log("", "ERROR")
+            self.log("You need to run this script with sudo or as root:", "ERROR")
+            self.log("  sudo python cis_master_runner.py", "ERROR")
+            self.log("  sudo python3 cis_master_runner.py", "ERROR")
+            self.log("="*70, "ERROR")
+            return None
+        except Exception as e:
+            self.log(f"ERROR: Cannot write to {self.report_dir}: {str(e)}", "ERROR")
+            return None
+
+        # === 1. สร้างไฟล์ SUMMARY (สรุปผล) === / Create SUMMARY file
+        try:
+            with open(summary_file, 'w') as f:
+                f.write("="*70 + "\n")
+                f.write("CIS Oracle Linux 9 - SUMMARY REPORT\n")
+                f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Report Directory: {self.report_dir}\n")
+                f.write("="*70 + "\n\n")
+
+                # สรุปผล audit / Audit summary
+                total_audit = len(self.results['audit']['passed']) + len(self.results['audit']['failed'])
+                f.write("AUDIT SUMMARY:\n")
+                f.write(f"  Total:   {total_audit}\n")
+                f.write(f"  Passed:  {len(self.results['audit']['passed'])} ")
+                f.write(f"({len(self.results['audit']['passed'])*100//total_audit if total_audit > 0 else 0}%)\n")
+                f.write(f"  Manual:  {len(self.results['audit'].get('manual', []))}\n")
+                f.write(f"  Failed:  {len(self.results['audit']['failed'])} ")
+                f.write(f"({len(self.results['audit']['failed'])*100//total_audit if total_audit > 0 else 0}%)\n")
+                f.write(f"  Skipped: {len(self.results['audit']['skipped'])}\n\n")
+
+                # สรุปผล remediation / Remediation summary
+                total_remediation = len(self.results['remediation']['success']) + len(self.results['remediation']['failed'])
+                if total_remediation > 0:
+                    f.write("REMEDIATION SUMMARY:\n")
+                    f.write(f"  Total:   {total_remediation}\n")
+                    f.write(f"  Success: {len(self.results['remediation']['success'])} ")
+                    f.write(f"({len(self.results['remediation']['success'])*100//total_remediation if total_remediation > 0 else 0}%)\n")
+                    f.write(f"  Manual:  {len(self.results['remediation'].get('manual', []))}\n")
+                    f.write(f"  Failed:  {len(self.results['remediation']['failed'])} ")
+                    f.write(f"({len(self.results['remediation']['failed'])*100//total_remediation if total_remediation > 0 else 0}%)\n")
+                    f.write(f"  Skipped: {len(self.results['remediation']['skipped'])}\n\n")
+
+                # ไฟล์อื่นๆ / Other files
+                f.write("RELATED FILES:\n")
+                f.write(f"  - Failed items & fixes: {failed_file.name}\n")
+                f.write(f"  - Full detailed report: {full_file.name}\n\n")
+
+                # SSH CONFIGURATION WARNING / เตือนเรื่อง SSH
+                f.write("="*70 + "\n")
+                f.write("IMPORTANT: SSH CONFIGURATION NOTICE\n")
+                f.write("="*70 + "\n\n")
+                f.write("Items 5.1.20 (AllowUsers) and 5.1.21 (AllowGroups):\n\n")
+                f.write("[!] STATUS: MANUAL CONFIGURATION REQUIRED\n\n")
+                f.write("REASON:\n")
+                f.write("  These items require careful manual configuration to avoid SSH lockout.\n")
+                f.write("  Automatic scripting with wildcard values (*@* or *) can cause\n")
+                f.write("  connection failures on some OpenSSH versions.\n\n")
+                f.write("RECOMMENDED STEPS:\n")
+                f.write("  1. Edit /etc/ssh/sshd_config\n")
+                f.write("  2. Configure AllowUsers with specific users:\n")
+                f.write("     Example: AllowUsers root@192.168.1.0/24 admin@*\n")
+                f.write("  3. Configure AllowGroups with specific groups:\n")
+                f.write("     Example: AllowGroups sshusers\n")
+                f.write("     (First: groupadd sshusers; usermod -a -G sshusers username)\n")
+                f.write("  4. NEVER use wildcards like '*' or '*@*' alone\n")
+                f.write("  5. Test syntax: sshd -t\n")
+                f.write("  6. Restart SSH: systemctl restart sshd\n\n")
+                f.write("Item 5.1.18 (ClientAliveCountMax):\n\n")
+                f.write("[!] Set to value 3 (not 0)\n\n")
+                f.write("REASON:\n")
+                f.write("  Value 0 causes immediate disconnect when network timeout occurs.\n")
+                f.write("  Value 3 (recommended) allows 3 missed keepalives before disconnect.\n\n")
+                f.write("WARNING:\n")
+                f.write("  Be very careful with SSH configuration changes.\n")
+                f.write("  Incorrect SSH settings can cause immediate lockout!\n")
+                f.write("  Always test connectivity before committing changes.\n\n")
+
+            self.log(f"Summary report saved: {summary_file}", "SUCCESS")
+        except Exception as e:
+            self.log(f"ERROR: Failed to write summary: {str(e)}", "ERROR")
+
+        # === 2. สร้างไฟล์ FAILED ITEMS พร้อมวิธีแก้ === / Create FAILED ITEMS file with fixes
+        try:
+            with open(failed_file, 'w') as f:
+                f.write("="*70 + "\n")
+                f.write("CIS Oracle Linux 9 - FAILED ITEMS & REMEDIATION GUIDE\n")
+                f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("="*70 + "\n\n")
+
+                # Manual audit items
+                if self.results['audit'].get('manual'):
+                    f.write(f"MANUAL AUDIT ITEMS ({len(self.results['audit']['manual'])} items):\n")
+                    f.write("="*70 + "\n\n")
+                    for i, item in enumerate(self.results['audit']['manual'], 1):
+                        f.write(f"{i}. CIS {item}\n")
+                        f.write(f"   Status: MANUAL VERIFICATION REQUIRED\n")
+                        f.write(f"   Note: This item requires manual review or configuration\n")
+                        f.write(f"   Script: cis_audits*/a{item}.sh\n")
+                        f.write("\n")
+
+                # Failed audit items พร้อมวิธีแก้ / Failed audit items with remediation advice
+                if self.results['audit']['failed']:
+                    f.write(f"FAILED AUDIT CHECKS ({len(self.results['audit']['failed'])} items):\n")
+                    f.write("="*70 + "\n\n")
+                    for i, item in enumerate(self.results['audit']['failed'], 1):
+                        f.write(f"{i}. CIS {item}\n")
+                        f.write(f"   Status: FAILED\n")
+                        f.write(f"   Fix: {self.get_remediation_advice(item)}\n")
+                        f.write(f"   Script: cis_remediations*/r{item}.sh\n")
+                        f.write("\n")
+
+                # Manual remediation items
+                if self.results['remediation'].get('manual'):
+                    f.write(f"\nMANUAL REMEDIATION ITEMS ({len(self.results['remediation']['manual'])} items):\n")
+                    f.write("="*70 + "\n\n")
+                    f.write("These items require manual configuration or verification:\n\n")
+                    for i, item in enumerate(self.results['remediation']['manual'], 1):
+                        f.write(f"{i}. CIS {item}\n")
+                        f.write(f"   Status: MANUAL CONFIGURATION REQUIRED\n")
+                        f.write(f"   Manual Fix Required: {self.get_remediation_advice(item)}\n")
+                        f.write(f"   Note: This may require manual configuration in configuration files\n")
+                        f.write("\n")
+
+                # Failed remediation items / Failed remediation items
+                if self.results['remediation']['failed']:
+                    f.write(f"\nFAILED REMEDIATION ITEMS ({len(self.results['remediation']['failed'])} items):\n")
+                    f.write("="*70 + "\n\n")
+                    f.write("These items failed automatic remediation and require manual fix:\n\n")
+                    for i, item in enumerate(self.results['remediation']['failed'], 1):
+                        f.write(f"{i}. CIS {item}\n")
+                        f.write(f"   Status: REMEDIATION FAILED\n")
+                        f.write(f"   Manual Fix Required: {self.get_remediation_advice(item)}\n")
+                        f.write(f"   Note: This may require reboot or manual configuration\n")
+                        f.write("\n")
+
+                # คำแนะนำทั่วไป / General recommendations
+                f.write("\n" + "="*70 + "\n")
+                f.write("GENERAL RECOMMENDATIONS:\n")
+                f.write("="*70 + "\n\n")
+                f.write("1. Review each failed item before applying fixes\n")
+                f.write("2. Test fixes in non-production environment first\n")
+                f.write("3. Backup system before making changes\n")
+                f.write("4. Some fixes require system reboot to take effect\n")
+                f.write("5. Re-run audit after applying fixes to verify\n\n")
+                f.write("To re-run audit:\n")
+                f.write("  sudo python cis_master_runner.py\n")
+                f.write("  Select mode 1 (Audit only)\n")
+                
+                # SSH CONFIGURATION WARNING / เตือนเรื่อง SSH
+                f.write("\n" + "="*70 + "\n")
+                f.write("IMPORTANT: SSH CONFIGURATION NOTICE\n")
+                f.write("="*70 + "\n\n")
+                f.write("Items 5.1.20 (AllowUsers) and 5.1.21 (AllowGroups):\n\n")
+                f.write("[!] STATUS: MANUAL CONFIGURATION REQUIRED\n\n")
+                f.write("REASON:\n")
+                f.write("  These items require careful manual configuration to avoid SSH lockout.\n")
+                f.write("  Automatic scripting with wildcard values (*@* or *) can cause\n")
+                f.write("  connection failures on some OpenSSH versions.\n\n")
+                f.write("RECOMMENDED STEPS:\n")
+                f.write("  1. Edit /etc/ssh/sshd_config\n")
+                f.write("  2. Configure AllowUsers with specific users:\n")
+                f.write("     Example: AllowUsers root@192.168.1.0/24 admin@*\n")
+                f.write("  3. Configure AllowGroups with specific groups:\n")
+                f.write("     Example: AllowGroups sshusers\n")
+                f.write("     (First: groupadd sshusers; usermod -a -G sshusers username)\n")
+                f.write("  4. NEVER use wildcards like '*' or '*@*' alone\n")
+                f.write("  5. Test syntax: sshd -t\n")
+                f.write("  6. Restart SSH: systemctl restart sshd\n\n")
+                f.write("Item 5.1.18 (ClientAliveCountMax):\n\n")
+                f.write("[!] Set to value 3 (not 0)\n\n")
+                f.write("REASON:\n")
+                f.write("  Value 0 causes immediate disconnect when network timeout occurs.\n")
+                f.write("  Value 3 (recommended) allows 3 missed keepalives before disconnect.\n\n")
+                f.write("WARNING:\n")
+                f.write("  Be very careful with SSH configuration changes.\n")
+                f.write("  Incorrect SSH settings can cause immediate lockout!\n")
+                f.write("  Always test connectivity before committing changes.\n\n")
+
+            self.log(f"Failed items report saved: {failed_file}", "SUCCESS")
+        except Exception as e:
+            self.log(f"ERROR: Failed to write failed items report: {str(e)}", "ERROR")
+
+        # === 3. สร้างไฟล์ FULL REPORT (แบบเดิม) === / Create FULL REPORT (legacy format)
+        try:
+            with open(full_file, 'w') as f:
+                f.write("="*70 + "\n")
+                f.write("CIS Oracle Linux 9 - FULL DETAILED REPORT\n")
+                f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("="*70 + "\n\n")
+
+                # Audit results (รายละเอียด) / Audit results (detailed)
+                f.write("AUDIT RESULTS:\n")
+                f.write("-"*70 + "\n")
+                f.write(f"Passed:  {len(self.results['audit']['passed'])}\n")
+                f.write(f"Manual:  {len(self.results['audit'].get('manual', []))}\n")
+                f.write(f"Failed:  {len(self.results['audit']['failed'])}\n")
+                f.write(f"Skipped: {len(self.results['audit']['skipped'])}\n\n")
+
+                if self.results['audit']['passed']:
+                    f.write("Passed Items:\n")
+                    for item in sorted(self.results['audit']['passed']):
+                        f.write(f"  [+] {item}\n")
+                    f.write("\n")
+
+                if self.results['audit'].get('manual'):
+                    f.write("Manual Items (require manual verification):\n")
+                    for item in sorted(self.results['audit'].get('manual', [])):
+                        f.write(f"  [!] {item}\n")
+                    f.write("\n")
+
+                if self.results['audit']['failed']:
+                    f.write("Failed Items:\n")
+                    for item in sorted(self.results['audit']['failed']):
+                        f.write(f"  [-] {item}\n")
+                    f.write("\n")
+
+                if self.results['audit']['skipped']:
+                    f.write("Skipped Items:\n")
+                    for item in sorted(self.results['audit']['skipped']):
+                        f.write(f"  [>>] {item}\n")
+                    f.write("\n")
+
+                # Remediation results (รายละเอียด) / Remediation results (detailed)
+                if len(self.results['remediation']['success']) > 0 or len(self.results['remediation']['failed']) > 0:
+                    f.write("\n" + "="*70 + "\n")
+                    f.write("REMEDIATION RESULTS:\n")
+                    f.write("-"*70 + "\n")
+                    f.write(f"Success: {len(self.results['remediation']['success'])}\n")
+                    f.write(f"Manual:  {len(self.results['remediation'].get('manual', []))}\n")
+                    f.write(f"Failed:  {len(self.results['remediation']['failed'])}\n")
+                    f.write(f"Skipped: {len(self.results['remediation']['skipped'])}\n\n")
+
+                    if self.results['remediation']['success']:
+                        f.write("Successful Remediations:\n")
+                        for item in sorted(self.results['remediation']['success']):
+                            f.write(f"  [+] {item}\n")
+                        f.write("\n")
+
+                    if self.results['remediation'].get('manual'):
+                        f.write("Manual Remediations (require manual configuration):\n")
+                        for item in sorted(self.results['remediation'].get('manual', [])):
+                            f.write(f"  [!] {item}\n")
+                        f.write("\n")
+
+                    if self.results['remediation']['failed']:
+                        f.write("Failed Remediations:\n")
+                        for item in sorted(self.results['remediation']['failed']):
+                            f.write(f"  [-] {item}\n")
+                        f.write("\n")
+
+                    if self.results['remediation']['skipped']:
+                        f.write("Skipped Remediations:\n")
+                        for item in sorted(self.results['remediation']['skipped']):
+                            f.write(f"  [>>] {item}\n")
+                        f.write("\n")
+
+                # SSH CONFIGURATION WARNING / เตือนเรื่อง SSH
+                f.write("\n" + "="*70 + "\n")
+                f.write("IMPORTANT: SSH CONFIGURATION NOTICE\n")
+                f.write("="*70 + "\n\n")
+                f.write("Items 5.1.20 (AllowUsers) and 5.1.21 (AllowGroups):\n\n")
+                f.write("[!] STATUS: MANUAL CONFIGURATION REQUIRED\n\n")
+                f.write("REASON:\n")
+                f.write("  These items require careful manual configuration to avoid SSH lockout.\n")
+                f.write("  Automatic scripting with wildcard values (*@* or *) can cause\n")
+                f.write("  connection failures on some OpenSSH versions.\n\n")
+                f.write("RECOMMENDED STEPS:\n")
+                f.write("  1. Edit /etc/ssh/sshd_config\n")
+                f.write("  2. Configure AllowUsers with specific users:\n")
+                f.write("     Example: AllowUsers root@192.168.1.0/24 admin@*\n")
+                f.write("  3. Configure AllowGroups with specific groups:\n")
+                f.write("     Example: AllowGroups sshusers\n")
+                f.write("     (First: groupadd sshusers; usermod -a -G sshusers username)\n")
+                f.write("  4. NEVER use wildcards like '*' or '*@*' alone\n")
+                f.write("  5. Test syntax: sshd -t\n")
+                f.write("  6. Restart SSH: systemctl restart sshd\n\n")
+                f.write("Item 5.1.18 (ClientAliveCountMax):\n\n")
+                f.write("[!] Set to value 3 (not 0)\n\n")
+                f.write("REASON:\n")
+                f.write("  Value 0 causes immediate disconnect when network timeout occurs.\n")
+                f.write("  Value 3 (recommended) allows 3 missed keepalives before disconnect.\n\n")
+                f.write("WARNING:\n")
+                f.write("  Be very careful with SSH configuration changes.\n")
+                f.write("  Incorrect SSH settings can cause immediate lockout!\n")
+                f.write("  Always test connectivity before committing changes.\n\n")
+
+            self.log(f"Full report saved: {full_file}", "SUCCESS")
+        except Exception as e:
+            self.log(f"ERROR: Failed to write full report: {str(e)}", "ERROR")
+
+        # === 4. Generate CSV Report ===
+        csv_file = self.generate_csv_report()
+
+        # Fix file permissions so user can access them / แก้ไข permission เพื่อให้ user สามารถเข้าถึงได้
+        try:
+            import os
+            os.chmod(summary_file, 0o644)
+            os.chmod(failed_file, 0o644)
+            os.chmod(full_file, 0o644)
+            if csv_file and os.path.exists(csv_file):
+                os.chmod(csv_file, 0o644)
+            # ให้ directory สามารถ read/write ได้ด้วย
+            os.chmod(self.report_dir, 0o755)
+        except Exception as e:
+            self.log(f"WARNING: Could not fix file permissions: {str(e)}", "WARNING")
+
+        # แสดงสรุป / Show summary
+        print("\n" + "="*70)
+        print("REPORTS GENERATED:")
+        print("="*70)
+        print("[*] Summary:      " + str(summary_file))
+        print("[*] Failed Items: " + str(failed_file))
+        print("[*] Full Report:  " + str(full_file))
+        if csv_file:
+            print("[*] CSV Report:   " + str(csv_file))
+        print("[*] Directory:    " + str(self.report_dir))
+        print("="*70 + "\n")
+
+        return (summary_file, failed_file, full_file)
+
+    def check_critical_dependencies(self):
+        """
+        ตรวจสอบความพร้อมของ packages ที่สำคัญก่อนเริ่มทำงาน
+        Check critical dependencies before starting
+        
+        Critical packages checked: aide, rsyslog, nftables
+        
+        Returns:
+            bool: True if all dependencies are met or user confirms, False if user cancels
+        """
+        critical_packages = ['aide', 'rsyslog', 'nftables']
+        missing_packages = []
+        
+        # ตรวจสอบแต่ละ package / Check each package
+        for package in critical_packages:
+            try:
+                result = subprocess.run(
+                    ['rpm', '-q', package],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode != 0:
+                    missing_packages.append(package)
+            except Exception as e:
+                self.log(f"WARNING: Could not check package {package}: {str(e)}", "WARNING")
+                missing_packages.append(package)
+        
+        # ถ้าครบ packages ทั้งหมด / If all packages are installed
+        if not missing_packages:
+            self.log("[+] All critical dependencies are installed", "SUCCESS")
+            return True
+        
+        # มีแพคเกจขาดหายไป / Missing packages found
+        print("\n" + "="*80)
+        print("RED ALERT - CRITICAL WARNING")
+        print("="*80)
+        print()
+        print("CRITICAL WARNING: Missing critical packages!")
+        print()
+        print("The following packages are not installed:")
+        for pkg in missing_packages:
+            print(f"  - {pkg}")
+        print()
+        print("REASON: Installing these via script may cause timeouts or boot loops")
+        print("        if network is unstable during remediation.")
+        print()
+        print("RECOMMENDATION:")
+        print("-" * 80)
+        print(f"Please open a SEPARATE TERMINAL and run MANUALLY:")
+        print()
+        print(f"  sudo dnf install -y {' '.join(missing_packages)}")
+        print()
+        print("-" * 80)
+        print()
+        
+        # ถามผู้ใช้ว่าได้ลงแล้วหรือยัง / Ask if user has installed packages
+        while True:
+            user_input = input("Have you installed these packages manually? (y/n): ").strip().lower()
+            
+            if user_input == 'n':
+                print()
+                print("="*80)
+                print("Exiting now. Please install the packages first.")
+                print("="*80)
+                print()
+                return False  # Exit the program
+            
+            elif user_input == 'y':
+                # ลองเช็ค rpm อีกรอบ / Re-check packages
+                missing_packages_after = []
+                for package in missing_packages:
+                    try:
+                        result = subprocess.run(
+                            ['rpm', '-q', package],
+                            capture_output=True,
+                            text=True,
+                            timeout=10
+                        )
+                        if result.returncode != 0:
+                            missing_packages_after.append(package)
+                    except Exception:
+                        missing_packages_after.append(package)
+                
+                # ถ้าเจอครบแล้ว / If all packages are now installed
+                if not missing_packages_after:
+                    print()
+                    print("="*80)
+                    print("[+] All critical packages verified!")
+                    print("[+] You can proceed with the remediation.")
+                    print("="*80)
+                    print()
+                    return True  # Continue the program
+                
+                # ยังไม่เจอ / Still missing packages
+                else:
+                    print()
+                    print("="*80)
+                    print("ERROR: The following packages are STILL missing:")
+                    for pkg in missing_packages_after:
+                        print(f"  - {pkg}")
+                    print()
+                    print("It appears you didn't install the packages, or the installation failed.")
+                    print("="*80)
+                    print()
+                    
+                    # ถามว่าจะให้สคริปต์พยายามติดตั้งให้ไหม / Ask if script should attempt auto-install
+                    while True:
+                        auto_install = input("Attempt to auto-install missing packages? (y/n): ").strip().lower()
+                        
+                        if auto_install == 'y':
+                            print()
+                            print("[*] Attempting to auto-install packages...")
+                            try:
+                                install_cmd = ['sudo', 'dnf', 'install', '-y'] + missing_packages_after
+                                result = subprocess.run(
+                                    install_cmd,
+                                    timeout=300  # 5 minute timeout
+                                )
+                                
+                                if result.returncode == 0:
+                                    print("[+] Auto-install completed successfully!")
+                                    print()
+                                    return True  # Continue
+                                else:
+                                    print("[-] Auto-install failed. Please install manually.")
+                                    print()
+                                    return False  # Exit
+                            except subprocess.TimeoutExpired:
+                                print("[-] Installation timed out. Please install manually.")
+                                return False  # Exit
+                            except Exception as e:
+                                print(f"[-] Auto-install error: {str(e)}")
+                                print()
+                                return False  # Exit
+                        
+                        elif auto_install == 'n':
+                            print()
+                            print("="*80)
+                            print("Exiting. Please install packages manually and try again.")
+                            print("="*80)
+                            print()
+                            return False  # Exit
+                        else:
+                            print("Please answer 'y' or 'n'")
+            else:
+                print("Please answer 'y' (yes) or 'n' (no)")
+
+    def ensure_aide_database(self):
+        """
+        Ensure the AIDE database exists before running remediations, and optionally run a system update.
+        ตรวจสอบว่ามีฐานข้อมูล AIDE หรือไม่ก่อนเริ่มการแก้ไข และเปิดให้ผู้ใช้อัปเดตระบบ
+        """
+        aide_db = Path("/var/lib/aide/aide.db.gz")
+        aide_db_new = Path("/var/lib/aide/aide.db.new.gz")
+
+        if aide_db.exists():
+            self.log("[*] AIDE database already exists. Skipping initialization.", "INFO")
+        else:
+            self.log("[*] AIDE database not found. Initializing now (this will take several minutes)...", "INFO")
+            try:
+                # Using Popen to stream the output for the long-running aide init
+                process = subprocess.Popen(
+                    "sudo aide --init",
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+                if process.stdout:
+                    for line in iter(process.stdout.readline, ''):
+                        print(line, end='', flush=True)
+                process.wait()
+
+                if process.returncode == 0:
+                    self.log("AIDE initialization completed successfully.", "SUCCESS")
+                    # Move the new db to the correct location
+                    if aide_db_new.exists():
+                        try:
+                            # Use sudo to move the file as it's owned by root
+                            move_cmd = f"sudo mv {aide_db_new} {aide_db}"
+                            self.log(f"Activating new AIDE database with: {move_cmd}", "DEBUG", min_verbose=2)
+                            move_result = subprocess.run(move_cmd, shell=True, capture_output=True, text=True)
+                            if move_result.returncode == 0:
+                                self.log(f"Moved new AIDE db to {aide_db}", "SUCCESS")
+                            else:
+                                self.log(f"Failed to move AIDE database: {move_result.stderr}", "ERROR")
+                                return False # This is a critical failure
+                        except Exception as e:
+                            self.log(f"Failed to move AIDE database: {e}", "ERROR")
+                            return False # This is a critical failure
+                    else:
+                        self.log(f"AIDE ran but the new database file ({aide_db_new}) was not found.", "ERROR")
+                        return False
+                else:
+                    self.log(f"AIDE initialization failed with exit code {process.returncode}.", "ERROR")
+                    return False # Can't proceed without AIDE db
+            except Exception as e:
+                self.log(f"An error occurred during AIDE initialization: {e}", "ERROR")
+                return False
+
+        # --- Optional System Update (Moved here) ---
+        print("\n" + "!"*70)
+        print("SYSTEM UPDATE CHECK / ตรวจสอบการอัปเดตระบบ")
+        print("!"*70)
+        
+        try:
+            self.log("Checking for available system updates...", "INFO")
+            # dnf check-update exits with 100 if updates are available, 0 if not.
+            check_result = subprocess.run("sudo dnf check-update", shell=True, capture_output=True, text=True)
+
+            if check_result.returncode == 100:
+                self.log("System updates are available.", "WARNING")
+                print("\n[คำเตือน] การอัปเดตระบบทั้งหมด (`dnf update`) อาจใช้เวลานานมาก (10-30+ นาที)")
+                print("และอาจมีความเสี่ยงหากการเชื่อมต่อถูกตัดขาด ขอแนะนำอย่างยิ่งให้ทำขั้นตอนนี้ด้วยตนเอง")
+                print("ใน `screen` หรือ `tmux` session เพื่อความปลอดภัย")
+                print("\n[WARNING] A full system update (`dnf update`) can be very time-consuming (10-30+ minutes)")
+                print("and carries risks if the connection is interrupted. It is highly recommended")
+                print("to perform this step manually in a `screen` or `tmux` session for safety.")
+
+                if self.confirm_action("Do you want to run a full system update now? / ต้องการอัปเดตระบบทั้งหมดตอนนี้หรือไม่?"):
+                    self.log("Starting full system update (sudo dnf update -y)...", "WARNING")
+                    print("-" * 70)
+                    process = subprocess.Popen(
+                        "sudo dnf update -y",
+                        shell=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1
+                    )
+                    if process.stdout:
+                        for line in iter(process.stdout.readline, ''):
+                            print(line, end='', flush=True)
+                    process.wait()
+                    print("-" * 70)
+
+                    if process.returncode == 0:
+                        self.log("System update completed successfully.", "SUCCESS")
+                    else:
+                        self.log(f"System update failed with exit code {process.returncode}.", "ERROR")
+                else:
+                    self.log("Skipping full system update as requested by user.", "INFO")
+
+            elif check_result.returncode == 0:
+                self.log("No system updates available. The system is up-to-date.", "SUCCESS")
+            
+            else:
+                self.log(f"Error checking for updates. Exit code: {check_result.returncode}", "ERROR")
+                self.log(f"DNF Check-Update Error: {check_result.stderr}", "ERROR", min_verbose=2)
+
+        except Exception as e:
+            self.log(f"An error occurred during the system update process: {e}", "ERROR")
+        
+        return True # Return True to indicate success or user skip
+
+    def run(self):
+        """
+        ฟังก์ชันหลักสำหรับรันโปรแกรม / Main function to execute the program
+        
+        ขั้นตอนการทำงาน / Execution steps:
+        0. ตรวจสอบความพร้อมของ dependencies / Check critical dependencies
+        1. แสดงเมนูและรับโหมดที่เลือก / Show menu and get mode selection
+        2. รับการเลือก Level (L1/L2/Both) / Get level filter selection
+        3. รับรายการข้อที่ต้องการข้าม / Get skip list
+        4. ขอยืนยันก่อนเริ่ม / Confirm before start
+        5. รันสคริปต์ตามโหมดที่เลือก / Run scripts based on mode
+        6. สร้างรายงาน / Generate report
+        7. แสดงข้อความเสร็จสมบูรณ์ / Display completion message
+        
+        Returns:
+            int: 0=สำเร็จ, 1=ยกเลิก / 0=success, 1=cancelled
+        """
+        # ตรวจสอบสิทธิ์การใช้งาน (ต้องรันด้วย sudo/root บน Linux) / Check permissions (must run as sudo/root on Linux)
+        # เช็คเฉพาะบน Linux (Windows ไม่มี geteuid) / Check only on Linux (Windows doesn't have geteuid)
+        try:
+            is_root = os.geteuid() == 0  # type: ignore
+        except AttributeError:
+            is_root = True  # Skip check on Windows
+        
+        if not is_root:
+            print("\n" + "="*70)
+            print("ERROR: This script requires root privileges!")
+            print("="*70)
+            print()
+            print("สคริปต์นี้ต้องรันด้วย sudo หรือ root เพราะ:")
+            print("  - ต้องเขียนไฟล์รายงานใน results/")
+            print("  - ต้องรัน audit scripts ที่ต้องการสิทธิ์ root")
+            print("  - ต้องรัน remediation scripts ที่แก้ไขระบบ")
+            print()
+            print("This script requires sudo or root because:")
+            print("  - Need to write report files in results/")
+            print("  - Need to run audit scripts that require root privileges")
+            print("  - Need to run remediation scripts that modify system")
+            print()
+            print("วิธีรัน / How to run:")
+            print("  sudo python cis_master_runner.py")
+            print("  sudo python3 cis_master_runner.py")
+            print()
+            print("หรือรันด้วย root โดยตรง / Or run as root directly:")
+            print("  su -")
+            print("  python cis_master_runner.py")
+            print("="*70 + "\n")
+            return 1  # ออกจากโปรแกรม / Exit program
+        
+        # แสดงเมนูและรับโหมด / Show menu and get mode
+        mode = self.show_menu()
+        if mode == '4':
+            # ผู้ใช้เลือกยกเลิก / User chose to cancel
+            self.log("Cancelled", "INFO")
+            return 1
+
+        # Get execution plan for the selected mode
+        execution_plan = self.get_execution_plan(mode)
+        if execution_plan == 'CANCEL':
+            self.log("Cancelled by user.", "INFO")
+            return 1
+        
+        self.log(f"Execution Plan: {execution_plan}", "INFO")
+        
+        # Ask for SELinux policy if L2 remediation is part of the plan
+        if self.level_filter in ['2', '3'] and mode in ['2', '3']:
+            self.choose_selinux_policy()
+
+        # รับรายการข้อที่ต้องการข้าม / Get skip list
+        self.get_skip_items()
+
+        if mode in ['2', '3']:
+            self.choose_firewall()
+
+        # ขอยืนยันก่อนเริ่ม / Confirm before starting
+        if not self.confirm_action("Ready to start?"):
+            self.log("Cancelled", "INFO")
+            return 1
+
+        # กำหนด report directory ตามประเภท mode / Setup report directory based on mode
+        if mode == '1':
+            self.setup_report_directory('audit')
+        elif mode == '2':
+            self.setup_report_directory('remediation')
+        else:  # mode == '3'
+            self.setup_report_directory('both')
+
+        # รันสคริปต์ตามโหมดที่เลือก / Run scripts based on mode
+        if mode in ['1', '3']:
+            # รัน audit (โหมด 1 หรือ 3) / Run audit (mode 1 or 3)
+            self.run_audit_scripts()
+
+        if mode in ['2', '3']:
+            # === Check critical dependencies before remediation === / === ตรวจสอบความพร้อมก่อนรัน remediation ===
+            print()
+            print("="*70)
+            print("[*] Step 0: Checking critical dependencies...")
+            print("="*70)
+            if not self.check_critical_dependencies():
+                # User cancelled or dependencies cannot be met
+                self.log("Cancelled - Missing critical dependencies", "INFO")
+                return 1
+
+            if not self.ensure_aide_database():
+                self.log("Cancelled - AIDE initialization failed", "ERROR")
+                return 1
+            
+            # รัน remediation (โหมด 2 หรือ 3) / Run remediation (mode 2 or 3)
+            _, failed_count, _ = self.run_remediation_scripts(self.remediation_plan)
+
+            # --- NEW: Interactive Debug Mode ---
+            if failed_count > 0 and self.results['remediation']['failed']:
+                self.log(f"{failed_count} remediation scripts failed.", "WARNING")
+                if self.confirm_action("Do you want to enter Interactive Debug Mode to re-run failed scripts?"):
+                    # Get the original list of failed IDs, as some might succeed in debug mode
+                    failed_ids = list(self.results['remediation']['failed']) 
+                    failed_script_paths = [self.script_map[fid] for fid in failed_ids if fid in self.script_map]
+                    self.run_interactive_debug(failed_script_paths)
+
+        # สร้างรายงาน / Generate report
+        self.generate_report()
+
+        # SELinux Safety Net: Run only during remediation (mode 2 or 3)
+        # Immediately relabel file contexts after hardening
+        if mode in ['2', '3']:
+            try:
+                # Check if SELinux is enabled/enforcing
+                with open('/etc/selinux/config', 'r') as f:
+                    selinux_config = f.read()
+                    if 'SELINUX=enforcing' in selinux_config or 'SELINUX=permissive' in selinux_config:
+                        self.log("\n" + "="*70, "INFO")
+                        self.log("[*] SELinux File Context Relabeling", "INFO")
+                        self.log("="*70, "INFO")
+                        
+                        # Ask user for permission before running
+                        if self.confirm_action("Run SELinux relabeling now? (This may take several minutes)"):
+                            self.log("[*] Starting SELinux relabeling now (ไม่รอ reboot)...", "WARNING")
+                            
+                            try:
+                                # Run restorecon recursively to fix all file contexts
+                                # This is faster than /.autorelabel on next boot
+                                self.log("[*] Running: restorecon -Rv /", "INFO")
+                                result = subprocess.run(
+                                    "sudo restorecon -Rv /",
+                                    shell=True,
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=300  # 5 minute timeout
+                                )
+                                
+                                if result.returncode == 0:
+                                    self.log("[+] SELinux file context relabeling completed successfully!", "SUCCESS")
+                                    self.log("[+] All file contexts have been restored immediately", "SUCCESS")
+                                    self.log("[+] NO REBOOT REQUIRED - System is ready to use!", "SUCCESS")
+                                else:
+                                    self.log(f"[-] restorecon completed with exit code {result.returncode}", "WARNING")
+                                    self.log("[*] Falling back to /.autorelabel method (will relabel on next boot)", "INFO")
+                                    try:
+                                        open('/.autorelabel', 'a').close()
+                                        self.log("[*] /.autorelabel file created for next boot relabeling", "WARNING")
+                                    except Exception as e:
+                                        self.log(f"[!] Could not create /.autorelabel: {e}", "WARNING")
+                            
+                            except subprocess.TimeoutExpired:
+                                self.log("[!] SELinux relabeling timed out (>5 minutes)", "WARNING")
+                                self.log("[*] Falling back to /.autorelabel method (will relabel on next boot)", "INFO")
+                                try:
+                                    open('/.autorelabel', 'a').close()
+                                    self.log("[*] /.autorelabel file created for next boot relabeling", "WARNING")
+                                except Exception as e:
+                                    self.log(f"[!] Could not create /.autorelabel: {e}", "WARNING")
+                            
+                            except Exception as e:
+                                self.log(f"[!] Error during SELinux relabeling: {e}", "WARNING")
+                                self.log("[*] Falling back to /.autorelabel method (will relabel on next boot)", "INFO")
+                                try:
+                                    open('/.autorelabel', 'a').close()
+                                    self.log("[*] /.autorelabel file created for next boot relabeling", "WARNING")
+                                except Exception as fallback_e:
+                                    self.log(f"[!] Could not create /.autorelabel: {fallback_e}", "WARNING")
+                        else:
+                            self.log("[*] SELinux relabeling skipped by user", "INFO")
+                        
+                        self.log("="*70, "INFO")
+            except (FileNotFoundError, IOError):
+                # SELinux config doesn't exist, skip
+                pass
+
+        # แสดงข้อความเสร็จสมบูรณ์ / Display completion message
+        print("\n" + "=" * 72)
+        print("|" + " " * 70 + "|")
+        print("|" + " " * 23 + "[+] COMPLETE! [+]" + " " * 30 + "|")
+        print("|" + " " * 70 + "|")
+        print("=" * 72 + "\n")
+
+        return 0  # สำเร็จ / Success
+
+# จุดเริ่มต้นของโปรแกรม / Program entry point
+# ถ้ารันไฟล์นี้โดยตรง (ไม่ใช่ import) / If running this file directly (not importing)
+if __name__ == "__main__":
+    # สร้าง argument parser สำหรับรับ command-line options / Create argument parser
+    parser = argparse.ArgumentParser(
+        description="CIS Oracle Linux 9 Benchmark Master Runner - รันสคริปต์ audit และ remediation อัตโนมัติ",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples / ตัวอย่างการใช้งาน:
+  python cis_master_runner.py                 # รันแบบปกติ (normal mode)
+  python cis_master_runner.py -v              # รันแบบ verbose (แสดงรายละเอียด)
+  python cis_master_runner.py -q              # รันแบบ quiet (แสดงแค่สรุป)
+  python cis_master_runner.py -vv             # รันแบบ very verbose (debug mode)
+  python cis_master_runner.py --help          # แสดงวิธีใช้งาน
+
+Verbose Levels / ระดับความละเอียด:
+  0 = Quiet mode    (แสดงแค่สรุปผล)
+  1 = Normal mode   (แสดง PASS/FAIL แต่ละข้อ) - default
+  2 = Verbose mode  (แสดง command, output, return code ทุกอย่าง)
+
+For debugging / สำหรับ debug:
+  ใช้ -v หรือ -vv เพื่อดู output และ error ของแต่ละสคริปต์
+  Use -v or -vv to see output and errors from each script
+        """)
+    
+    # เพิ่ม options / Add options
+    parser.add_argument(
+        "-v", "--verbose",
+        action="count",
+        default=1,
+        help="เพิ่มความละเอียดของ output (ใช้ -v หรือ -vv) / Increase output verbosity (use -v or -vv)"
+    )
+    parser.add_argument(
+        "-q", "--quiet",
+        action="store_true",
+        help="โหมดเงียบ แสดงแค่สรุปผล / Quiet mode, show summary only"
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="CIS Oracle Linux 9 Benchmark Master Runner v2.0.0"
+    )
+    
+    # รับ arguments จาก command line / Parse arguments from command line
+    args = parser.parse_args()
+    
+    # สร้าง object CISMasterRunner พร้อม verbose level / Create CISMasterRunner object with verbosity
+    runner = CISMasterRunner(verbose=args.verbose, quiet=args.quiet)
+    
+    # รันโปรแกรมและส่งค่า exit code กลับ / Run program and return exit code
+    # 0 = สำเร็จ, 1 = ยกเลิก / 0 = success, 1 = cancelled
+    sys.exit(runner.run())

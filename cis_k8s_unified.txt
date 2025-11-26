@@ -1,0 +1,398 @@
+#!/usr/bin/env python3
+"""
+CIS Kubernetes Benchmark - Unified Interactive Runner (Final Release)
+Features:
+- Smart Kubeconfig Detection
+- Auto Backup System
+- Oracle-Style Detailed XML/Text Reporting (Folder structure based)
+- Robust CSV Generation
+- Extracts Title directly from Scripts
+"""
+
+import os
+import sys
+import shutil
+import subprocess
+import json
+import csv
+import time
+import socket
+from datetime import datetime
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# --- Configuration ---
+BASE_RESULT_DIR = "results"
+BACKUP_DIR = "backups"
+LOG_DIR = "logs"
+
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    CYAN = '\033[96m'
+    BOLD = '\033[1m'
+    ENDC = '\033[0m'
+
+class CISUnifiedRunner:
+    def __init__(self, verbose=False):
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.hostname = socket.gethostname()
+        self.verbose = verbose
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Setup Result Directory Structure (Oracle Style)
+        # results/YYYY-MM-DD/audit/run_TIMESTAMP/
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        self.current_report_dir = None # Will be set during scan/fix
+        self.date_dir = os.path.join(self.base_dir, BASE_RESULT_DIR, date_str)
+        
+        self.results = []
+        self.stats = {
+            "master": {"pass": 0, "fail": 0, "manual": 0, "error": 0, "total": 0},
+            "worker": {"pass": 0, "fail": 0, "manual": 0, "error": 0, "total": 0}
+        }
+        self.health_status = "UNKNOWN"
+        self.stop_requested = False
+        self.setup_dirs()
+        self.check_dependencies()
+
+    def setup_dirs(self):
+        for d in [BASE_RESULT_DIR, LOG_DIR, BACKUP_DIR]:
+            os.makedirs(os.path.join(self.base_dir, d), exist_ok=True)
+
+    def check_dependencies(self):
+        required_tools = ["kubectl", "jq", "grep", "sed", "awk"]
+        missing = []
+        for tool in required_tools:
+            if shutil.which(tool) is None:
+                missing.append(tool)
+        if missing:
+            print(f"{Colors.RED}❌ Missing dependencies: {', '.join(missing)}{Colors.ENDC}")
+
+    def get_kubectl_cmd(self):
+        possible_configs = [
+            os.environ.get('KUBECONFIG'),
+            "/etc/kubernetes/admin.conf",
+            os.path.join(os.path.expanduser("~"), ".kube/config"),
+            f"/home/{os.environ.get('SUDO_USER')}/.kube/config" if os.environ.get("SUDO_USER") else None
+        ]
+        
+        for conf in possible_configs:
+            if conf and os.path.exists(conf):
+                if self.verbose:
+                    print(f"{Colors.BLUE}[DEBUG] Using Kubeconfig: {conf}{Colors.ENDC}")
+                return ["kubectl", "--kubeconfig", conf]
+        
+        return ["kubectl"]
+
+    def check_health(self):
+        print(f"{Colors.CYAN}[*] Checking Cluster Health...{Colors.ENDC}")
+        kubectl = self.get_kubectl_cmd()
+        
+        try:
+            res_nodes = subprocess.run(kubectl + ["get", "nodes"], capture_output=True, text=True, timeout=10)
+            if res_nodes.returncode != 0:
+                self.health_status = "CRITICAL (Nodes Unreachable)"
+                print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+                return self.health_status
+
+            res_pods = subprocess.run(
+                kubectl + ["get", "pods", "-n", "kube-system", "--field-selector", "status.phase!=Running"],
+                capture_output=True, text=True, timeout=10
+            )
+            failed_pods = [line for line in res_pods.stdout.split('\n') if line.strip() and "NAME" not in line]
+            
+            if failed_pods:
+                self.health_status = f"WARNING ({len(failed_pods)} Unhealthy Pods)"
+                print(f"{Colors.YELLOW}    -> {self.health_status}{Colors.ENDC}")
+            else:
+                self.health_status = "OK (Healthy)"
+                print(f"{Colors.GREEN}    -> {self.health_status}{Colors.ENDC}")
+                
+        except Exception as e:
+            self.health_status = f"ERROR ({str(e)})"
+            print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+        
+        return self.health_status
+
+    def extract_metadata_from_script(self, script_path):
+        """Extract title directly from script file."""
+        title = "Title not found"
+        if not script_path or not os.path.exists(script_path): return title
+
+        try:
+            with open(script_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()[:30]
+            for line in lines:
+                line = line.strip()
+                if not line.startswith("#"): continue
+                clean = line.lstrip("#").strip()
+                if "Title:" in line:
+                    return line.split("Title:", 1)[1].strip()
+                prefixes = ["Ensure", "Enable", "Disable", "Configure", "Restrict"]
+                if any(clean.startswith(p) for p in prefixes):
+                    if 10 < len(clean) < 150: return clean
+        except: pass
+        return title
+
+    def get_scripts(self, mode, target_level, target_role):
+        suffix = "_remediate.sh" if mode == "remediate" else "_audit.sh"
+        scripts = []
+        levels = ['1', '2'] if target_level == "all" else [target_level]
+        roles = ['Master', 'Worker'] if target_role == "all" else [target_role.capitalize()]
+        
+        for role in roles:
+            for level in levels:
+                dir_path = os.path.join(self.base_dir, f"Level_{level}_{role}_Node")
+                if os.path.isdir(dir_path):
+                    for f in sorted(os.listdir(dir_path)):
+                        if f.endswith(suffix):
+                            scripts.append({
+                                "path": os.path.join(dir_path, f),
+                                "id": f.replace(suffix, ""),
+                                "role": role.lower(),
+                                "name": f,
+                                "level": level
+                            })
+        return scripts
+
+    def run_script(self, script, mode):
+        if self.stop_requested: return None
+        start_time = time.time()
+        try:
+            cmd = ["bash", script["path"]]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            duration = round(time.time() - start_time, 2)
+            
+            status = "FAIL"
+            reason = ""
+
+            if mode == "remediate":
+                status = "FIXED" if res.returncode == 0 else "ERROR"
+            else:
+                if res.returncode == 0:
+                    status = "PASS"
+                elif "manual" in res.stdout.lower() or "review" in res.stdout.lower():
+                    status = "MANUAL"
+                else:
+                    status = "FAIL"
+                    lines = [l.strip() for l in res.stdout.split('\n') if l.strip()]
+                    for line in lines:
+                        if "Check Failed" in line or "Reason" in line:
+                            reason = line
+                            break
+                    if not reason and lines: reason = lines[-1]
+
+            return {
+                "id": script["id"],
+                "role": script["role"],
+                "level": script["level"],
+                "status": status,
+                "duration": duration,
+                "reason": reason,
+                "output": res.stdout + res.stderr,
+                "path": script["path"]
+            }
+        except Exception as e:
+            return {
+                "id": script["id"], "role": script["role"], "level": script["level"], 
+                "status": "ERROR", "reason": str(e), "output": "", "path": script["path"]
+            }
+
+    def update_stats(self, result):
+        if not result: return
+        role = "master" if "master" in result["role"] else "worker"
+        status = result["status"].lower()
+        if status not in self.stats[role]: status = "error"
+        self.stats[role][status] += 1
+        self.stats[role]["total"] += 1
+
+    def perform_backup(self):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dest_dir = os.path.join(self.base_dir, BACKUP_DIR, f"backup_{timestamp}")
+        os.makedirs(dest_dir, exist_ok=True)
+        print(f"\n{Colors.CYAN}📦 Creating Backup...{Colors.ENDC}")
+        targets = ["/etc/kubernetes/manifests", "/var/lib/kubelet/config.yaml"]
+        for target in targets:
+            if os.path.exists(target):
+                try:
+                    name = os.path.basename(target)
+                    if os.path.isdir(target): shutil.copytree(target, os.path.join(dest_dir, name))
+                    else: shutil.copy2(target, dest_dir)
+                except Exception as e:
+                    print(f"{Colors.RED}Backup Error {target}: {e}{Colors.ENDC}")
+        print(f"   -> Saved to: {dest_dir}")
+
+    def show_verbose_result(self, res):
+        title = self.extract_metadata_from_script(res.get('path'))
+        color = Colors.GREEN if res['status'] in ['PASS', 'FIXED'] else (Colors.YELLOW if res['status'] == 'MANUAL' else Colors.RED)
+        print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}")
+        print(f"DETAILS - {color}{res['status']}{Colors.ENDC} - {res['id']}")
+        print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}")
+        print(f"  Title:         {title}")
+        print(f"  Time:          {res['duration']}s")
+        if res['reason']: print(f"  {Colors.YELLOW}Reason:        {res['reason']}{Colors.ENDC}")
+        if res['status'] in ['FAIL', 'ERROR', 'MANUAL']:
+            print(f"\n  {Colors.YELLOW}[i] Raw Output:{Colors.ENDC}")
+            print('\n'.join(res['output'].strip().split('\n')[-5:])) # Show last 5 lines
+        print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}\n")
+
+    def _prepare_report_dir(self, mode):
+        """Creates specific folder for this run (Oracle Style)"""
+        run_folder = f"run_{self.timestamp}"
+        self.current_report_dir = os.path.join(self.date_dir, mode, run_folder)
+        os.makedirs(self.current_report_dir, exist_ok=True)
+        return self.current_report_dir
+
+    def scan(self, target_level, target_role):
+        print(f"\n{Colors.CYAN}🔄 Starting Audit Scan...{Colors.ENDC}")
+        self._prepare_report_dir("audit")
+        
+        scripts = self.get_scripts("audit", target_level, target_role)
+        self.results = []
+        
+        # Reset stats
+        self.stats = {
+            "master": {"pass": 0, "fail": 0, "manual": 0, "error": 0, "total": 0},
+            "worker": {"pass": 0, "fail": 0, "manual": 0, "error": 0, "total": 0}
+        }
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {executor.submit(self.run_script, s, "audit"): s for s in scripts}
+            try:
+                completed = 0
+                for future in as_completed(futures):
+                    if self.stop_requested: break
+                    res = future.result()
+                    if res:
+                        res['path'] = futures[future]['path']
+                        self.results.append(res)
+                        self.update_stats(res)
+                        completed += 1
+                        if self.verbose: self.show_verbose_result(res)
+                        else:
+                            color = Colors.GREEN if res['status'] == "PASS" else (Colors.YELLOW if res['status'] == "MANUAL" else Colors.RED)
+                            print(f"\r   [{completed}/{len(scripts)}] {res['id']} -> {color}{res['status']}{Colors.ENDC}", end="")
+            except KeyboardInterrupt:
+                self.stop_requested = True
+                print("\nAborted.")
+
+        print(f"\n{Colors.GREEN}✅ Audit Complete.{Colors.ENDC}")
+        self.save_reports("audit")
+        self.print_stats_summary()
+
+    def fix(self, target_level, target_role):
+        if "CRITICAL" in self.health_status:
+            print(f"\n{Colors.RED}⚠️  Cannot remediate: Cluster Health is CRITICAL.{Colors.ENDC}")
+            return
+
+        self._prepare_report_dir("remediation")
+        self.perform_backup()
+        print(f"\n{Colors.YELLOW}🛠️  Starting Remediation...{Colors.ENDC}")
+        scripts = self.get_scripts("remediate", target_level, target_role)
+        self.results = []
+
+        for s in scripts:
+            print(f"   Applying {s['id']}...", end="")
+            res = self.run_script(s, "remediate")
+            if res:
+                res['path'] = s['path']
+                self.results.append(res)
+                color = Colors.GREEN if res['status'] == "FIXED" else Colors.RED
+                print(f" {color}{res['status']}{Colors.ENDC}")
+            
+        print(f"\n{Colors.GREEN}✅ Remediation Complete.{Colors.ENDC}")
+        self.save_reports("remediate")
+
+    def generate_text_report(self, mode):
+        """Generates Oracle-Style Summary & Failure Reports"""
+        summary_file = os.path.join(self.current_report_dir, "summary.txt")
+        failed_file = os.path.join(self.current_report_dir, "failed_items.txt")
+
+        passed = [r for r in self.results if r['status'] in ['PASS', 'FIXED']]
+        failed = [r for r in self.results if r['status'] in ['FAIL', 'ERROR']]
+        manual = [r for r in self.results if r['status'] == 'MANUAL']
+
+        # Summary
+        with open(summary_file, 'w') as f:
+            f.write("="*60 + "\n")
+            f.write(f"CIS BENCHMARK SUMMARY - {mode.upper()}\n")
+            f.write(f"Date: {datetime.now()}\n")
+            f.write("="*60 + "\n\n")
+            f.write(f"Total: {len(self.results)}\n")
+            f.write(f"Pass:  {len(passed)}\n")
+            f.write(f"Fail:  {len(failed)}\n")
+            f.write(f"Manual: {len(manual)}\n")
+            score = (len(passed)/len(self.results))*100 if self.results else 0
+            f.write(f"Score: {score:.2f}%\n")
+
+        # Failed Items
+        with open(failed_file, 'w') as f:
+            f.write(f"FAILED & MANUAL ITEMS ({mode.upper()})\n")
+            f.write("="*60 + "\n")
+            
+            for item in failed + manual:
+                title = self.extract_metadata_from_script(item.get('path'))
+                f.write(f"\nCIS ID: {item['id']} [{item['status']}]\n")
+                f.write(f"Title:  {title}\n")
+                f.write(f"Role:   {item['role'].upper()}\n")
+                if item['reason']: f.write(f"Reason: {item['reason']}\n")
+                f.write("-" * 40)
+
+        return summary_file, failed_file
+
+    def save_reports(self, mode):
+        csv_file = os.path.join(self.current_report_dir, "report.csv")
+        json_file = os.path.join(self.current_report_dir, "report.json")
+        
+        # [FIX] Allow extra fields like 'path'
+        fieldnames = ["id", "role", "level", "status", "duration", "reason", "output"]
+        
+        try:
+            with open(csv_file, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                writer.writerows(self.results)
+        except Exception as e:
+            print(f"{Colors.RED}CSV Error: {e}{Colors.ENDC}")
+
+        sum_file, fail_file = self.generate_text_report(mode)
+        
+        with open(json_file, 'w') as f:
+            json.dump({"stats": self.stats, "details": self.results}, f, indent=2)
+        
+        print(f"\n   📄 Reports Saved in: {self.current_report_dir}")
+        print(f"      - {os.path.basename(sum_file)}")
+        print(f"      - {os.path.basename(fail_file)}")
+        print(f"      - report.csv & report.json")
+
+    def print_stats_summary(self):
+        print(f"\n{Colors.BOLD}📊 Summary:{Colors.ENDC}")
+        for role in ["master", "worker"]:
+            s = self.stats[role]
+            if s['total'] > 0:
+                print(f"   {role.upper()}: Pass {s['pass']} | Fail {s['fail']} | Manual {s['manual']}")
+
+    def main_loop(self):
+        print(f"\n{Colors.HEADER}=== CIS KUBERNETES BENCHMARK (Unified) ==={Colors.ENDC}")
+        self.check_health()
+        while True:
+            print(f"\n{Colors.BOLD}MENU:{Colors.ENDC} 1)Audit 2)Fix 3)Both 4)Health 0)Exit")
+            choice = input("> ").strip()
+            if choice == '1': self.scan("all", "all")
+            elif choice == '2': 
+                if input("Confirm Fix? (y/n): ") == "y": self.fix("all", "all")
+            elif choice == '3':
+                self.scan("all", "all")
+                if input("Proceed to Fix? (y/n): ") == "y": self.fix("all", "all")
+            elif choice == '4': self.check_health()
+            elif choice == '0': sys.exit(0)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action="store_true")
+    runner = CISUnifiedRunner(verbose=parser.parse_args().verbose)
+    runner.main_loop()

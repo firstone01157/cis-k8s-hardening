@@ -9,9 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Minimize admission of containers with hostIPC.")
-	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@.spec.hostIPC}{\"\\n\"}{end}' | grep true")
-	return 0
+	# Check for pods with hostIPC:true
+	hostipc_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select(.spec.hostIPC==true) | "\(.metadata.namespace)/\(.metadata.name)"')
+	
+	if [ -z "$hostipc_pods" ]; then
+		a_output+=(" - Check Passed: No pods with hostIPC:true found")
+	else
+		a_output2+=(" - Check Failed: Found pods with hostIPC sharing host IPC namespace:")
+		while IFS= read -r pod; do
+			a_output2+=(" - Pod: $pod")
+		done <<< "$hostipc_pods"
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

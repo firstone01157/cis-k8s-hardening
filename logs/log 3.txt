@@ -1,0 +1,86 @@
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo python3 cis_k8s_unified.py
+
+================================================================
+   🛡️  CIS KUBERNETES UNIFIED RUNNER
+   Host: terramaster
+================================================================
+[*] Checking Cluster Health...
+    -> CRITICAL (Nodes Unreachable)
+    Debug Info: E1126 07:08:43.397189  201312 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:08:43.397643  201312 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:08:43.399128  201312 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:08:43.399483  201312 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:08:43.401052  201312 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+MAIN MENU:
+  1) Audit (Scan)
+  2) Remediation (Fix)
+  3) Both (Audit then Fix)
+  4) Check Health
+  0) Exit
+
+Select option > จ
+Invalid option.
+
+MAIN MENU:
+  1) Audit (Scan)
+  2) Remediation (Fix)
+  3) Both (Audit then Fix)
+  4) Check Health
+  0) Exit
+
+Select option > 0
+Bye!
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ kubectl get nodes
+NAME          STATUS   ROLES           AGE   VERSION
+terramaster   Ready    control-plane   24h   v1.34.2
+terranode1    Ready    <none>          24h   v1.34.2
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo crictl ps -a | grep kube-apiserver
+WARN[0000] Config "/etc/crictl.yaml" does not exist, trying next: "/usr/bin/crictl.yaml"
+WARN[0000] runtime connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+WARN[0000] Image connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+e200fcc58bd54       a5f569d49a979       About a minute ago   Running             kube-apiserver            6                   0d089d5dafed7       kube-apiserver-terramaster            kube-system
+ddff3a727d666       a5f569d49a979       5 minutes ago        Exited              kube-apiserver            5                   0d089d5dafed7       kube-apiserver-terramaster            kube-system
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo python3 cis_k8s_unified.py -vv
+
+================================================================
+   🛡️  CIS KUBERNETES UNIFIED RUNNER
+   Host: terramaster
+================================================================
+[*] Checking Cluster Health...
+    -> CRITICAL (Nodes Unreachable)
+    Debug Info: E1126 07:09:25.663645  201774 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:25.663956  201774 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:25.665521  201774 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:25.665822  201774 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:25.667509  201774 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+MAIN MENU:
+  1) Audit (Scan)
+  2) Remediation (Fix)
+  3) Both (Audit then Fix)
+  4) Check Health
+  0) Exit
+
+Select option > 4
+[*] Checking Cluster Health...
+    -> CRITICAL (Nodes Unreachable)
+    Debug Info: E1126 07:09:30.060636  201812 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:30.060980  201812 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:30.062817  201812 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:30.063244  201812 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+E1126 07:09:30.064871  201812 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"http://localhost:8080/api?timeout=32s\": dial tcp 127.0.0.1:8080: connect: connection refused"
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+MAIN MENU:
+  1) Audit (Scan)
+  2) Remediation (Fix)
+  3) Both (Audit then Fix)
+  4) Check Health
+  0) Exit
+
+Select option > ^C
+Bye!
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$

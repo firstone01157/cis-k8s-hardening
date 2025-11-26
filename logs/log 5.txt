@@ -1,0 +1,168 @@
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo nano /etc/kubernetes/manifests/kube-apiserver.yaml
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ kubectl get nodes
+The connection to the server 192.168.150.131:6443 was refused - did you specify the right host or port?
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo systemctl restart kubelet
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ kubectl get nodes
+The connection to the server 192.168.150.131:6443 was refused - did you specify the right host or port?
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ kubectl get nodes
+The connection to the server 192.168.150.131:6443 was refused - did you specify the right host or port?
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo crictl ps -a | grep kube-apiserver | head -n 3
+WARN[0000] Config "/etc/crictl.yaml" does not exist, trying next: "/usr/bin/crictl.yaml"
+WARN[0000] runtime connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+WARN[0000] Image connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+e8cb4e83db9b0       a5f569d49a979       3 minutes ago       Running             kube-apiserver            10                  0d089d5dafed7       kube-apiserver-terramaster            kube-system
+275aec38f3bc9       a5f569d49a979       12 minutes ago      Exited              kube-apiserver            9                   0d089d5dafed7       kube-apiserver-terramaster            kube-system
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ kubectl get nodes
+The connection to the server 192.168.150.131:6443 was refused - did you specify the right host or port?
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo crictl ps -a
+WARN[0000] Config "/etc/crictl.yaml" does not exist, trying next: "/usr/bin/crictl.yaml"
+WARN[0000] runtime connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+WARN[0000] Image connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+CONTAINER           IMAGE               CREATED             STATE               NAME                      ATTEMPT             POD ID              POD                                   NAMESPACE
+49723b5aaabdc       88320b5498ff2       15 seconds ago      Running             kube-scheduler            37                  352f9ed56f913       kube-scheduler-terramaster            kube-system
+58c8e37ba66dc       01e8bacf0f500       15 seconds ago      Running             kube-controller-manager   37                  eed392ff39793       kube-controller-manager-terramaster   kube-system
+e8cb4e83db9b0       a5f569d49a979       3 minutes ago       Running             kube-apiserver            10                  0d089d5dafed7       kube-apiserver-terramaster            kube-system
+805bce93d5c9b       88320b5498ff2       8 minutes ago       Exited              kube-scheduler            36                  352f9ed56f913       kube-scheduler-terramaster            kube-system
+27e033c318401       01e8bacf0f500       8 minutes ago       Exited              kube-controller-manager   36                  eed392ff39793       kube-controller-manager-terramaster   kube-system
+275aec38f3bc9       a5f569d49a979       13 minutes ago      Exited              kube-apiserver            9                   0d089d5dafed7       kube-apiserver-terramaster            kube-system
+09bf9ad41956d       52546a367cc9e       5 hours ago         Running             coredns                   1                   606b7d83d3033       coredns-66bc5c9577-jktg5              kube-system
+c77746adef30f       52546a367cc9e       5 hours ago         Running             coredns                   1                   def7113ff7975       coredns-66bc5c9577-4pfwh              kube-system
+25eea9f3c6072       e83704a177312       5 hours ago         Running             kube-flannel              1                   61fe1ce47c3a5       kube-flannel-ds-476m6                 kube-flannel
+4e9b9f21c43d4       e83704a177312       5 hours ago         Exited              install-cni               0                   61fe1ce47c3a5       kube-flannel-ds-476m6                 kube-flannel
+1aeb73921171a       bb28ded63816e       5 hours ago         Exited              install-cni-plugin        1                   61fe1ce47c3a5       kube-flannel-ds-476m6                 kube-flannel
+28ae8cdbab273       8aa150647e88a       5 hours ago         Running             kube-proxy                1                   1c12f453f8db7       kube-proxy-xvsmn                      kube-system
+6f3f218580753       a3e246e9556e9       5 hours ago         Running             etcd                      1                   c849ee45d6d3b       etcd-terramaster                      kube-system
+5e9f42fcfd0c0       e83704a177312       25 hours ago        Exited              kube-flannel              0                   19c4ca4f5c116       kube-flannel-ds-476m6                 kube-flannel
+53022640fd832       52546a367cc9e       25 hours ago        Exited              coredns                   0                   0308b7aab5cff       coredns-66bc5c9577-4pfwh              kube-system
+c85887a9bbc10       52546a367cc9e       25 hours ago        Exited              coredns                   0                   a28ad1013ff3a       coredns-66bc5c9577-jktg5              kube-system
+43752398026bb       8aa150647e88a       25 hours ago        Exited              kube-proxy                0                   d793f19f16541       kube-proxy-xvsmn                      kube-system
+e0b0ee109090c       a3e246e9556e9       25 hours ago        Exited              etcd                      0                   62c40297b515e       etcd-terramaster                      kube-system
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ kubectl get nodes
+The connection to the server 192.168.150.131:6443 was refused - did you specify the right host or port?
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo cat /etc/kubernetes/manifests/kube-apiserver.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubeadm.kubernetes.io/kube-apiserver.advertise-address.endpoint: 192.168.150.131:6443
+  labels:
+    component: kube-apiserver
+    tier: control-plane
+  name: kube-apiserver
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    - --advertise-address=192.168.150.131
+    - --allow-privileged=true
+    - --authorization-mode=Node,RBAC
+    - --client-ca-file=/etc/kubernetes/pki/ca.crt
+    - --enable-admission-plugins=NodeRestriction
+    - --enable-bootstrap-token-auth=true
+    - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
+    - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+    - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+    - --etcd-servers=https://127.0.0.1:2379
+    - --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt
+    - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
+    - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+    - --proxy-client-cert-file=/etc/kubernetes/pki/front-proxy-client.crt
+    - --proxy-client-key-file=/etc/kubernetes/pki/front-proxy-client.key
+    - --requestheader-allowed-names=front-proxy-client
+    - --requestheader-client-ca-file=/etc/kubernetes/pki/front-proxy-ca.crt
+    - --requestheader-extra-headers-prefix=X-Remote-Extra-
+    - --requestheader-group-headers=X-Remote-Group
+    - --requestheader-username-headers=X-Remote-User
+    - --secure-port=6443
+    - --service-account-issuer=https://kubernetes.default.svc.cluster.local
+    - --service-account-key-file=/etc/kubernetes/pki/sa.pub
+    - --service-account-signing-key-file=/etc/kubernetes/pki/sa.key
+    - --service-cluster-ip-range=10.96.0.0/12
+    - --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+    - --tls-private-key-file=/etc/kubernetes/pki/apiserver.key
+    image: registry.k8s.io/kube-apiserver:v1.34.2
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      failureThreshold: 8
+      httpGet:
+        host: 192.168.150.131
+        path: /livez
+        port: probe-port
+        scheme: HTTPS
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 15
+      failureThreshold: 5      # ยอมให้พลาดได้ 5 ครั้ง (รวม 50วิ) ก่อนฆ่า
+    name: kube-apiserver
+    ports:
+    - containerPort: 6443
+      name: probe-port
+      protocol: TCP
+    readinessProbe:
+      failureThreshold: 3
+      httpGet:
+        host: 192.168.150.131
+        path: /readyz
+        port: probe-port
+        scheme: HTTPS
+      periodSeconds: 1
+      timeoutSeconds: 15
+    resources:
+      requests:
+        cpu: 250m
+    startupProbe:
+      failureThreshold: 24
+      httpGet:
+        host: 192.168.150.131
+        path: /livez
+        port: probe-port
+        scheme: HTTPS
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 15
+    volumeMounts:
+    - mountPath: /etc/ssl/certs
+      name: ca-certs
+      readOnly: true
+    - mountPath: /etc/ca-certificates
+      name: etc-ca-certificates
+      readOnly: true
+    - mountPath: /etc/kubernetes/pki
+      name: k8s-certs
+      readOnly: true
+    - mountPath: /usr/local/share/ca-certificates
+      name: usr-local-share-ca-certificates
+      readOnly: true
+    - mountPath: /usr/share/ca-certificates
+      name: usr-share-ca-certificates
+      readOnly: true
+  hostNetwork: true
+  priority: 2000001000
+  priorityClassName: system-node-critical
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+  - hostPath:
+      path: /etc/ssl/certs
+      type: DirectoryOrCreate
+    name: ca-certs
+  - hostPath:
+      path: /etc/ca-certificates
+      type: DirectoryOrCreate
+    name: etc-ca-certificates
+  - hostPath:
+      path: /etc/kubernetes/pki
+      type: DirectoryOrCreate
+    name: k8s-certs
+  - hostPath:
+      path: /usr/local/share/ca-certificates
+      type: DirectoryOrCreate
+    name: usr-local-share-ca-certificates
+  - hostPath:
+      path: /usr/share/ca-certificates
+      type: DirectoryOrCreate
+    name: usr-share-ca-certificates
+status: {}
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$

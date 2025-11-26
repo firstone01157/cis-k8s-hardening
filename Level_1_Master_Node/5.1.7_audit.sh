@@ -9,9 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Avoid use of system:masters group.")
-	a_output+=(" - Command: Review all credentials and rolebindings.")
-	return 0
+	# Get all ClusterRoleBindings that reference system:masters group
+	violations=$(kubectl get clusterrolebindings -o json 2>/dev/null | jq -r '.items[] | select(.subjects[]? | select(.kind == "Group" and .name == "system:masters")) | "ClusterRoleBinding: \(.metadata.name)"' | sort -u)
+	
+	if [ -n "$violations" ]; then
+		a_output2+=(" - Check Failed: ClusterRoleBindings using system:masters group found:")
+		while IFS= read -r line; do
+			[ -n "$line" ] && a_output2+=(" - $line")
+		done <<< "$violations"
+	else
+		a_output+=(" - Check Passed: No ClusterRoleBindings using system:masters group")
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

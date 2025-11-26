@@ -9,9 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Minimize admission of privileged containers.")
-	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@..securityContext.privileged}{\"\\n\"}{end}' | grep true")
-	return 0
+	# Check all pods across all namespaces for privileged:true in securityContext
+	privileged_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select(.spec.containers[]?.securityContext.privileged==true or .spec.initContainers[]?.securityContext.privileged==true) | "\(.metadata.namespace)/\(.metadata.name)"')
+	
+	if [ -z "$privileged_pods" ]; then
+		a_output+=(" - Check Passed: No privileged containers found running in cluster")
+	else
+		a_output2+=(" - Check Failed: Found privileged containers:")
+		while IFS= read -r pod; do
+			a_output2+=(" - Pod: $pod")
+		done <<< "$privileged_pods"
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

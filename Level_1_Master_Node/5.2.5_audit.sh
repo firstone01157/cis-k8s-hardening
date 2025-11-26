@@ -9,9 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Minimize admission of containers with hostNetwork.")
-	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@.spec.hostNetwork}{\"\\n\"}{end}' | grep true")
-	return 0
+	# Check for pods with hostNetwork:true
+	hostnetwork_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select(.spec.hostNetwork==true) | "\(.metadata.namespace)/\(.metadata.name)"')
+	
+	if [ -z "$hostnetwork_pods" ]; then
+		a_output+=(" - Check Passed: No pods with hostNetwork:true found")
+	else
+		a_output2+=(" - Check Failed: Found pods with hostNetwork sharing host network namespace:")
+		while IFS= read -r pod; do
+			a_output2+=(" - Pod: $pod")
+		done <<< "$hostnetwork_pods"
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

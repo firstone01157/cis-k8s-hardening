@@ -9,9 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Minimize access to service account token creation.")
-	a_output+=(" - Command: Review users with access to create token sub-resource of serviceaccounts.")
-	return 0
+	# Get all Roles and ClusterRoles with serviceaccounts/tokens create access
+	violations=$(kubectl get roles,clusterroles -A -o json 2>/dev/null | jq -r '.items[] | select(.rules[]? | select((.resources[]? | select(. == "serviceaccounts/tokens" or . == "serviceaccounts" or . == "*")) and (.verbs[]? == "*" or .verbs[]? == "create"))) | "\(.kind): \(.metadata.namespace):\(.metadata.name)"' | sort -u)
+	
+	if [ -n "$violations" ]; then
+		a_output2+=(" - Check Failed: Roles/ClusterRoles with serviceaccount token creation access found:")
+		while IFS= read -r line; do
+			[ -n "$line" ] && a_output2+=(" - $line")
+		done <<< "$violations"
+	else
+		a_output+=(" - Check Passed: No Roles/ClusterRoles with serviceaccount token creation access")
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

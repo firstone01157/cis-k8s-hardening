@@ -9,18 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	## TODO: Verify this command specifically
-	## Description from CSV:
-	## List the policies in use for each namespace in the cluster, ensure that each policy disallows the admission of containers which have hostPort sections.
-	##
-	## Command hint: List the policies in use for each namespace in the cluster, ensure that each policy disallows the admission of containers which have hostPort sections.
-	##
-	## Placeholder logic (Fail by default until reviewed)
-	## Change "1" to "0" once you implement the actual check
-
-	a_output+=(" - Manual Check: Minimize admission of containers which use HostPorts.")
-	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@.spec.containers[*].ports[*].hostPort}{\"\\n\"}{end}'")
-	return 0
+	# Check for containers with HostPorts defined
+	hostport_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select((.spec.containers[]?.ports[]?.hostPort!=null) or (.spec.initContainers[]?.ports[]?.hostPort!=null)) | "\(.metadata.namespace)/\(.metadata.name)" + " - Ports: " + (([.spec.containers[]?.ports[]?.hostPort?, .spec.initContainers[]?.ports[]?.hostPort?] | map(select(!=null) | tostring) | join(",")) // "")')
+	
+	if [ -z "$hostport_pods" ]; then
+		a_output+=(" - Check Passed: No containers with HostPorts found")
+	else
+		a_output2+=(" - Check Failed: Found containers with HostPorts:")
+		while IFS= read -r pod; do
+			a_output2+=(" - Pod: $pod")
+		done <<< "$hostport_pods"
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

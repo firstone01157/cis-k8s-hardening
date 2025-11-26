@@ -9,9 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Ensure Service Account Tokens are only mounted where necessary.")
-	a_output+=(" - Command: Review pod and service account objects.")
-	return 0
+	# Get all pods with automountServiceAccountToken = true (or not explicitly set to false)
+	violations=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select((.spec.automountServiceAccountToken // true) == true) | "\(.metadata.namespace)/\(.metadata.name)"' | sort -u)
+	
+	if [ -n "$violations" ]; then
+		a_output2+=(" - Check Failed: Pods with automountServiceAccountToken=true found:")
+		while IFS= read -r line; do
+			[ -n "$line" ] && a_output2+=(" - $line")
+		done <<< "$violations"
+	else
+		a_output+=(" - Check Passed: All pods have automountServiceAccountToken explicitly disabled")
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

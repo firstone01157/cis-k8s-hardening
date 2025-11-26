@@ -1,37 +1,46 @@
 #!/bin/bash
 # CIS Benchmark: 1.4.1
-# Title: Ensure that the --profiling argument is set to false (Automated)
+# Title: Ensure that the --profiling argument is set to false
 # Level: • Level 1 - Master Node
 # Remediation Script
 
 remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+    l_output3=""
+    l_dl=""
+    unset a_output
+    unset a_output2
 
-	l_file="/etc/kubernetes/manifests/kube-scheduler.yaml"
-	if [ -e "$l_file" ]; then
-		if grep -q -- "--profiling" "$l_file"; then
-			if grep -q -- "--profiling=false" "$l_file"; then
-				a_output+=(" - Remediation not needed: --profiling already set to false")
-			else
-				cp "$l_file" "$l_file.bak_$(date +%s)"
-				sed -i 's/--profiling=[^ "]*\s*/--profiling=false/g' "$l_file"
-				a_output+=(" - Remediation applied: Updated --profiling to false")
-			fi
-		else
-			a_output2+=(" - Remediation Required: Please MANUALLY add '--profiling=false' to $l_file")
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-	fi
+    l_file="/etc/kubernetes/manifests/kube-scheduler.yaml"
+    l_flag="--profiling"
+    l_value="false"
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		return 0
-	else
-		return 1
-	fi
+    if [ -e "$l_file" ]; then
+        # 1. Backup First
+        cp "$l_file" "$l_file.bak_$(date +%s)"
+
+        # 2. Check & Apply
+        if grep -q -- "$l_flag" "$l_file"; then
+            # Case A: Flag exists -> Update value
+            sed -i "s/$l_flag=[^ \"]*/$l_flag=$l_value/g" "$l_file"
+            a_output+=(" - Remediation applied: Updated existing $l_flag to $l_value")
+        else
+            # Case B: Flag missing -> Insert new line
+            # Note: Binary name for scheduler is usually kube-scheduler
+            sed -i "/- kube-scheduler/a \    - $l_flag=$l_value" "$l_file"
+            a_output+=(" - Remediation applied: Inserted new flag $l_flag=$l_value")
+        fi
+    else
+        a_output2+=(" - Remediation failed: $l_file not found")
+        return 1
+    fi
+
+    # 3. Verify
+    if grep -q -- "$l_flag=$l_value" "$l_file"; then
+        return 0
+    else
+        a_output2+=(" - Remediation verification failed")
+        return 1
+    fi
 }
 
 remediate_rule

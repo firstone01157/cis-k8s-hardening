@@ -1,0 +1,57 @@
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0/kube-bench$ # ดู Exit Code ของตัวที่ตาย (ตัวที่ Exited บนสุด)
+sudo crictl ps -a
+WARN[0000] Config "/etc/crictl.yaml" does not exist, trying next: "/usr/bin/crictl.yaml"
+WARN[0000] runtime connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+WARN[0000] Image connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+CONTAINER           IMAGE               CREATED             STATE               NAME                      ATTEMPT             POD ID              POD                                   NAMESPACE
+072af2bd4da7d       01e8bacf0f500       3 minutes ago       Running             kube-controller-manager   26                  eed392ff39793       kube-controller-manager-terramaster   kube-system
+c006ee977af5b       88320b5498ff2       3 minutes ago       Running             kube-scheduler            26                  352f9ed56f913       kube-scheduler-terramaster            kube-system
+f7804e9ef70fb       a5f569d49a979       3 minutes ago       Running             kube-apiserver            27                  4bb4e5f24bcec       kube-apiserver-terramaster            kube-system
+374cbd5c7801d       a5f569d49a979       8 minutes ago       Exited              kube-apiserver            26                  4bb4e5f24bcec       kube-apiserver-terramaster            kube-system
+5463b0048e331       88320b5498ff2       13 minutes ago      Exited              kube-scheduler            25                  352f9ed56f913       kube-scheduler-terramaster            kube-system
+d3f203dc87e33       01e8bacf0f500       13 minutes ago      Exited              kube-controller-manager   25                  eed392ff39793       kube-controller-manager-terramaster   kube-system
+09bf9ad41956d       52546a367cc9e       4 hours ago         Running             coredns                   1                   606b7d83d3033       coredns-66bc5c9577-jktg5              kube-system
+c77746adef30f       52546a367cc9e       4 hours ago         Running             coredns                   1                   def7113ff7975       coredns-66bc5c9577-4pfwh              kube-system
+25eea9f3c6072       e83704a177312       4 hours ago         Running             kube-flannel              1                   61fe1ce47c3a5       kube-flannel-ds-476m6                 kube-flannel
+4e9b9f21c43d4       e83704a177312       4 hours ago         Exited              install-cni               0                   61fe1ce47c3a5       kube-flannel-ds-476m6                 kube-flannel
+1aeb73921171a       bb28ded63816e       4 hours ago         Exited              install-cni-plugin        1                   61fe1ce47c3a5       kube-flannel-ds-476m6                 kube-flannel
+28ae8cdbab273       8aa150647e88a       4 hours ago         Running             kube-proxy                1                   1c12f453f8db7       kube-proxy-xvsmn                      kube-system
+6f3f218580753       a3e246e9556e9       4 hours ago         Running             etcd                      1                   c849ee45d6d3b       etcd-terramaster                      kube-system
+5e9f42fcfd0c0       e83704a177312       24 hours ago        Exited              kube-flannel              0                   19c4ca4f5c116       kube-flannel-ds-476m6                 kube-flannel
+53022640fd832       52546a367cc9e       24 hours ago        Exited              coredns                   0                   0308b7aab5cff       coredns-66bc5c9577-4pfwh              kube-system
+c85887a9bbc10       52546a367cc9e       24 hours ago        Exited              coredns                   0                   a28ad1013ff3a       coredns-66bc5c9577-jktg5              kube-system
+43752398026bb       8aa150647e88a       24 hours ago        Exited              kube-proxy                0                   d793f19f16541       kube-proxy-xvsmn                      kube-system
+e0b0ee109090c       a3e246e9556e9       24 hours ago        Exited              etcd                      0                   62c40297b515e       etcd-terramaster                      kube-system
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0/kube-bench$ ืsudo nano /etc/kubernetes/manifests/kube-apiserver.yaml
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0/kube-bench$ sudo crictl ps -a | grep kube-apiserver | head -n 5
+WARN[0000] Config "/etc/crictl.yaml" does not exist, trying next: "/usr/bin/crictl.yaml"
+WARN[0000] runtime connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+WARN[0000] Image connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+7444f321531ff       a5f569d49a979       30 seconds ago      Running             kube-apiserver            0                   0d089d5dafed7       kube-apiserver-terramaster            kube-system
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0/kube-bench$ sudo crictl logs 374cbd5c7801d --tail 20
+WARN[0000] Config "/etc/crictl.yaml" does not exist, trying next: "/usr/bin/crictl.yaml"
+NAME:
+   crictl logs - Fetch the logs of a container
+
+USAGE:
+   crictl logs [command options] CONTAINER-ID
+
+COMMANDS:
+   help, h  Shows a list of commands or help for one command
+
+OPTIONS:
+   --follow, -f              Follow log output (default: false)
+   --limit-bytes value       Maximum bytes of logs to return. Defaults to no limit (default: -1)
+   --previous, -p            Print the logs for the previous instance of the container in a pod if it exists (default: false)
+   --reopen, -r              Reopen the container logs for the provided container (default: false)
+   --since value             Show logs since timestamp (e.g. 2013-01-02T13:23:37) or relative (e.g. 42m for 42 minutes)
+   --stream value, -s value  Show specified stream (stdout or stderr). Defaults to both.
+   --tail value              Number of lines to show from the end of the logs. Defaults to all (default: -1)
+   --timestamps, -t          Show timestamps (default: false)
+   --help, -h                show help
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0/kube-bench$ sudo crictl logs 374cbd5c7801d
+WARN[0000] Config "/etc/crictl.yaml" does not exist, trying next: "/usr/bin/crictl.yaml"
+WARN[0000] runtime connect using default endpoints: [unix:///run/containerd/containerd.sock unix:///run/crio/crio.sock unix:///var/run/cri-dockerd.sock]. As the default settings are now deprecated, you should set the endpoint instead.
+E1126 06:37:56.855702  179251 log.go:32] "ContainerStatus from runtime service failed" err="rpc error: code = NotFound desc = an error occurred when try to find container \"374cbd5c7801d\": not found" containerID="374cbd5c7801d"
+FATA[0000] rpc error: code = NotFound desc = an error occurred when try to find container "374cbd5c7801d": not found
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0/kube-bench$

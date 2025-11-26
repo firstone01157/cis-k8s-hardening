@@ -9,8 +9,16 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Ensure CNI supports Network Policies.")
-	return 0
+	# Check for existence of NetworkPolicy resources in the cluster
+	networkpolicies=$(kubectl get networkpolicies -A -o json 2>/dev/null | jq -r '.items | length')
+	
+	if [ "$networkpolicies" -gt 0 ]; then
+		a_output+=(" - Check Passed: NetworkPolicy resources found in cluster")
+		a_output+=(" - Network Policies defined: $networkpolicies")
+	else
+		a_output2+=(" - Check Failed: No NetworkPolicy resources found")
+		a_output2+=(" - Ensure CNI plugin supports Network Policies (e.g., Calico, Weave, Cilium)")
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

@@ -1,0 +1,557 @@
+DETAILED RESULTS (AUDIT)
+============================================================
+
+FAILED & MANUAL ITEMS (92 total)
+------------------------------------------------------------
+
+CIS ID: 1.1.10 [ERROR]
+Title:  Ensure that the Container Network Interface file ownership is set to root:root (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.10_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.12 [ERROR]
+Title:  Ensure that the etcd data directory ownership is set to etcd:etcd (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.12_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.11 [ERROR]
+Title:  Ensure that the etcd data directory permissions are set to 700 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.11_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.14 [ERROR]
+Title:  Ensure that the default administrative credential file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.14_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.15 [ERROR]
+Title:  Ensure that the scheduler.conf file permissions are set to 600 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.15_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.13 [ERROR]
+Title:  Ensure that the default administrative credential file permissions are set to 600 (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.13_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.16 [ERROR]
+Title:  Ensure that the scheduler.conf file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.16_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.17 [ERROR]
+Title:  Ensure that the controller-manager.conf file permissions are set to 600 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.17_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.1 [ERROR]
+Title:  Ensure that the API server pod specification file permissions are set to 600 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.1_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.19 [ERROR]
+Title:  Ensure that the Kubernetes PKI directory and file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.19_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.2 [ERROR]
+Title:  Ensure that the API server pod specification file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.2_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.21 [ERROR]
+Title:  Ensure that the Kubernetes PKI key file permissions are set to 600 (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.21_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.3 [ERROR]
+Title:  Ensure that the controller manager pod specification file permissions are set to 600 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.3_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.20 [ERROR]
+Title:  Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.20_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.18 [ERROR]
+Title:  Ensure that the controller-manager.conf file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.18_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.5 [ERROR]
+Title:  Ensure that the scheduler pod specification file permissions are set to 600 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.5_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.4 [ERROR]
+Title:  Ensure that the controller manager pod specification file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.4_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.9 [ERROR]
+Title:  Ensure that the Container Network Interface file permissions are set to 600 or more restrictive (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.9_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.6 [ERROR]
+Title:  Ensure that the scheduler pod specification file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.6_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.8 [ERROR]
+Title:  Ensure that the etcd pod specification file ownership is set to root:root (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.8_audit.sh
+----------------------------------------
+
+CIS ID: 1.1.7 [ERROR]
+Title:  Ensure that the etcd pod specification file permissions are set to 600 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.1.7_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.11 [ERROR]
+Title:  Ensure that the admission control plugin AlwaysPullImages is set (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.11_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.15 [ERROR]
+Title:  Ensure that the --profiling argument is set to false (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.15_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.10 [ERROR]
+Title:  Ensure that the admission control plugin AlwaysAdmit is not set (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.10_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.16 [ERROR]
+Title:  Ensure that the --audit-log-path argument is set (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.16_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.17 [ERROR]
+Title:  Ensure that the --audit-log-maxage argument is set to 30 or as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.17_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.18 [ERROR]
+Title:  Ensure that the --audit-log-maxbackup argument is set to 10 or as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.18_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.20 [ERROR]
+Title:  Ensure that the --request-timeout argument is set as appropriate (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.20_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.19 [ERROR]
+Title:  Ensure that the --audit-log-maxsize argument is set to 100 or as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.19_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.23 [ERROR]
+Title:  Ensure that the --etcd-certfile and --etcd-keyfile arguments are set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.23_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.1 [ERROR]
+Title:  Ensure that the --anonymous-auth argument is set to false (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.1_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.21 [ERROR]
+Title:  Ensure that the --service-account-lookup argument is set to true (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.21_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.22 [ERROR]
+Title:  Ensure that the --service-account-key-file argument is set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.22_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.24 [ERROR]
+Title:  Ensure that the --tls-cert-file and --tls-private-key-file arguments are set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.24_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.27 [ERROR]
+Title:  Ensure that the --encryption-provider-config argument is set as appropriate (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.27_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.25 [ERROR]
+Title:  Ensure that the --client-ca-file argument is set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.25_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.29 [ERROR]
+Title:  Ensure that the API Server only makes use of Strong Cryptographic Ciphers (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.29_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.26 [ERROR]
+Title:  Ensure that the --etcd-cafile argument is set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.26_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.28 [ERROR]
+Title:  Ensure that encryption providers are appropriately configured (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.28_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.5 [ERROR]
+Title:  Ensure that the --kubelet-certificate-authority argument is set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.5_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.2 [ERROR]
+Title:  Ensure that the --token-auth-file parameter is not set (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.2_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.3 [ERROR]
+Title:  Ensure that the DenyServiceExternalIPs is set (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.3_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.6 [ERROR]
+Title:  Ensure that the --authorization-mode argument is not set to AlwaysAllow (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.6_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.30 [ERROR]
+Title:  Ensure that the --service-account-extend-token-expiration parameter is set to false (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.30_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.7 [ERROR]
+Title:  Ensure that the --authorization-mode argument includes Node (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.7_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.4 [ERROR]
+Title:  Ensure that the --kubelet-client-certificate and --kubelet-client-key arguments are set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.4_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.8 [ERROR]
+Title:  Ensure that the --authorization-mode argument includes RBAC (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.8_audit.sh
+----------------------------------------
+
+CIS ID: 1.2.9 [ERROR]
+Title:  Ensure that the admission control plugin EventRateLimit is set (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.2.9_audit.sh
+----------------------------------------
+
+CIS ID: 1.3.1 [ERROR]
+Title:  Ensure that the --terminated-pod-gc-threshold argument is set as appropriate (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.3.1_audit.sh
+----------------------------------------
+
+CIS ID: 1.3.3 [ERROR]
+Title:  Ensure that the --use-service-account-credentials argument is set to true (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.3.3_audit.sh
+----------------------------------------
+
+CIS ID: 1.3.2 [ERROR]
+Title:  Ensure that the --profiling argument is set to false (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.3.2_audit.sh
+----------------------------------------
+
+CIS ID: 1.3.6 [ERROR]
+Title:  Ensure that the RotateKubeletServerCertificate argument is set to true (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.3.6_audit.sh
+----------------------------------------
+
+CIS ID: 1.3.5 [ERROR]
+Title:  Ensure that the --root-ca-file argument is set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.3.5_audit.sh
+----------------------------------------
+
+CIS ID: 1.3.4 [ERROR]
+Title:  Ensure that the --service-account-private-key-file argument is set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.3.4_audit.sh
+----------------------------------------
+
+CIS ID: 1.3.7 [ERROR]
+Title:  Ensure that the --bind-address argument is set to 127.0.0.1 (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.3.7_audit.sh
+----------------------------------------
+
+CIS ID: 1.4.2 [ERROR]
+Title:  Ensure that the --bind-address argument is set to 127.0.0.1 (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.4.2_audit.sh
+----------------------------------------
+
+CIS ID: 1.4.1 [ERROR]
+Title:  Ensure that the --profiling argument is set to false (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\1.4.1_audit.sh
+----------------------------------------
+
+CIS ID: 2.3 [ERROR]
+Title:  Ensure that the --auto-tls argument is not set to true (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\2.3_audit.sh
+----------------------------------------
+
+CIS ID: 2.1 [ERROR]
+Title:  Ensure that the --cert-file and --key-file arguments are set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\2.1_audit.sh
+----------------------------------------
+
+CIS ID: 2.2 [ERROR]
+Title:  Ensure that the --client-cert-auth argument is set to true (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\2.2_audit.sh
+----------------------------------------
+
+CIS ID: 2.5 [ERROR]
+Title:  Ensure that the --peer-client-cert-auth argument is set to true (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\2.5_audit.sh
+----------------------------------------
+
+CIS ID: 2.6 [ERROR]
+Title:  Ensure that the --peer-auto-tls argument is not set to true (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\2.6_audit.sh
+----------------------------------------
+
+CIS ID: 2.4 [ERROR]
+Title:  Ensure that the --peer-cert-file and --peer-key-file arguments are set as appropriate (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\2.4_audit.sh
+----------------------------------------
+
+CIS ID: 3.1.2 [ERROR]
+Title:  Service account token authentication should not be used for users (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\3.1.2_audit.sh
+----------------------------------------
+
+CIS ID: 3.1.3 [ERROR]
+Title:  Bootstrap token authentication should not be used for users (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\3.1.3_audit.sh
+----------------------------------------
+
+CIS ID: 3.1.1 [ERROR]
+Title:  Client certificate authentication should not be used for users (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\3.1.1_audit.sh
+----------------------------------------
+
+CIS ID: 4.1.1 [ERROR]
+Title:  Ensure that the kubelet service file permissions are set to 600 or more restrictive (Automated)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\4.1.1_audit.sh
+----------------------------------------
+
+CIS ID: 3.2.1 [ERROR]
+Title:  Ensure that a minimal audit policy is created (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\3.2.1_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.10 [ERROR]
+Title:  Minimize access to the proxy sub-resource of nodes (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.10_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.11 [ERROR]
+Title:  Minimize access to the approval sub-resource of certificatesigningrequests objects (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.11_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.7 [ERROR]
+Title:  Avoid use of system:masters group (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.7_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.12 [ERROR]
+Title:  Minimize access to webhook configuration objects (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.12_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.8 [ERROR]
+Title:  Limit use of the Bind, Impersonate and Escalate permissions in the Kubernetes cluster (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.8_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.9 [ERROR]
+Title:  Minimize access to create persistent volumes (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.9_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.10 [ERROR]
+Title:  Minimize the admission of Windows HostProcess Containers (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.10_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.11 [ERROR]
+Title:  Minimize the admission of HostPath volumes (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.11_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.13 [ERROR]
+Title:  Minimize access to the service account token creation (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.13_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.1 [ERROR]
+Title:  Ensure that the cluster-admin role is only used where required (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.1_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.12 [ERROR]
+Title:  Minimize the admission of containers which use HostPorts (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.12_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.6 [ERROR]
+Title:  Ensure that Service Account Tokens are only mounted where necessary (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.6_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.2 [ERROR]
+Title:  Minimize access to secrets (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.2_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.1 [ERROR]
+Title:  Ensure that the cluster has at least one active policy control mechanism in place (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.1_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.5 [ERROR]
+Title:  Ensure that default service accounts are not actively used. (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.5_audit.sh
+----------------------------------------
+
+CIS ID: 5.1.4 [ERROR]
+Title:  Minimize access to create pods (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.1.4_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.2 [ERROR]
+Title:  Minimize the admission of privileged containers (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.2_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.4 [ERROR]
+Title:  Minimize the admission of containers wishing to share the host IPC namespace (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.4_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.5 [ERROR]
+Title:  Minimize the admission of containers wishing to share the host network namespace (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.5_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.6 [ERROR]
+Title:  Minimize the admission of containers with allowPrivilegeEscalation (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.6_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.3 [ERROR]
+Title:  Minimize the admission of containers wishing to share the host process ID namespace (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.3_audit.sh
+----------------------------------------
+
+CIS ID: 5.2.8 [ERROR]
+Title:  Minimize the admission of containers with the NET_RAW capability (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.2.8_audit.sh
+----------------------------------------
+
+CIS ID: 5.6.1 [ERROR]
+Title:  Create administrative boundaries between resources using namespaces (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.6.1_audit.sh
+----------------------------------------
+
+CIS ID: 5.3.1 [ERROR]
+Title:  Ensure that the CNI in use supports Network Policies (Manual)
+Role:   MASTER
+Reason: Script not found: C:\Users\jaksupak.khe\Documents\CIS_Kubernetes_Benchmark_V1.12.0\Level_1_Master_Node\5.3.1_audit.sh
+----------------------------------------

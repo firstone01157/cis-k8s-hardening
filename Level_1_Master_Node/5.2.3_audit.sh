@@ -9,9 +9,17 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	a_output+=(" - Manual Check: Minimize admission of containers with hostPID.")
-	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@.spec.hostPID}{\"\\n\"}{end}' | grep true")
-	return 0
+	# Check for pods with hostPID:true
+	hostpid_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select(.spec.hostPID==true) | "\(.metadata.namespace)/\(.metadata.name)"')
+	
+	if [ -z "$hostpid_pods" ]; then
+		a_output+=(" - Check Passed: No pods with hostPID:true found")
+	else
+		a_output2+=(" - Check Failed: Found pods with hostPID sharing host process namespace:")
+		while IFS= read -r pod; do
+			a_output2+=(" - Pod: $pod")
+		done <<< "$hostpid_pods"
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
