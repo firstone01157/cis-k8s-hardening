@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.3.5..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-controller-manager | grep -v grep | grep -q -- "--root-ca-file"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q \"\\s--root-ca-file(=|\\s|$)\"; then"
+	if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--root-ca-file(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --root-ca-file is set")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --root-ca-file is not set")
+		echo "[FAIL_REASON] Check Failed: --root-ca-file is not set"
+		echo "[FIX_HINT] Run remediation script: 1.3.5_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

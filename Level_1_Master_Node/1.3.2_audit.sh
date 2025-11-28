@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.3.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-controller-manager | grep -v grep | grep -q -- "--profiling=false"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q \"\\s--profiling=false(\\s|$)\"; then"
+	if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --profiling is set to false")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --profiling is not set to false")
+		echo "[FAIL_REASON] Check Failed: --profiling is not set to false"
+		echo "[FIX_HINT] Run remediation script: 1.3.2_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

@@ -1,29 +1,52 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 2.4
-# Title: Ensure that the --peer-cert-file and --peer-key-file arguments are set as appropriate (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --peer-cert-file and --peer-key-file arguments are set as appropriate
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/etcd.yaml"
+KEY1="--peer-cert-file"
+VALUE1="/etc/kubernetes/pki/etcd/peer.crt"
+FULL_PARAM1="${KEY1}=${VALUE1}"
+KEY2="--peer-key-file"
+VALUE2="/etc/kubernetes/pki/etcd/peer.key"
+FULL_PARAM2="${KEY2}=${VALUE2}"
+BINARY_NAME="etcd"
 
-	l_file="/etc/kubernetes/manifests/etcd.yaml"
-	if [ -e "$l_file" ]; then
-		if grep -q "\--peer-cert-file" "$l_file" && grep -q "\--peer-key-file" "$l_file"; then
-			a_output+=(" - Remediation not needed: etcd peer cert flags present in $l_file")
-			return 0
-		else
-			a_output2+=(" - Remediation required: --peer-cert-file and/or --peer-key-file missing in $l_file. Please add them manually.")
-			return 1
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-		return 0
-	fi
-}
+echo "[INFO] Remediating ${KEY1} and ${KEY2}..."
 
-remediate_rule
-exit $?
+# Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
+
+# Process KEY1
+if grep -Fq -- "${FULL_PARAM1}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${FULL_PARAM1} is already set."
+else
+    if grep -Fq -- "${KEY1}" "${CONFIG_FILE}"; then
+        sed -i "s|${KEY1}=.*|${FULL_PARAM1}|g" "${CONFIG_FILE}"
+    else
+        sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM1}" "${CONFIG_FILE}"
+    fi
+fi
+
+# Process KEY2
+if grep -Fq -- "${FULL_PARAM2}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${FULL_PARAM2} is already set."
+else
+    if grep -Fq -- "${KEY2}" "${CONFIG_FILE}"; then
+        sed -i "s|${KEY2}=.*|${FULL_PARAM2}|g" "${CONFIG_FILE}"
+    else
+        sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM2}" "${CONFIG_FILE}"
+    fi
+fi
+
+# Verify
+if grep -Fq -- "${FULL_PARAM1}" "${CONFIG_FILE}" && grep -Fq -- "${FULL_PARAM2}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied both parameters"
+else
+    echo "[ERROR] Failed to apply one or both parameters"
+    exit 1
+fi

@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.6..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--authorization-mode=AlwaysAllow"; then
-		a_output2+=(" - Check Failed: --authorization-mode is set to AlwaysAllow")
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- \"--authorization-mode=.*AlwaysAllow\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*AlwaysAllow"; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: --authorization-mode contains AlwaysAllow")
+		echo "[FAIL_REASON] Check Failed: --authorization-mode contains AlwaysAllow"
+		echo "[FIX_HINT] Run remediation script: 1.2.6_remediate.sh"
 	else
-		a_output+=(" - Check Passed: --authorization-mode is not set to AlwaysAllow")
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --authorization-mode does not contain AlwaysAllow")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

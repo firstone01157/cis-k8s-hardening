@@ -4,14 +4,20 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 3.1.3..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- \"--enable-bootstrap-token-auth=true\"; then"
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--enable-bootstrap-token-auth=true"; then
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --enable-bootstrap-token-auth is set to true")
+		echo "[FAIL_REASON] Check Failed: --enable-bootstrap-token-auth is set to true"
+		echo "[FIX_HINT] Run remediation script: 3.1.3_remediate.sh"
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --enable-bootstrap-token-auth is not set to true")
 	fi
 

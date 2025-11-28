@@ -4,18 +4,23 @@
 # Level: • Level 2 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.4.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
 	## Description from CSV:
+	echo "[CMD] Executing: ## Run the following command to find references to objects which use environment variables defined from secrets. kubectl get all -o jsonpath=\'{range .items[?(@..secretKeyRef)]} {.kind} {.metadata.name} {"
 	## Run the following command to find references to objects which use environment variables defined from secrets. kubectl get all -o jsonpath='{range .items[?(@..secretKeyRef)]} {.kind} {.metadata.name} {
 	##
+	echo "[CMD] Executing: ## Command hint: Run the following command to find references to objects which use environment variables defined from secrets. kubectl get all -o jsonpath=\'{range .items[?(@..secretKeyRef)]} {.kind} {.metadata.name} {\"\\n\"}{end}\' -A"
 	## Command hint: Run the following command to find references to objects which use environment variables defined from secrets. kubectl get all -o jsonpath='{range .items[?(@..secretKeyRef)]} {.kind} {.metadata.name} {"\n"}{end}' -A
 	##
 
+	echo "[INFO] Check Passed"
 	a_output+=(" - Manual Check: Prefer using secrets as files over secrets as environment variables.")
+	echo "[CMD] Executing: a_output+=(\" - Command: kubectl get all -o jsonpath=\'{range .items[?(@..secretKeyRef)]} {.kind} {.metadata.name} {\\\"\\\\n\\\"}{end}\' -A\")"
 	a_output+=(" - Command: kubectl get all -o jsonpath='{range .items[?(@..secretKeyRef)]} {.kind} {.metadata.name} {\"\\n\"}{end}' -A")
 	return 0
 

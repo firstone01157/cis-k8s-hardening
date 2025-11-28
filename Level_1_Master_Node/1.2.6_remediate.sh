@@ -1,39 +1,42 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.6
-# Title: Ensure that the --authorization-mode argument is not set to AlwaysAllow (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --kubelet-certificate-authority argument is set as appropriate
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY="--kubelet-certificate-authority"
+VALUE="/etc/kubernetes/pki/ca.crt"
+FULL_PARAM="${KEY}=${VALUE}"
+BINARY_NAME="kube-apiserver"
 
-	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-	if [ -e "$l_file" ]; then
-		if grep -q "\--authorization-mode" "$l_file"; then
-			if grep -q "AlwaysAllow" "$l_file"; then
-				# AlwaysAllow is bad. We should set it to Node,RBAC (safe default)
-				cp "$l_file" "$l_file.bak_$(date +%s)"
-				sed -i 's/--authorization-mode=[^ "]*\s*/--authorization-mode=Node,RBAC/g' "$l_file"
-				a_output+=(" - Remediation applied: Updated --authorization-mode to Node,RBAC")
-			else
-				a_output+=(" - Remediation not needed: AlwaysAllow not present in --authorization-mode in $l_file")
-			fi
-		else
-			a_output2+=(" - Remediation required: --authorization-mode flag is missing in $l_file. Please add it (e.g., Node,RBAC) manually.")
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-	fi
+echo "[INFO] Remediating ${KEY}..."
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		return 0
-	else
-		return 1
-	fi
-}
+# 1. Pre-check using 'grep -F --' to handle dashes safely
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${FULL_PARAM} is already set."
+    exit 0
+fi
 
-remediate_rule
-exit $?
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
+
+# 3. Apply Fix using sed
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    # Case A: Key exists, update it (using | delimiter)
+    sed -i "s|${KEY}=.*|${FULL_PARAM}|g" "${CONFIG_FILE}"
+else
+    # Case B: Key missing, append inside 'command:' block with 4-space indent
+    sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
+fi
+
+# 4. Verify
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied ${FULL_PARAM}"
+else
+    echo "[ERROR] Failed to apply ${FULL_PARAM}"
+    exit 1
+fi

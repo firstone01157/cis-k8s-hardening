@@ -4,21 +4,47 @@
 # Level: • Level 1 - Worker Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.2.5..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	## Description from CSV:
-	## Run the following command on each node: ps -ef | grep kubelet Verify that the --streaming-connection-idle-timeout argument is not set to 0. If the argument is not present, and there is a Kubelet confi
-	##
-	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that the --streaming-connection-idle-timeout argument is not set to 0. If the argument is not present, and there is a Kubelet config file specified by --config, check that it does not set streamingConnectionIdleTimeout to 0.
-	##
+	# 1. Detect Config File
+	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"
+	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP '(?<=--config=)[^ ]+' | head -n 1)
+	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
 
-	if ps -ef | grep kubelet | grep -v grep | grep -q "\--streaming-connection-idle-timeout=0"; then
-		a_output2+=(" - Check Failed: --streaming-connection-idle-timeout is set to 0")
+	# 2. Priority 1: Check Flag
+	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--streaming-connection-idle-timeout=0(\\s|$)\"; then"
+	if ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--streaming-connection-idle-timeout=0(\s|$)"; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: --streaming-connection-idle-timeout is set to 0 (Flag)")
+		echo "[FAIL_REASON] Check Failed: --streaming-connection-idle-timeout is set to 0 (Flag)"
+		echo "[FIX_HINT] Run remediation script: 4.2.5_remediate.sh"
+	echo "[CMD] Executing: elif ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--streaming-connection-idle-timeout=\"; then"
+	elif ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--streaming-connection-idle-timeout="; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --streaming-connection-idle-timeout is set to non-zero (Flag)")
+	
+	# 3. Priority 2: Check Config File
+	elif [ -f "$config_path" ]; then
+		echo "[CMD] Executing: if grep -E -q \"streamingConnectionIdleTimeout:\\s*0\" \"$config_path\"; then"
+		if grep -E -q "streamingConnectionIdleTimeout:\s*0" "$config_path"; then
+			echo "[INFO] Check Failed"
+			a_output2+=(" - Check Failed: streamingConnectionIdleTimeout is set to 0 in $config_path")
+			echo "[FAIL_REASON] Check Failed: streamingConnectionIdleTimeout is set to 0 in $config_path"
+			echo "[FIX_HINT] Run remediation script: 4.2.5_remediate.sh"
+		else
+			# If missing or not 0, it passes (Default is 4h)
+			echo "[INFO] Check Passed"
+			a_output+=(" - Check Passed: streamingConnectionIdleTimeout is not set to 0 in $config_path (or missing/default)")
+		fi
+	
+	# 4. Priority 3: Default
 	else
-		a_output+=(" - Check Passed: --streaming-connection-idle-timeout is NOT set to 0")
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --streaming-connection-idle-timeout not set (Default: 4h)")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

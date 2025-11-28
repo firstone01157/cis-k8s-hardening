@@ -1,39 +1,42 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.4
-# Title: Ensure that the --kubelet-client-certificate and --kubelet-client-key arguments are set as appropriate (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --kubelet-https argument is set to true
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY="--kubelet-https"
+VALUE="true"
+FULL_PARAM="${KEY}=${VALUE}"
+BINARY_NAME="kube-apiserver"
 
-	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-	if [ -e "$l_file" ]; then
-		l_missing=0
-		if ! grep -q "\--kubelet-client-certificate" "$l_file"; then
-			l_missing=1
-		fi
-		if ! grep -q "\--kubelet-client-key" "$l_file"; then
-			l_missing=1
-		fi
-		if [ "$l_missing" -eq 1 ]; then
-			a_output2+=(" - Remediation required: --kubelet-client-certificate and/or --kubelet-client-key missing in $l_file. Please add them manually with correct paths.")
-		else
-			a_output+=(" - Remediation not needed: flags are present in $l_file")
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-	fi
+echo "[INFO] Remediating ${KEY}..."
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		return 0
-	else
-		return 1
-	fi
-}
+# 1. Pre-check using 'grep -F --' to handle dashes safely
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${FULL_PARAM} is already set."
+    exit 0
+fi
 
-remediate_rule
-exit $?
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
+
+# 3. Apply Fix using sed
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    # Case A: Key exists, update it (using | delimiter)
+    sed -i "s|${KEY}=.*|${FULL_PARAM}|g" "${CONFIG_FILE}"
+else
+    # Case B: Key missing, append inside 'command:' block with 4-space indent
+    sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
+fi
+
+# 4. Verify
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied ${FULL_PARAM}"
+else
+    echo "[ERROR] Failed to apply ${FULL_PARAM}"
+    exit 1
+fi

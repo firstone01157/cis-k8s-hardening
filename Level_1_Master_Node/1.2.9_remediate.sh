@@ -1,55 +1,41 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.9
-# Title: Ensure that the admission control plugin EventRateLimit is set
-# Level: • Level 1 - Master Node
-# Remediation Script - SAFE VERSION
+# Title: Ensure that the --authorization-mode argument includes RBAC
+# Level: Level 1 - Master Node
+# Remediation Script
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY="--authorization-mode"
+VALUE="RBAC"
+BINARY_NAME="kube-apiserver"
 
-    l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-    # Path ที่เราจะใช้เก็บ Config (มาตรฐาน CIS)
-    l_config_file="/etc/kubernetes/admission-control/event-rate-limit.yaml"
-    
-    # 1. Safety Check: ตรวจว่ามีไฟล์ Config ของ EventRateLimit หรือยัง?
-    if [ ! -f "$l_config_file" ]; then
-        a_output2+=(" - Safety Stop: Config file $l_config_file is missing.")
-        a_output2+=(" - Manual Action: You MUST create this file first before enabling the plugin.")
-        # Return 1 เพื่อบอกว่ายังไม่ผ่าน แต่ไม่ทำอะไรพัง
-        return 1
-    fi
+echo "[INFO] Remediating ${KEY}..."
 
-    if [ -e "$l_file" ]; then
-        # 2. ถ้ามี Config แล้ว ค่อยแก้ Manifest
-        if grep -q "\--enable-admission-plugins" "$l_file"; then
-            if grep -q "EventRateLimit" "$l_file"; then
-                a_output+=(" - Remediation not needed: EventRateLimit is already present")
-            else
-                cp "$l_file" "$l_file.bak_$(date +%s)"
-                sed -i 's/\(--enable-admission-plugins=[^ ]*\)/\1,EventRateLimit/' "$l_file"
-                a_output+=(" - Remediation applied: Appended EventRateLimit")
-            fi
-        else
-             a_output2+=(" - Error: --enable-admission-plugins flag not found")
-             return 1
-        fi
-        
-        # 3. เพิ่ม flag ชี้ไปหา Config File ด้วย (ถ้ายังไม่มี)
-        if ! grep -q "\--admission-control-config-file" "$l_file"; then
-             sed -i "/- kube-apiserver/a \    - --admission-control-config-file=$l_config_file" "$l_file"
-             a_output+=(" - Remediation applied: Added --admission-control-config-file path")
-        fi
-        
-    else
-        a_output2+=(" - File not found: $l_file")
-        return 1
-    fi
+# 1. Pre-check using 'grep -F --' to handle dashes safely
+if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${KEY} includes ${VALUE}."
+    exit 0
+fi
 
-    return 0
-}
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
 
-remediate_rule
-exit $?
+# 3. Apply Fix using sed
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    # Key exists, append value to comma-separated list
+    sed -i "s|${KEY}=|&${VALUE},|" "${CONFIG_FILE}"
+else
+    # Key missing, insert with default Node,RBAC
+    sed -i "/- ${BINARY_NAME}/a \    - ${KEY}=Node,RBAC" "${CONFIG_FILE}"
+fi
+
+# 4. Verify
+if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied ${KEY} includes ${VALUE}"
+else
+    echo "[ERROR] Failed to apply ${KEY}"
+    exit 1
+fi

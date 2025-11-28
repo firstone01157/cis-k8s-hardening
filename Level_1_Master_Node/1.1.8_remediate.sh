@@ -1,37 +1,35 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.8
-# Title: Ensure that the etcd pod specification file ownership is set to root:root (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the etcd pod specification file ownership is set to root:root
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+CONFIG_FILE="/etc/kubernetes/manifests/etcd.yaml"
+OWNER="root:root"
 
-	l_file="/etc/kubernetes/manifests/etcd.yaml"
-	if [ -e "$l_file" ]; then
-		l_owner=$(stat -c %U:%G "$l_file")
-		if [ "$l_owner" == "root:root" ]; then
-			a_output+=(" - Remediation not needed: Ownership on $l_file is $l_owner")
-			return 0
-		else
-			chown root:root "$l_file"
-			l_owner_new=$(stat -c %U:%G "$l_file")
-			if [ "$l_owner_new" == "root:root" ]; then
-				a_output+=(" - Remediation applied: Ownership on $l_file changed to $l_owner_new")
-				return 0
-			else
-				a_output2+=(" - Remediation failed: Could not change ownership on $l_file")
-				return 1
-			fi
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-		return 0
-	fi
-}
+echo "[INFO] Remediating ownership for $CONFIG_FILE..."
 
-remediate_rule
-exit $?
+# 2. Pre-Check (Idempotency)
+if [ -e "$CONFIG_FILE" ]; then
+    CURRENT_OWNER=$(stat -c "%U:%G" "$CONFIG_FILE")
+    if [ "$CURRENT_OWNER" = "$OWNER" ]; then
+        echo "[FIXED] Ownership on $CONFIG_FILE is already $CURRENT_OWNER."
+        exit 0
+    fi
+else
+    echo "[INFO] $CONFIG_FILE not found. Skipping."
+    exit 0
+fi
+
+# 3. Apply Fix
+chown "$OWNER" "$CONFIG_FILE"
+
+# 4. Verification & Output
+CURRENT_OWNER=$(stat -c "%U:%G" "$CONFIG_FILE")
+if [ "$CURRENT_OWNER" = "$OWNER" ]; then
+    echo "[FIXED] Successfully applied ownership $OWNER to $CONFIG_FILE"
+else
+    echo "[ERROR] Failed to apply ownership to $CONFIG_FILE"
+    exit 1
+fi

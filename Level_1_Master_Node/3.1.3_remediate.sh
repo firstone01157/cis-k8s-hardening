@@ -1,42 +1,42 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 3.1.3
 # Title: Bootstrap token authentication should not be used for users
-# Level: • Level 1 - Master Node
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY="--enable-bootstrap-token-auth"
+VALUE="false"
+FULL_PARAM="${KEY}=${VALUE}"
+BINARY_NAME="kube-apiserver"
 
-    l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-    l_flag="--enable-bootstrap-token-auth"
-    l_val="false"
+echo "[INFO] Remediating ${KEY}..."
 
-    if [ -e "$l_file" ]; then
-        cp "$l_file" "$l_file.bak_$(date +%s)"
+# 1. Pre-check using 'grep -F --' to handle dashes safely
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${FULL_PARAM} is already set."
+    exit 0
+fi
 
-        if grep -q -- "$l_flag" "$l_file"; then
-            # Update existing
-            sed -i "s/$l_flag=[^ \"]*/$l_flag=$l_val/g" "$l_file"
-            a_output+=(" - Remediation applied: Set $l_flag to $l_val")
-        else
-            # Insert explicitly disabled
-            sed -i "/- kube-apiserver/a \    - $l_flag=$l_val" "$l_file"
-            a_output+=(" - Remediation applied: Inserted $l_flag=$l_val")
-        fi
-    else
-        a_output2+=(" - Remediation failed: $l_file not found")
-        return 1
-    fi
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
 
-    if grep -q "$l_flag=$l_val" "$l_file"; then
-        return 0
-    else
-        return 1
-    fi
-}
+# 3. Apply Fix using sed
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    # Case A: Key exists, update it (using | delimiter)
+    sed -i "s|${KEY}=.*|${FULL_PARAM}|g" "${CONFIG_FILE}"
+else
+    # Case B: Key missing, append inside 'command:' block with 4-space indent
+    sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
+fi
 
-remediate_rule
-exit $?
+# 4. Verify
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied ${FULL_PARAM}"
+else
+    echo "[ERROR] Failed to apply ${FULL_PARAM}"
+    exit 1
+fi

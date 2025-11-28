@@ -1,37 +1,39 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.11
-# Title: Ensure that the etcd data directory permissions are set to 700 or more restrictive (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the etcd data directory permissions are set to 700 or more restrictive
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+# Try to detect etcd data dir, default to /var/lib/etcd
+ETCD_DATA_DIR=$(ps -ef | grep etcd | grep -- --data-dir | sed 's/.*--data-dir[= ]\([^ ]*\).*/\1/')
+if [ -z "$ETCD_DATA_DIR" ]; then
+    ETCD_DATA_DIR="/var/lib/etcd"
+fi
+MAX_PERM=700
 
-	l_dir="/var/lib/etcd"
-	if [ -d "$l_dir" ]; then
-		l_mode=$(stat -c %a "$l_dir")
-		if [ "$l_mode" -le 700 ]; then
-			a_output+=(" - Remediation not needed: Permissions on $l_dir are $l_mode")
-			return 0
-		else
-			chmod 700 "$l_dir"
-			l_mode_new=$(stat -c %a "$l_dir")
-			if [ "$l_mode_new" -le 700 ]; then
-				a_output+=(" - Remediation applied: Permissions on $l_dir changed to $l_mode_new")
-				return 0
-			else
-				a_output2+=(" - Remediation failed: Could not change permissions on $l_dir")
-				return 1
-			fi
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_dir not found")
-		return 0
-	fi
-}
+echo "[INFO] Remediating permissions for $ETCD_DATA_DIR..."
 
-remediate_rule
-exit $?
+# 2. Pre-Check
+if [ -d "$ETCD_DATA_DIR" ]; then
+    CURRENT_PERM=$(stat -c %a "$ETCD_DATA_DIR")
+    if [ "$CURRENT_PERM" -le "$MAX_PERM" ]; then
+        echo "[FIXED] Permissions on $ETCD_DATA_DIR are already $CURRENT_PERM (<= $MAX_PERM)."
+        exit 0
+    fi
+else
+    echo "[INFO] Etcd data directory $ETCD_DATA_DIR not found. Skipping."
+    exit 0
+fi
+
+# 3. Apply Fix
+chmod "$MAX_PERM" "$ETCD_DATA_DIR"
+
+# 4. Verification
+CURRENT_PERM=$(stat -c %a "$ETCD_DATA_DIR")
+if [ "$CURRENT_PERM" -le "$MAX_PERM" ]; then
+    echo "[FIXED] Successfully applied permissions $MAX_PERM to $ETCD_DATA_DIR"
+else
+    echo "[ERROR] Failed to apply permissions to $ETCD_DATA_DIR"
+    exit 1
+fi

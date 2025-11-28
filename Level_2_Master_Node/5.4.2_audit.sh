@@ -4,6 +4,7 @@
 # Level: • Level 2 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.4.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -15,6 +16,7 @@ audit_rule() {
 	## Command hint: Review your secrets management implementation.
 	##
 
+	echo "[INFO] Check Passed"
 	a_output+=(" - Manual Check: Consider external secret storage.")
 	return 0
 

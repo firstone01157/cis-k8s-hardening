@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.28..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--encryption-provider-config"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q \"\\s--encryption-provider-config(=|\\s|$)\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--encryption-provider-config(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --encryption-provider-config is set (Manual verification of config file content required)")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --encryption-provider-config is not set")
+		echo "[FAIL_REASON] Check Failed: --encryption-provider-config is not set"
+		echo "[FIX_HINT] Run remediation script: 1.2.28_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

@@ -1,23 +1,47 @@
 #!/bin/bash
 # CIS Benchmark: 5.2.9
-# Title: Minimize the admission of containers with capabilities assigned (Manual)
-# Level: • Level 2 - Master Node
+# Title: Minimize the admission of containers with added capabilities (Automated)
+# Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.2.9..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	## Description from CSV:
-	## List the policies in use for each namespace in the cluster, ensure that at least one policy requires that capabilities are dropped by all containers.
-	##
-	## Command hint: List the policies in use for each namespace in the cluster, ensure that at least one policy requires that capabilities are dropped by all containers.
-	##
+	echo "[CMD] Executing: # Verify kubectl is available"
+	# Verify kubectl is available
+	echo "[CMD] Executing: if ! command -v kubectl &> /dev/null; then"
+	if ! command -v kubectl &> /dev/null; then
+		echo "[CMD] Executing: a_output2+=(\" - Check Error: kubectl command not found\")"
+		a_output2+=(" - Check Error: kubectl command not found")
+		echo "[FAIL_REASON] Check Error: kubectl command not found"
+		echo "[FIX_HINT] Run remediation script: 5.2.9_remediate.sh"
+		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
+		return 2
+	fi
 
-	a_output+=(" - Manual Check: Minimize admission of containers with capabilities assigned.")
-	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@..capabilities}{\"\\n\"}{end}'")
-	return 0
+	# Check for containers with added capabilities
+	# Exclude system namespaces
+	echo "[CMD] Executing: caps_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r \'.items[] | select(.metadata.namespace | test(\"^(kube-system|kube-public|kube-node-lease)$\") | not) | select((.spec.containers[]?.securityContext.capabilities.add | length) > 0 or (.spec.initContainers[]?.securityContext.capabilities.add | length) > 0) | \"\\(.metadata.namespace)/\\(.metadata.name)\"\' | sort -u)"
+	caps_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select(.metadata.namespace | test("^(kube-system|kube-public|kube-node-lease)$") | not) | select((.spec.containers[]?.securityContext.capabilities.add | length) > 0 or (.spec.initContainers[]?.securityContext.capabilities.add | length) > 0) | "\(.metadata.namespace)/\(.metadata.name)"' | sort -u)
+	
+	if [ -z "$caps_pods" ]; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: No containers with added capabilities found")
+	else
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: Found containers with added capabilities:")
+		echo "[FAIL_REASON] Check Failed: Found containers with added capabilities:"
+		echo "[FIX_HINT] Run remediation script: 5.2.9_remediate.sh"
+		while IFS= read -r pod; do
+			echo "[INFO] Check Failed"
+			a_output2+=(" - Pod: $pod")
+			echo "[FAIL_REASON] Pod: $pod"
+			echo "[FIX_HINT] Run remediation script: 5.2.9_remediate.sh"
+		done <<< "$caps_pods"
+	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"

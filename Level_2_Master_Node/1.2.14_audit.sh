@@ -4,21 +4,29 @@
 # Level: • Level 2 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.14..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
 	## Description from CSV:
+	echo "[CMD] Executing: ## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction."
 	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction.
 	##
+	echo "[CMD] Executing: ## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction."
 	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction.
 	##
 
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep \"\\--enable-admission-plugins\" | grep -q \"NodeRestriction\"; then"
 	if ps -ef | grep kube-apiserver | grep -v grep | grep "\--enable-admission-plugins" | grep -q "NodeRestriction"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: NodeRestriction is present in --enable-admission-plugins")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: NodeRestriction is NOT present in --enable-admission-plugins")
+		echo "[FAIL_REASON] Check Failed: NodeRestriction is NOT present in --enable-admission-plugins"
+		echo "[FIX_HINT] Run remediation script: 1.2.14_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

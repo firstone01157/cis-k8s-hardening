@@ -1,38 +1,41 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.30
-# Title: Ensure that the --service-account-extend-token-expiration parameter is set to false (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --service-account-extend-token-expiration argument is set to false
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# --- CONFIG ---
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+BINARY_NAME="kube-apiserver"
+KEY="--service-account-extend-token-expiration"
+VALUE="false"
+FULL_PARAM="${KEY}=${VALUE}"
 
-	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-	if [ -e "$l_file" ]; then
-		if grep -q -- "--service-account-extend-token-expiration" "$l_file"; then
-			if grep -q -- "--service-account-extend-token-expiration=false" "$l_file"; then
-				a_output+=(" - Remediation not needed: --service-account-extend-token-expiration is already false")
-			else
-				cp "$l_file" "$l_file.bak_$(date +%s)"
-				sed -i 's/--service-account-extend-token-expiration=[^ "]*\s*/--service-account-extend-token-expiration=false/g' "$l_file"
-				a_output+=(" - Remediation applied: Set --service-account-extend-token-expiration to false")
-			fi
-		else
-			a_output2+=(" - Remediation Required: Please MANUALLY add '--service-account-extend-token-expiration=false' to $l_file")
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-	fi
+echo "[INFO] Remediating ${KEY}..."
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		return 0
-	else
-		return 1
-	fi
-}
+# 1. Pre-check
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[PASS] ${FULL_PARAM} is already set."
+    exit 0
+fi
 
-remediate_rule
-exit $?
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
+
+# 3. Apply Fix
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    sed -i "s|${KEY}=.*|${FULL_PARAM}|g" "${CONFIG_FILE}"
+else
+    sed -i "/  - ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
+fi
+
+# 4. Verify
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[PASS] Successfully applied ${FULL_PARAM}"
+    exit 0
+else
+    echo "[FAIL] Failed to apply ${FULL_PARAM}"
+    exit 1
+fi

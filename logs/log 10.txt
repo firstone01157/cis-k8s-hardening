@@ -1,0 +1,4310 @@
+dos2unix: converting file ./master_remediate_only.sh to Unix format...
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo python3 cis_k8s_unified.py -vv
+[!] Config file '/home/master/CIS_Kubernetes_Benchmark_V1.12.0/cis_config.json' not found. Using default settings.
+======================================================================
+  CIS Kubernetes Benchmark - Unified Interactive Runner
+======================================================================
+  Version: 1.0 (Enhanced)
+  Date: 2025-11-28 03:02:57
+======================================================================
+
+[*] Checking Cluster Health...
+[DEBUG] Using Kubeconfig: /etc/kubernetes/admin.conf
+1    -> OK (Healthy)
+
+======================================================================
+SELECT MODE:
+======================================================================
+
+  1) Audit only
+     Run compliance audit (non-destructive)
+
+  2) Remediation only
+     Apply fixes to non-compliant items (DESTRUCTIVE)
+
+  3) Both (Audit first, then Remediation)
+     Run audit then fix if confirmed
+
+  4) Health Check
+     Check cluster health status
+
+  5) Help
+     Display help and documentation
+
+  0) Exit
+     Exit application
+
+Choose [0-5]:
+
+======================================================================
+AUDIT CONFIGURATION:
+======================================================================
+
+  Kubernetes Role:
+    1) Master nodes only
+    2) Worker nodes only
+    3) Both Master and Worker
+
+  Select role [3]: 1
+
+  CIS Level:
+    1) Level 1 (Essential)
+    2) Level 2 (Scored)
+    3) All Levels
+
+  Select level [3]: 1
+
+[*] Starting Audit Scan...
+======================================================================
+DETAILS - PASS - 1.1.10
+======================================================================
+  Title:         Ensure that the Container Network Interface file ownership is set to root:root (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.10...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/cni/net.d/10-flannel.conflist is root:root
+stat: cannot statx '"/etc/cni/net.d/10-flannel.conflist"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.11
+======================================================================
+  Title:         Ensure that the etcd data directory permissions are set to 700 or more restrictive (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.11...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /var/lib/etcd are 700
+stat: cannot statx '"/var/lib/etcd"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.17
+======================================================================
+  Title:         Ensure that the controller-manager.conf file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.17...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/controller-manager.conf are 600
+stat: cannot statx '"/etc/kubernetes/controller-manager.conf"': No such file or directory
+======================================================================
+
+======================================================================
+1DETAILS - PASS - 1.1.13
+======================================================================
+  Title:         Ensure that the default administrative credential file permissions are set to 600 (Automated)
+  Time:          0.05s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.13...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/admin.conf are 600
+ - Check Passed: Permissions on /etc/kubernetes/super-admin.conf are 600
+stat: cannot statx '"/etc/kubernetes/admin.conf"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/super-admin.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.16
+======================================================================
+  Title:         Ensure that the scheduler.conf file ownership is set to root:root (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.16...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/scheduler.conf is root:root
+stat: cannot statx '"/etc/kubernetes/scheduler.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.15
+======================================================================
+  Title:         Ensure that the scheduler.conf file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.05s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.15...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/scheduler.conf are 600
+stat: cannot statx '"/etc/kubernetes/scheduler.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.12
+======================================================================
+  Title:         Ensure that the etcd data directory ownership is set to etcd:etcd (Automated)
+  Time:          0.06s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.12...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /var/lib/etcd is root:root
+stat: cannot statx '"/var/lib/etcd"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.14
+======================================================================
+  Title:         Ensure that the default administrative credential file ownership is set to root:root (Automated)
+  Time:          0.06s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.14...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/admin.conf is root:root
+ - Check Passed: Ownership on /etc/kubernetes/super-admin.conf is root:root
+stat: cannot statx '"/etc/kubernetes/admin.conf"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/super-admin.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.18
+======================================================================
+  Title:         Ensure that the controller-manager.conf file ownership is set to root:root (Automated)
+  Time:          0.03s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.18...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/controller-manager.conf is root:root
+stat: cannot statx '"/etc/kubernetes/controller-manager.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.19
+======================================================================
+  Title:         Ensure that the Kubernetes PKI directory and file ownership is set to root:root (Automated)
+  Time:          0.03s
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.19...
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All files and directories in /etc/kubernetes/pki are owned by root:root
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.2
+======================================================================
+  Title:         Ensure that the API server pod specification file ownership is set to root:root (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.2...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/kube-apiserver.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/kube-apiserver.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.1
+======================================================================
+  Title:         Ensure that the API server pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.1...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/kube-apiserver.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/kube-apiserver.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.3
+======================================================================
+  Title:         Ensure that the controller manager pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.03s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.3...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/kube-controller-manager.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/kube-controller-manager.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.6
+======================================================================
+  Title:         Ensure that the scheduler pod specification file ownership is set to root:root (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.6...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/kube-scheduler.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/kube-scheduler.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.4
+======================================================================
+  Title:         Ensure that the controller manager pod specification file ownership is set to root:root (Automated)
+  Time:          0.03s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.4...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/kube-controller-manager.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/kube-controller-manager.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.7
+======================================================================
+  Title:         Ensure that the etcd pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.7...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/etcd.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/etcd.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.8
+======================================================================
+  Title:         Ensure that the etcd pod specification file ownership is set to root:root (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.8...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/etcd.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/etcd.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.1.9
+======================================================================
+  Title:         Ensure that the Container Network Interface file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.04s
+  Reason:        Check Failed: Permissions on /etc/cni/net.d/10-flannel.conflist are 644 (should be 600 or more restrictive)
+  Try Fix:       Run remediation script: 1.1.9_remediate.sh
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.9...
+[CMD] Executing: l_mode=
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: Permissions on /etc/cni/net.d/10-flannel.conflist are 644 (should be 600 or more restrictive)
+[FIX_HINT] Run remediation script: 1.1.9_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: Permissions on /etc/cni/net.d/10-flannel.conflist are 644 (should be 600 or more restrictive)
+stat: cannot statx '"/etc/cni/net.d/10-flannel.conflist"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.5
+======================================================================
+  Title:         Ensure that the scheduler pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.06s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.5...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/kube-scheduler.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/kube-scheduler.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.16
+======================================================================
+  Title:         Ensure that the --audit-log-path argument is set (Automated)
+  Time:          0.05s
+  Reason:        Check Failed: --audit-log-path is not set
+  Try Fix:       Run remediation script: 1.2.16_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-path(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.16...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-path(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-path is not set
+[FIX_HINT] Run remediation script: 1.2.16_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-path is not set
+======================================================================
+
+
+======================================================================
+DETAILS - PASS - 1.2.10
+======================================================================
+  Title:         Ensure that the admission control plugin AlwaysAdmit is not set (Automated)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "AlwaysAdmit"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.10...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "AlwaysAdmit"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: AlwaysAdmit is not enabled
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.11
+======================================================================
+  Title:         Ensure that the admission control plugin AlwaysPullImages is set (Manual)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins=.*(,|\s)AlwaysPullImages(,|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.18
+======================================================================
+  Title:         Ensure that the --audit-log-maxbackup argument is set to 10 or as appropriate (Automated)
+  Time:          0.09s
+  Reason:        Check Failed: --audit-log-maxbackup is not set
+  Try Fix:       Run remediation script: 1.2.18_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxbackup(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.18...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxbackup(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-maxbackup is not set
+[FIX_HINT] Run remediation script: 1.2.18_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-maxbackup is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.15
+======================================================================
+  Title:         Ensure that the --profiling argument is set to false (Automated)
+  Time:          0.13s
+  Reason:        Check Failed: --profiling is not set to false in process or manifest
+  Try Fix:       Run remediation script: 1.2.15_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+   $ Executing: grep for profiling in /etc/kubernetes/manifests/kube-apiserver.yaml
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.15...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+[CMD] Executing: grep for profiling in /etc/kubernetes/manifests/kube-apiserver.yaml
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --profiling is not set to false in process or manifest
+[FIX_HINT] Run remediation script: 1.2.15_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --profiling is not set to false in process or manifest
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.17
+======================================================================
+  Title:         Ensure that the --audit-log-maxage argument is set to 30 or as appropriate (Automated)
+  Time:          0.11s
+  Reason:        Check Failed: --audit-log-maxage is not set
+  Try Fix:       Run remediation script: 1.2.17_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxage(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.17...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxage(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-maxage is not set
+[FIX_HINT] Run remediation script: 1.2.17_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-maxage is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.19
+======================================================================
+  Title:         Ensure that the --audit-log-maxsize argument is set to 100 or as appropriate (Automated)
+  Time:          0.12s
+  Reason:        Check Failed: --audit-log-maxsize is not set
+  Try Fix:       Run remediation script: 1.2.19_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxsize(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.19...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxsize(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-maxsize is not set
+[FIX_HINT] Run remediation script: 1.2.19_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-maxsize is not set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.21
+======================================================================
+  Title:         Ensure that the --service-account-lookup argument is set to true (Automated)
+  Time:          0.07s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=false"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.21...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=false"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --service-account-lookup is not set to false
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.1
+======================================================================
+  Title:         Ensure that the --anonymous-auth argument is set to false (Manual)
+  Time:          0.16s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--anonymous-auth=false(\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.22
+======================================================================
+  Title:         Ensure that the --service-account-key-file argument is set as appropriate (Automated)
+  Time:          0.14s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.22...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-key-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --service-account-key-file is set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.25
+======================================================================
+  Title:         Ensure that the --client-ca-file argument is set as appropriate (Automated)
+  Time:          0.08s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--client-ca-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.25...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--client-ca-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --client-ca-file is set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.23
+======================================================================
+  Title:         Ensure that the --etcd-certfile and --etcd-keyfile arguments are set as appropriate (Automated)
+  Time:          0.14s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-certfile(=|\s|$)" && \
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.23...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-certfile(=|\s|$)" && \
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --etcd-certfile and --etcd-keyfile are set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.20
+======================================================================
+  Title:         Ensure that the --request-timeout argument is set as appropriate (Automated)
+  Time:          0.18s
+  Reason:        Check Failed: --request-timeout is not set
+  Try Fix:       Run remediation script: 1.2.20_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--request-timeout(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.20...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--request-timeout(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --request-timeout is not set
+[FIX_HINT] Run remediation script: 1.2.20_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --request-timeout is not set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.20
+======================================================================
+  Title:         Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive (Automated)
+  Time:          0.38s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.20...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-kubelet-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/peer.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/server.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/ca.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/healthcheck-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-ca.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-etcd-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/ca.crt are 644
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-kubelet-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/peer.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/server.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/ca.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/healthcheck-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-ca.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-etcd-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/ca.crt"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.26
+======================================================================
+  Title:         Ensure that the --etcd-cafile argument is set as appropriate (Automated)
+  Time:          0.09s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-cafile(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.26...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-cafile(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --etcd-cafile is set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.28
+======================================================================
+  Title:         Ensure that encryption providers are appropriately configured (Manual)
+  Time:          0.08s
+  Reason:        Check Failed: --encryption-provider-config is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--encryption-provider-config(=|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.24
+======================================================================
+  Title:         Ensure that the --tls-cert-file and --tls-private-key-file arguments are set as appropriate (Automated)
+  Time:          0.17s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cert-file(=|\s|$)" && \
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.24...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cert-file(=|\s|$)" && \
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --tls-cert-file and --tls-private-key-file are set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.27
+======================================================================
+  Title:         Ensure that the --encryption-provider-config argument is set as appropriate (Manual)
+  Time:          0.08s
+  Reason:        Check Failed: --encryption-provider-config argument is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--encryption-provider-config(=|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.21
+======================================================================
+  Title:         Ensure that the Kubernetes PKI key file permissions are set to 600 (Automated)
+  Time:          0.4s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.21...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/peer.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/server.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/ca.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/healthcheck-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/sa.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/ca.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-etcd-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-kubelet-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-ca.key are 600
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/peer.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/server.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/ca.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/healthcheck-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/sa.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/ca.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-etcd-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-kubelet-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-ca.key"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.2
+======================================================================
+  Title:         Ensure that the --token-auth-file parameter is not set (Automated)
+  Time:          0.08s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--token-auth-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.2...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--token-auth-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --token-auth-file is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.29
+======================================================================
+  Title:         Ensure that the API Server only makes use of Strong Cryptographic Ciphers (Automated)
+  Time:          0.11s
+  Reason:        Check Failed: --tls-cipher-suites is not set
+  Try Fix:       Run remediation script: 1.2.29_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cipher-suites(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.29...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cipher-suites(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --tls-cipher-suites is not set
+[FIX_HINT] Run remediation script: 1.2.29_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --tls-cipher-suites is not set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.6
+======================================================================
+  Title:         Ensure that the --authorization-mode argument is not set to AlwaysAllow (Automated)
+  Time:          0.05s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*AlwaysAllow"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.6...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*AlwaysAllow"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --authorization-mode does not contain AlwaysAllow
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.7
+======================================================================
+  Title:         Ensure that the --authorization-mode argument includes Node (Automated)
+  Time:          0.1s
+  Reason:        Check Failed: --authorization-mode does NOT include Node
+  Try Fix:       Run remediation script: 1.2.7_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*(,|$)Node(,|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.7...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*(,|$)Node(,|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --authorization-mode does NOT include Node
+[FIX_HINT] Run remediation script: 1.2.7_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --authorization-mode does NOT include Node
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.30
+======================================================================
+  Title:         Ensure that the --service-account-extend-token-expiration parameter is set to false (Automated)
+  Time:          0.14s
+  Reason:        Check Failed: --service-account-extend-token-expiration is not set to false
+  Try Fix:       Run remediation script: 1.2.30_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-extend-token-expiration=false(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.30...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-extend-token-expiration=false(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --service-account-extend-token-expiration is not set to false
+[FIX_HINT] Run remediation script: 1.2.30_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --service-account-extend-token-expiration is not set to false
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.5
+======================================================================
+  Title:         Ensure that the --kubelet-certificate-authority argument is set as appropriate (Automated)
+  Time:          0.14s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-certificate-authority(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.5...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-certificate-authority(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --kubelet-certificate-authority is set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.9
+======================================================================
+  Title:         Ensure that the admission control plugin EventRateLimit is set (Manual)
+  Time:          0.12s
+  Reason:        Check Failed: EventRateLimit is NOT enabled
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "EventRateLimit"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.4
+======================================================================
+  Title:         Ensure that the --kubelet-client-certificate and --kubelet-client-key arguments are set as appropriate (Automated)
+  Time:          0.16s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-client-certificate(=|\s|$)" && \
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.4...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-client-certificate(=|\s|$)" && \
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --kubelet-client-certificate and --kubelet-client-key are set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.3
+======================================================================
+  Title:         Ensure that the DenyServiceExternalIPs is set (Manual)
+  Time:          0.18s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "DenyServiceExternalIPs"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.3.1
+======================================================================
+  Title:         Ensure that the --terminated-pod-gc-threshold argument is set as appropriate (Manual)
+  Time:          0.14s
+  Reason:        Check Failed: --terminated-pod-gc-threshold is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--terminated-pod-gc-threshold(=|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.8
+======================================================================
+  Title:         Ensure that the --authorization-mode argument includes RBAC (Automated)
+  Time:          0.18s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--authorization-mode(=|\s|$)" | grep -q "RBAC"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.8...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--authorization-mode(=|\s|$)" | grep -q "RBAC"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --authorization-mode includes RBAC
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.2
+======================================================================
+  Title:         Ensure that the --profiling argument is set to false (Automated)
+  Time:          0.11s
+  Reason:        Check Failed: --profiling is not set to false
+  Try Fix:       Run remediation script: 1.3.2_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.2...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --profiling is not set to false
+[FIX_HINT] Run remediation script: 1.3.2_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --profiling is not set to false
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.3
+======================================================================
+  Title:         Ensure that the --use-service-account-credentials argument is set to true (Automated)
+  Time:          0.11s
+  Reason:        Check Failed: --use-service-account-credentials is not set to true
+  Try Fix:       Run remediation script: 1.3.3_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--use-service-account-credentials=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.3...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--use-service-account-credentials=true(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --use-service-account-credentials is not set to true
+[FIX_HINT] Run remediation script: 1.3.3_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --use-service-account-credentials is not set to true
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.5
+======================================================================
+  Title:         Ensure that the --root-ca-file argument is set as appropriate (Automated)
+  Time:          0.11s
+  Reason:        Check Failed: --root-ca-file is not set
+  Try Fix:       Run remediation script: 1.3.5_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--root-ca-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.5...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--root-ca-file(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --root-ca-file is not set
+[FIX_HINT] Run remediation script: 1.3.5_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --root-ca-file is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.6
+======================================================================
+  Title:         Ensure that the RotateKubeletServerCertificate argument is set to true (Automated)
+  Time:          0.1s
+  Reason:        Check Failed: RotateKubeletServerCertificate is not set to true
+  Try Fix:       Run remediation script: 1.3.6_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "(^|\s|,)RotateKubeletServerCertificate=true($|\s|,)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.6...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "(^|\s|,)RotateKubeletServerCertificate=true($|\s|,)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: RotateKubeletServerCertificate is not set to true
+[FIX_HINT] Run remediation script: 1.3.6_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: RotateKubeletServerCertificate is not set to true
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.4
+======================================================================
+  Title:         Ensure that the --service-account-private-key-file argument is set as appropriate (Automated)
+  Time:          0.12s
+  Reason:        Check Failed: --service-account-private-key-file is not set
+  Try Fix:       Run remediation script: 1.3.4_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--service-account-private-key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.4...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--service-account-private-key-file(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --service-account-private-key-file is not set
+[FIX_HINT] Run remediation script: 1.3.4_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --service-account-private-key-file is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.4.2
+======================================================================
+  Title:         Ensure that the --bind-address argument is set to 127.0.0.1 (Automated)
+  Time:          0.08s
+  Reason:        Check Failed: --bind-address is not set to 127.0.0.1
+  Try Fix:       Run remediation script: 1.4.2_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.4.2...
+[CMD] Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --bind-address is not set to 127.0.0.1
+[FIX_HINT] Run remediation script: 1.4.2_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --bind-address is not set to 127.0.0.1
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.7
+======================================================================
+  Title:         Ensure that the --bind-address argument is set to 127.0.0.1 (Automated)
+  Time:          0.1s
+  Reason:        Check Failed: --bind-address is not set to 127.0.0.1
+  Try Fix:       Run remediation script: 1.3.7_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.7...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --bind-address is not set to 127.0.0.1
+[FIX_HINT] Run remediation script: 1.3.7_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --bind-address is not set to 127.0.0.1
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.4.1
+======================================================================
+  Title:         Ensure that the --profiling argument is set to false (Automated)
+  Time:          0.1s
+  Reason:        Check Failed: --profiling is not set to false
+  Try Fix:       Run remediation script: 1.4.1_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.4.1...
+[CMD] Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --profiling is not set to false
+[FIX_HINT] Run remediation script: 1.4.1_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --profiling is not set to false
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.3
+======================================================================
+  Title:         Ensure that the --auto-tls argument is not set to true (Automated)
+  Time:          0.07s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--auto-tls=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.3...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--auto-tls=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --auto-tls is not set to true
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.1
+======================================================================
+  Title:         Ensure that the --cert-file and --key-file arguments are set as appropriate (Automated)
+  Time:          0.13s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--cert-file(=|\s|$)" && \
+   $ Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.1...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--cert-file(=|\s|$)" && \
+[CMD] Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--key-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --cert-file and --key-file are set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.2
+======================================================================
+  Title:         Ensure that the --client-cert-auth argument is set to true (Automated)
+  Time:          0.12s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--client-cert-auth=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.2...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--client-cert-auth=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --client-cert-auth is set to true
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.1.2
+======================================================================
+  Title:         Service account token authentication should not be used for users (Manual)
+  Time:          0.07s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=true"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.10
+======================================================================
+  Title:         Minimize access to the proxy sub-resource of nodes (Manual)
+  Time:          0.01s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.1.1
+======================================================================
+  Title:         Client certificate authentication should not be used for users (Manual)
+  Time:          0.1s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--client-ca-file"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 4.1.1
+======================================================================
+  Title:         Ensure that the kubelet service file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.03s
+
+  [i] Raw Output:
+[INFO] Starting check for 4.1.1...
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf not found (Audit not applicable or file missing)
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.5
+======================================================================
+  Title:         Ensure that the --peer-client-cert-auth argument is set to true (Automated)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-client-cert-auth=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.5...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-client-cert-auth=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --peer-client-cert-auth is set to true
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.11
+======================================================================
+  Title:         Minimize access to the approval sub-resource of certificatesigningrequests objects (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.6
+======================================================================
+  Title:         Ensure that the --peer-auto-tls argument is not set to true (Automated)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-auto-tls=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.6...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-auto-tls=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --peer-auto-tls is not set to true
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.13
+======================================================================
+  Title:         Minimize access to the service account token creation (Manual)
+  Time:          0.01s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.12
+======================================================================
+  Title:         Minimize access to webhook configuration objects (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.2
+======================================================================
+  Title:         Minimize access to secrets (Manual)
+  Time:          0.01s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.5
+======================================================================
+  Title:         Ensure that default service accounts are not actively used. (Manual)
+  Time:          0.01s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.4
+======================================================================
+  Title:         Minimize access to create pods (Manual)
+  Time:          0.01s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.6
+======================================================================
+  Title:         Ensure that Service Account Tokens are only mounted where necessary (Manual)
+  Time:          0.01s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.8
+======================================================================
+  Title:         Limit use of the Bind, Impersonate and Escalate permissions in the Kubernetes cluster (Manual)
+  Time:          0.01s
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.4
+======================================================================
+  Title:         Ensure that the --peer-cert-file and --peer-key-file arguments are set as appropriate (Automated)
+  Time:          0.15s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-cert-file(=|\s|$)" && \
+   $ Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.4...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-cert-file(=|\s|$)" && \
+[CMD] Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-key-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --peer-cert-file and --peer-key-file are set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.7
+======================================================================
+  Title:         Avoid use of system:masters group (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.9
+======================================================================
+  Title:         Minimize access to create persistent volumes (Manual)
+  Time:          0.01s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.1.3
+======================================================================
+  Title:         Bootstrap token authentication should not be used for users (Manual)
+  Time:          0.1s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--enable-bootstrap-token-auth=true"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.2.1
+======================================================================
+  Title:         Ensure that a minimal audit policy is created (Manual)
+  Time:          0.08s
+  Reason:        Check Failed: --audit-policy-file is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--audit-policy-file"; then
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 5.1.1
+======================================================================
+  Title:         Ensure that the cluster-admin role is only used where required
+  Time:          0.2s
+  Reason:        Check Error: Unable to connect to Kubernetes cluster
+  Try Fix:       Check kubeconfig and cluster connectivity.
+
+  [Commands Ran]
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+   $ Executing: if ! kubectl cluster-info &>/dev/null; then
+
+  [i] Raw Output:
+[INFO] Starting check for 5.1.1...
+[CMD] Executing: if ! command -v kubectl &> /dev/null; then
+[CMD] Executing: if ! kubectl cluster-info &>/dev/null; then
+[INFO] Check Failed
+[FAIL_REASON] Check Error: Unable to connect to Kubernetes cluster
+[FIX_HINT] Check kubeconfig and cluster connectivity.
+
+- Audit Result:
+  [-] ERROR
+ - Check Error: Unable to connect to Kubernetes cluster
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.4
+======================================================================
+  Title:         Minimize the admission of containers wishing to share the host IPC namespace
+  Time:          0.37s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.4...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.3
+======================================================================
+  Title:         Minimize the admission of containers wishing to share the host process ID namespace
+  Time:          0.52s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.3...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.10
+======================================================================
+  Title:         Minimize the admission of Windows HostProcess Containers
+  Time:          0.55s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.10...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.3.1
+======================================================================
+  Title:         Ensure that the CNI in use supports Network Policies (Manual)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.2
+======================================================================
+  Title:         Minimize the admission of privileged containers
+  Time:          0.75s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.2...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.12
+======================================================================
+  Title:         Minimize the admission of containers which use HostPorts
+  Time:          0.78s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.12...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.1
+======================================================================
+  Title:         Ensure that the cluster has at least one active policy control mechanism in place
+  Time:          0.79s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.1...
+[CMD] Executing: # Verify kubectl is available
+[CMD] Executing: if ! command -v kubectl &> /dev/null; then
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name | test(\"^(kube-system|kube-public)$\") | not) | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.5
+======================================================================
+  Title:         Minimize the admission of containers wishing to share the host network namespace
+  Time:          0.73s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.5...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.11
+======================================================================
+  Title:         Minimize the admission of HostPath volumes
+  Time:          0.95s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.11...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.6
+======================================================================
+  Title:         Minimize the admission of containers with allowPrivilegeEscalation
+  Time:          0.58s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.6...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.8
+======================================================================
+  Title:         Minimize the admission of containers with the NET_RAW capability
+  Time:          0.44s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.8...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.3.2
+======================================================================
+  Title:         Ensure that all Namespaces have Network Policies defined
+  Time:          0.44s
+
+  [Commands Ran]
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+   $ Executing: namespaces=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.3.2...
+[CMD] Executing: if ! command -v kubectl &> /dev/null; then
+[CMD] Executing: namespaces=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have at least one NetworkPolicy
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.6.1
+======================================================================
+  Title:         Create administrative boundaries between resources using namespaces (Manual)
+  Time:          0.31s
+
+  [Commands Ran]
+   $ Executing: total_namespaces=
+======================================================================
+
+
+[+] Audit Complete.
+
+   [*] Reports Saved in: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/reports/2025-11-28/audit/run_20251128_030257
+      - summary.txt
+      - failed_items.txt
+      - component_summary.txt
+      - report.csv
+      - report.json
+      - report.html
+
+======================================================================
+STATISTICS SUMMARY
+======================================================================
+
+  MASTER:
+    [+] Pass:    50
+    [-] Fail:    19
+    [!] Manual:  24
+    [>>] Skipped: 0
+    [✓] Ignored: 0
+    [*] Total:   93
+    [%] Success: 53%
+
+TOP 5 SLOWEST CHECKS:
+  1. 5.2.11            0.95s - PASS
+  2. 5.2.1             0.79s - PASS
+  3. 5.2.12            0.78s - PASS
+  4. 5.2.2             0.75s - PASS
+  5. 5.2.5             0.73s - PASS
+
+======================================================================
+
+======================================================================
+TREND ANALYSIS (Score Comparison)
+======================================================================
+  Current Score:   53.76%
+  Previous Score:  51.61%
+  Change:          📈 +2.15%
+  Previous Run:    2025-11-28T02:50:57.875733
+======================================================================
+[DEBUG] Snapshot saved: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/history/snapshot_20251128_030259_audit_master_1.json
+
+======================================================================
+RESULTS MENU:
+======================================================================
+
+  1) View summary report
+  2) View failed/manual items
+  3) View detailed report
+  4) Return to main menu
+
+Choose [1-4]:
+======================================================================
+============================================================
+CIS BENCHMARK SUMMARY - AUDIT
+Date: 2025-11-28 03:02:59.722968
+============================================================
+
+Total: 93
+Pass:  50
+Fail:  19
+Manual: 24
+Skipped: 0
+Ignored: 0
+Score: 53.76%
+
+======================================================================
+
+======================================================================
+RESULTS MENU:
+======================================================================
+
+  1) View summary report
+  2) View failed/manual items
+  3) View detailed report
+  4) Return to main menu
+
+Choose [1-4]: 4
+
+======================================================================
+SELECT MODE:
+======================================================================
+
+  1) Audit only
+     Run compliance audit (non-destructive)
+
+  2) Remediation only
+     Apply fixes to non-compliant items (DESTRUCTIVE)
+
+  3) Both (Audit first, then Remediation)
+     Run audit then fix if confirmed
+
+  4) Health Check
+     Check cluster health status
+
+  5) Help
+     Display help and documentation
+
+  0) Exit
+     Exit application
+
+Choose [0-5]: 2
+
+======================================================================
+[!] WARNING: REMEDIATION WILL MODIFY YOUR CLUSTER!
+======================================================================
+
+  Kubernetes Role:
+    1) Master nodes only
+    2) Worker nodes only
+    3) Both Master and Worker
+
+  Select role [3]: 1
+
+  CIS Level:
+    1) Level 1 (Essential)
+    2) Level 2 (Scored)
+    3) All Levels
+
+  Select level [3]: 1
+
+Confirm remediation on master nodes with Level 1? [y/n]: y
+
+======================================================================
+[*] Creating Backup...
+======================================================================
+   -> Saved to: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/backups/backup_20251128_030514
+
+======================================================================
+[*] Creating Backup...
+======================================================================
+Backup Error /etc/kubernetes/manifests: [Errno 17] File exists: '/home/master/CIS_Kubernetes_Benchmark_V1.12.0/backups/backup_20251128_030514/manifests'
+   -> Saved to: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/backups/backup_20251128_030514
+
+[*] Starting Remediation...
+   [  1.1%] [1/92] 1.1.16 -> FIXED
+   [  2.2%] [2/92] 1.1.15 -> FIXED
+   [  3.3%] [3/92] 1.1.10 -> FIXED
+   [  4.3%] [4/92] 1.1.14 -> FIXED
+   [  5.4%] [5/92] 1.1.12 -> FIXED
+   [  6.5%] [6/92] 1.1.1 -> FIXED
+   [  7.6%] [7/92] 1.1.17 -> FIXED
+   [  8.7%] [8/92] 1.1.19 -> FIXED
+   [  9.8%] [9/92] 1.1.13 -> FIXED
+   [ 10.9%] [10/92] 1.1.2 -> FIXED
+   [ 12.0%] [11/92] 1.1.18 -> FIXED
+   [ 13.0%] [12/92] 1.1.3 -> FIXED
+   [ 14.1%] [13/92] 1.1.5 -> FIXED
+   [ 15.2%] [14/92] 1.1.11 -> FIXED
+   [ 16.3%] [15/92] 1.1.4 -> FIXED
+   [ 17.4%] [16/92] 1.1.8 -> FIXED
+   [ 18.5%] [17/92] 1.1.6 -> FIXED
+   [ 19.6%] [18/92] 1.1.7 -> FIXED
+   [ 20.7%] [19/92] 1.2.10 -> FIXED
+   [ 21.7%] [20/92] 1.1.9 -> FIXED
+   [ 22.8%] [21/92] 1.2.11 -> FIXED
+   [ 23.9%] [22/92] 1.2.15 -> FIXED
+   [ 25.0%] [23/92] 1.2.17 -> FIXED
+   [ 26.1%] [24/92] 1.2.1 -> FIXED
+   [ 27.2%] [25/92] 1.2.21 -> FIXED
+   [ 28.3%] [26/92] 1.2.18 -> FIXED
+   [ 29.3%] [27/92] 1.2.19 -> FIXED
+   [ 30.4%] [28/92] 1.2.16 -> FIXED
+   [ 31.5%] [29/92] 1.2.20 -> FIXED
+   [ 32.6%] [30/92] 1.1.21 -> FIXED
+   [ 33.7%] [31/92] 1.2.22 -> FIXED
+   [ 34.8%] [32/92] 1.2.23 -> FIXED
+   [ 35.9%] [33/92] 1.2.25 -> FIXED
+   [ 37.0%] [34/92] 1.2.2 -> FIXED
+   [ 38.0%] [35/92] 1.2.27 -> FIXED
+   [ 39.1%] [36/92] 1.2.26 -> FIXED
+   [ 40.2%] [37/92] 1.2.30 -> FIXED
+   [ 41.3%] [38/92] 1.2.4 -> FIXED
+   [ 42.4%] [39/92] 1.2.29 -> FIXED
+   [ 43.5%] [40/92] 1.2.28 -> FIXED
+   [ 44.6%] [41/92] 1.2.3 -> FIXED
+   [ 45.7%] [42/92] 1.2.6 -> FIXED
+   [ 46.7%] [43/92] 1.2.5 -> FIXED
+   [ 47.8%] [44/92] 1.2.7 -> FIXED
+   [ 48.9%] [45/92] 1.1.20 -> FIXED
+   [ 50.0%] [46/92] 1.2.9 -> FIXED
+   [ 51.1%] [47/92] 1.2.24 -> FIXED
+   [ 52.2%] [48/92] 1.3.1 -> FIXED
+   [ 53.3%] [49/92] 1.2.8 -> FIXED
+   [ 54.3%] [50/92] 1.3.2 -> FIXED
+   [ 55.4%] [51/92] 1.3.3 -> FIXED
+   [ 56.5%] [52/92] 1.3.6 -> FIXED
+   [ 57.6%] [53/92] 1.3.5 -> FIXED
+   [ 58.7%] [54/92] 1.4.1 -> FIXED
+   [ 59.8%] [55/92] 1.3.4 -> FIXED
+   [ 60.9%] [56/92] 1.4.2 -> FIXED
+   [ 62.0%] [57/92] 3.1.1 -> FIXED
+   [ 63.0%] [58/92] 2.3 -> FIXED
+   [ 64.1%] [59/92] 2.4 -> FIXED
+   [ 65.2%] [60/92] 2.5 -> FIXED
+   [ 66.3%] [61/92] 2.1 -> FIXED
+   [ 67.4%] [62/92] 5.1.10 -> FIXED
+   [ 68.5%] [63/92] 3.2.1 -> FIXED
+   [ 69.6%] [64/92] 1.3.7 -> FIXED
+   [ 70.7%] [65/92] 3.1.2 -> FIXED
+   [ 71.7%] [66/92] 2.2 -> FIXED
+   [ 72.8%] [67/92] 4.1.1 -> FIXED
+   [ 73.9%] [68/92] 5.1.4 -> FIXED
+   [ 75.0%] [69/92] 3.1.3 -> ERROR
+   [ 76.1%] [70/92] 2.6 -> FIXED
+   [ 77.2%] [71/92] 5.1.1 -> FIXED
+   [ 78.3%] [72/92] 5.1.2 -> FIXED
+   [ 79.3%] [73/92] 5.1.6 -> FIXED
+   [ 80.4%] [74/92] 5.1.12 -> FIXED
+   [ 81.5%] [75/92] 5.1.7 -> FIXED
+   [ 82.6%] [76/92] 5.1.5 -> FIXED
+   [ 83.7%] [77/92] 5.2.10 -> FIXED
+   [ 84.8%] [78/92] 5.2.12 -> FIXED
+   [ 85.9%] [79/92] 5.2.11 -> FIXED
+   [ 87.0%] [80/92] 5.1.13 -> FIXED
+   [ 88.0%] [81/92] 5.2.1 -> FIXED
+   [ 89.1%] [82/92] 5.2.2 -> FIXED
+   [ 90.2%] [83/92] 5.1.8 -> FIXED
+   [ 91.3%] [84/92] 5.1.11 -> FIXED
+   [ 92.4%] [85/92] 5.2.4 -> FIXED
+   [ 93.5%] [86/92] 5.1.9 -> FIXED
+   [ 94.6%] [87/92] 5.2.3 -> FIXED
+   [ 95.7%] [88/92] 5.2.6 -> FIXED
+   [ 96.7%] [89/92] 5.2.8 -> FIXED
+   [ 97.8%] [90/92] 5.3.1 -> FIXED
+   [ 98.9%] [91/92] 5.2.5 -> FIXED
+   [100.0%] [92/92] 5.6.1 -> FIXED
+
+[+] Remediation Complete.
+
+   [*] Reports Saved in: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/reports/2025-11-28/remediation/run_20251128_030257
+      - summary.txt
+      - failed_items.txt
+      - component_summary.txt
+      - report.csv
+      - report.json
+      - report.html
+
+======================================================================
+STATISTICS SUMMARY
+======================================================================
+
+  MASTER:
+    [+] Pass:    0
+    [-] Fail:    0
+    [!] Manual:  0
+    [>>] Skipped: 0
+    [✓] Ignored: 0
+    [*] Total:   92
+    [%] Success: 0%
+
+TOP 5 SLOWEST CHECKS:
+  1. 1.1.20            0.33s - FIXED
+  2. 1.1.21            0.21s - FIXED
+  3. 1.1.11            0.16s - FIXED
+  4. 1.2.24            0.13s - FIXED
+  5. 1.2.16            0.11s - FIXED
+
+======================================================================
+[DEBUG] Snapshot saved: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/history/snapshot_20251128_030515_remediate_master_1.json
+Traceback (most recent call last):
+  File "/home/master/CIS_Kubernetes_Benchmark_V1.12.0/cis_k8s_unified.py", line 1197, in <module>
+    runner.main_loop()
+  File "/home/master/CIS_Kubernetes_Benchmark_V1.12.0/cis_k8s_unified.py", line 1161, in main_loop
+    self.fix(level, role)
+  File "/home/master/CIS_Kubernetes_Benchmark_V1.12.0/cis_k8s_unified.py", line 549, in fix
+    self.log_activity("FIX_END", f"Total:{len(self.results)}, Fixed:{self.stats['master']['pass']+self.stats['worker']['pass']}, Failed:{self.stats['master']['fail']+self.stats['worker']['fail']}, Error:{self.stats['master']['error']+self.stats['worker']['error']}, Ignored:{self.stats['master']['ignored']+self.stats['worker']['ignored']}")
+KeyError: 'ignored'
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo python3 cis_k8s_unified.py -vv
+[!] Config file '/home/master/CIS_Kubernetes_Benchmark_V1.12.0/cis_config.json' not found. Using default settings.
+======================================================================
+  CIS Kubernetes Benchmark - Unified Interactive Runner
+======================================================================
+  Version: 1.0 (Enhanced)
+  Date: 2025-11-28 03:05:27
+======================================================================
+
+[*] Checking Cluster Health...
+[DEBUG] Using Kubeconfig: /etc/kubernetes/admin.conf
+    -> CRITICAL (Nodes Unreachable)
+
+======================================================================
+SELECT MODE:
+======================================================================
+
+  1) Audit only
+     Run compliance audit (non-destructive)
+
+  2) Remediation only
+     Apply fixes to non-compliant items (DESTRUCTIVE)
+
+  3) Both (Audit first, then Remediation)
+     Run audit then fix if confirmed
+
+  4) Health Check
+     Check cluster health status
+
+  5) Help
+     Display help and documentation
+
+  0) Exit
+     Exit application
+
+Choose [0-5]: 1
+
+======================================================================
+AUDIT CONFIGURATION:
+======================================================================
+
+  Kubernetes Role:
+    1) Master nodes only
+    2) Worker nodes only
+    3) Both Master and Worker
+
+  Select role [3]:
+
+  CIS Level:
+    1) Level 1 (Essential)
+    2) Level 2 (Scored)
+    3) All Levels
+
+  Select level [3]: 1
+
+[*] Starting Audit Scan...
+======================================================================
+DETAILS - PASS - 1.1.11
+======================================================================
+  Title:         Ensure that the etcd data directory permissions are set to 700 or more restrictive (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.11...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /var/lib/etcd are 700
+stat: cannot statx '"/var/lib/etcd"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.10
+======================================================================
+  Title:         Ensure that the Container Network Interface file ownership is set to root:root (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.10...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/cni/net.d/10-flannel.conflist is root:root
+stat: cannot statx '"/etc/cni/net.d/10-flannel.conflist"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.15
+======================================================================
+  Title:         Ensure that the scheduler.conf file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.01s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.15...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/scheduler.conf are 600
+stat: cannot statx '"/etc/kubernetes/scheduler.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.16
+======================================================================
+  Title:         Ensure that the scheduler.conf file ownership is set to root:root (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.16...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/scheduler.conf is root:root
+stat: cannot statx '"/etc/kubernetes/scheduler.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.12
+======================================================================
+  Title:         Ensure that the etcd data directory ownership is set to etcd:etcd (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.12...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /var/lib/etcd is root:root
+stat: cannot statx '"/var/lib/etcd"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.14
+======================================================================
+  Title:         Ensure that the default administrative credential file ownership is set to root:root (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.14...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/admin.conf is root:root
+ - Check Passed: Ownership on /etc/kubernetes/super-admin.conf is root:root
+stat: cannot statx '"/etc/kubernetes/admin.conf"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/super-admin.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.17
+======================================================================
+  Title:         Ensure that the controller-manager.conf file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.17...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/controller-manager.conf are 600
+stat: cannot statx '"/etc/kubernetes/controller-manager.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.18
+======================================================================
+  Title:         Ensure that the controller-manager.conf file ownership is set to root:root (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.18...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/controller-manager.conf is root:root
+stat: cannot statx '"/etc/kubernetes/controller-manager.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.19
+======================================================================
+  Title:         Ensure that the Kubernetes PKI directory and file ownership is set to root:root (Automated)
+  Time:          0.04s
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.19...
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All files and directories in /etc/kubernetes/pki are owned by root:root
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.1
+======================================================================
+  Title:         Ensure that the API server pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.1...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/kube-apiserver.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/kube-apiserver.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.13
+======================================================================
+  Title:         Ensure that the default administrative credential file permissions are set to 600 (Automated)
+  Time:          0.06s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.13...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/admin.conf are 600
+ - Check Passed: Permissions on /etc/kubernetes/super-admin.conf are 600
+stat: cannot statx '"/etc/kubernetes/admin.conf"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/super-admin.conf"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.2
+======================================================================
+  Title:         Ensure that the API server pod specification file ownership is set to root:root (Automated)
+  Time:          0.03s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.2...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/kube-apiserver.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/kube-apiserver.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.3
+======================================================================
+  Title:         Ensure that the controller manager pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.03s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.3...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/kube-controller-manager.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/kube-controller-manager.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.5
+======================================================================
+  Title:         Ensure that the scheduler pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.5...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/kube-scheduler.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/kube-scheduler.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.4
+======================================================================
+  Title:         Ensure that the controller manager pod specification file ownership is set to root:root (Automated)
+  Time:          0.03s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.4...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/kube-controller-manager.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/kube-controller-manager.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.8
+======================================================================
+  Title:         Ensure that the etcd pod specification file ownership is set to root:root (Automated)
+  Time:          0.03s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.8...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/etcd.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/etcd.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.7
+======================================================================
+  Title:         Ensure that the etcd pod specification file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.7...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/manifests/etcd.yaml are 600
+stat: cannot statx '"/etc/kubernetes/manifests/etcd.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.6
+======================================================================
+  Title:         Ensure that the scheduler pod specification file ownership is set to root:root (Automated)
+  Time:          0.05s
+
+  [Commands Ran]
+   $ Executing: l_owner=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.6...
+[CMD] Executing: l_owner=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Ownership on /etc/kubernetes/manifests/kube-scheduler.yaml is root:root
+stat: cannot statx '"/etc/kubernetes/manifests/kube-scheduler.yaml"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.9
+======================================================================
+  Title:         Ensure that the Container Network Interface file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.06s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.9...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/cni/net.d/10-flannel.conflist are 600
+stat: cannot statx '"/etc/cni/net.d/10-flannel.conflist"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.15
+======================================================================
+  Title:         Ensure that the --profiling argument is set to false (Automated)
+  Time:          0.07s
+  Reason:        Check Failed: --profiling is not set to false in process or manifest
+  Try Fix:       Run remediation script: 1.2.15_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+   $ Executing: grep for profiling in /etc/kubernetes/manifests/kube-apiserver.yaml
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.15...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+[CMD] Executing: grep for profiling in /etc/kubernetes/manifests/kube-apiserver.yaml
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --profiling is not set to false in process or manifest
+[FIX_HINT] Run remediation script: 1.2.15_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --profiling is not set to false in process or manifest
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.11
+======================================================================
+  Title:         Ensure that the admission control plugin AlwaysPullImages is set (Manual)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins=.*(,|\s)AlwaysPullImages(,|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.10
+======================================================================
+  Title:         Ensure that the admission control plugin AlwaysAdmit is not set (Automated)
+  Time:          0.16s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "AlwaysAdmit"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.10...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "AlwaysAdmit"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: AlwaysAdmit is not enabled
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.19
+======================================================================
+  Title:         Ensure that the --audit-log-maxsize argument is set to 100 or as appropriate (Automated)
+  Time:          0.09s
+  Reason:        Check Failed: --audit-log-maxsize is not set
+  Try Fix:       Run remediation script: 1.2.19_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxsize(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.19...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxsize(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-maxsize is not set
+[FIX_HINT] Run remediation script: 1.2.19_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-maxsize is not set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.1
+======================================================================
+  Title:         Ensure that the --anonymous-auth argument is set to false (Manual)
+  Time:          0.06s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--anonymous-auth=false(\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.17
+======================================================================
+  Title:         Ensure that the --audit-log-maxage argument is set to 30 or as appropriate (Automated)
+  Time:          0.21s
+  Reason:        Check Failed: --audit-log-maxage is not set
+  Try Fix:       Run remediation script: 1.2.17_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxage(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.17...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxage(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-maxage is not set
+[FIX_HINT] Run remediation script: 1.2.17_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-maxage is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.16
+======================================================================
+  Title:         Ensure that the --audit-log-path argument is set (Automated)
+  Time:          0.22s
+  Reason:        Check Failed: --audit-log-path is not set
+  Try Fix:       Run remediation script: 1.2.16_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-path(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.16...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-path(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-path is not set
+[FIX_HINT] Run remediation script: 1.2.16_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-path is not set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.20
+======================================================================
+  Title:         Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive (Automated)
+  Time:          0.3s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.20...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-kubelet-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/peer.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/server.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/ca.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/healthcheck-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-ca.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-etcd-client.crt are 644
+ - Check Passed: Permissions on /etc/kubernetes/pki/ca.crt are 644
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-kubelet-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/peer.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/server.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/ca.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/healthcheck-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-ca.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-etcd-client.crt"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/ca.crt"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.22
+======================================================================
+  Title:         Ensure that the --service-account-key-file argument is set as appropriate (Automated)
+  Time:          0.08s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.22...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-key-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --service-account-key-file is set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.18
+======================================================================
+  Title:         Ensure that the --audit-log-maxbackup argument is set to 10 or as appropriate (Automated)
+  Time:          0.21s
+  Reason:        Check Failed: --audit-log-maxbackup is not set
+  Try Fix:       Run remediation script: 1.2.18_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxbackup(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.18...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--audit-log-maxbackup(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --audit-log-maxbackup is not set
+[FIX_HINT] Run remediation script: 1.2.18_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --audit-log-maxbackup is not set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.20
+======================================================================
+  Title:         Ensure that the --request-timeout argument is set as appropriate (Automated)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--request-timeout(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.20...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--request-timeout(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --request-timeout is set in manifest
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.21
+======================================================================
+  Title:         Ensure that the --service-account-lookup argument is set to true (Automated)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=false"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.21...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=false"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --service-account-lookup is not set to false
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.25
+======================================================================
+  Title:         Ensure that the --client-ca-file argument is set as appropriate (Automated)
+  Time:          0.08s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--client-ca-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.25...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--client-ca-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --client-ca-file is set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.27
+======================================================================
+  Title:         Ensure that the --encryption-provider-config argument is set as appropriate (Manual)
+  Time:          0.09s
+  Reason:        Check Failed: --encryption-provider-config argument is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--encryption-provider-config(=|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.26
+======================================================================
+  Title:         Ensure that the --etcd-cafile argument is set as appropriate (Automated)
+  Time:          0.14s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-cafile(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.26...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-cafile(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --etcd-cafile is set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.28
+======================================================================
+  Title:         Ensure that encryption providers are appropriately configured (Manual)
+  Time:          0.12s
+  Reason:        Check Failed: --encryption-provider-config is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--encryption-provider-config(=|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.23
+======================================================================
+  Title:         Ensure that the --etcd-certfile and --etcd-keyfile arguments are set as appropriate (Automated)
+  Time:          0.19s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-certfile(=|\s|$)" && \
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.23...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-certfile(=|\s|$)" && \
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --etcd-certfile and --etcd-keyfile are set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.24
+======================================================================
+  Title:         Ensure that the --tls-cert-file and --tls-private-key-file arguments are set as appropriate (Automated)
+  Time:          0.19s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cert-file(=|\s|$)" && \
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.24...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cert-file(=|\s|$)" && \
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --tls-cert-file and --tls-private-key-file are set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.29
+======================================================================
+  Title:         Ensure that the API Server only makes use of Strong Cryptographic Ciphers (Automated)
+  Time:          0.16s
+  Reason:        Check Failed: --tls-cipher-suites is not set
+  Try Fix:       Run remediation script: 1.2.29_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cipher-suites(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.29...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--tls-cipher-suites(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --tls-cipher-suites is not set
+[FIX_HINT] Run remediation script: 1.2.29_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --tls-cipher-suites is not set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.2
+======================================================================
+  Title:         Ensure that the --token-auth-file parameter is not set (Automated)
+  Time:          0.12s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--token-auth-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.2...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--token-auth-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --token-auth-file is not set
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.1.21
+======================================================================
+  Title:         Ensure that the Kubernetes PKI key file permissions are set to 600 (Automated)
+  Time:          0.5s
+
+  [Commands Ran]
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+   $ Executing: l_mode=
+
+  [i] Raw Output:
+[INFO] Starting check for 1.1.21...
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+[CMD] Executing: l_mode=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/peer.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/server.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/ca.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/etcd/healthcheck-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/sa.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/ca.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-etcd-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/apiserver-kubelet-client.key are 600
+ - Check Passed: Permissions on /etc/kubernetes/pki/front-proxy-ca.key are 600
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/peer.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/server.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/ca.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/etcd/healthcheck-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/sa.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/ca.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-etcd-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/apiserver-kubelet-client.key"': No such file or directory
+stat: cannot statx '"/etc/kubernetes/pki/front-proxy-ca.key"': No such file or directory
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.3
+======================================================================
+  Title:         Ensure that the DenyServiceExternalIPs is set (Manual)
+  Time:          0.07s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "DenyServiceExternalIPs"; then
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.30
+======================================================================
+  Title:         Ensure that the --service-account-extend-token-expiration parameter is set to false (Automated)
+  Time:          0.13s
+  Reason:        Check Failed: --service-account-extend-token-expiration is not set to false
+  Try Fix:       Run remediation script: 1.2.30_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-extend-token-expiration=false(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.30...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-extend-token-expiration=false(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --service-account-extend-token-expiration is not set to false
+[FIX_HINT] Run remediation script: 1.2.30_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --service-account-extend-token-expiration is not set to false
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.5
+======================================================================
+  Title:         Ensure that the --kubelet-certificate-authority argument is set as appropriate (Automated)
+  Time:          0.09s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-certificate-authority(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.5...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-certificate-authority(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --kubelet-certificate-authority is set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.2.7
+======================================================================
+  Title:         Ensure that the --authorization-mode argument includes Node (Automated)
+  Time:          0.07s
+  Reason:        Check Failed: --authorization-mode does NOT include Node
+  Try Fix:       Run remediation script: 1.2.7_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*(,|$)Node(,|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.7...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*(,|$)Node(,|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --authorization-mode does NOT include Node
+[FIX_HINT] Run remediation script: 1.2.7_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --authorization-mode does NOT include Node
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.8
+======================================================================
+  Title:         Ensure that the --authorization-mode argument includes RBAC (Automated)
+  Time:          0.12s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--authorization-mode(=|\s|$)" | grep -q "RBAC"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.8...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--authorization-mode(=|\s|$)" | grep -q "RBAC"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --authorization-mode includes RBAC
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.6
+======================================================================
+  Title:         Ensure that the --authorization-mode argument is not set to AlwaysAllow (Automated)
+  Time:          0.15s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*AlwaysAllow"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.6...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*AlwaysAllow"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --authorization-mode does not contain AlwaysAllow
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.2.9
+======================================================================
+  Title:         Ensure that the admission control plugin EventRateLimit is set (Manual)
+  Time:          0.14s
+  Reason:        Check Failed: EventRateLimit is NOT enabled
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "EventRateLimit"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 1.3.1
+======================================================================
+  Title:         Ensure that the --terminated-pod-gc-threshold argument is set as appropriate (Manual)
+  Time:          0.14s
+  Reason:        Check Failed: --terminated-pod-gc-threshold is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--terminated-pod-gc-threshold(=|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.2.4
+======================================================================
+  Title:         Ensure that the --kubelet-client-certificate and --kubelet-client-key arguments are set as appropriate (Automated)
+  Time:          0.21s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-client-certificate(=|\s|$)" && \
+
+  [i] Raw Output:
+[INFO] Starting check for 1.2.4...
+[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-client-certificate(=|\s|$)" && \
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --kubelet-client-certificate and --kubelet-client-key are set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.3
+======================================================================
+  Title:         Ensure that the --use-service-account-credentials argument is set to true (Automated)
+  Time:          0.1s
+  Reason:        Check Failed: --use-service-account-credentials is not set to true
+  Try Fix:       Run remediation script: 1.3.3_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--use-service-account-credentials=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.3...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--use-service-account-credentials=true(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --use-service-account-credentials is not set to true
+[FIX_HINT] Run remediation script: 1.3.3_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --use-service-account-credentials is not set to true
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.2
+======================================================================
+  Title:         Ensure that the --profiling argument is set to false (Automated)
+  Time:          0.15s
+  Reason:        Check Failed: --profiling is not set to false
+  Try Fix:       Run remediation script: 1.3.2_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.2...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --profiling is not set to false
+[FIX_HINT] Run remediation script: 1.3.2_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --profiling is not set to false
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.5
+======================================================================
+  Title:         Ensure that the --root-ca-file argument is set as appropriate (Automated)
+  Time:          0.07s
+  Reason:        Check Failed: --root-ca-file is not set
+  Try Fix:       Run remediation script: 1.3.5_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--root-ca-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.5...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--root-ca-file(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --root-ca-file is not set
+[FIX_HINT] Run remediation script: 1.3.5_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --root-ca-file is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.4
+======================================================================
+  Title:         Ensure that the --service-account-private-key-file argument is set as appropriate (Automated)
+  Time:          0.14s
+  Reason:        Check Failed: --service-account-private-key-file is not set
+  Try Fix:       Run remediation script: 1.3.4_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--service-account-private-key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.4...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--service-account-private-key-file(=|\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --service-account-private-key-file is not set
+[FIX_HINT] Run remediation script: 1.3.4_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --service-account-private-key-file is not set
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.6
+======================================================================
+  Title:         Ensure that the RotateKubeletServerCertificate argument is set to true (Automated)
+  Time:          0.09s
+  Reason:        Check Failed: RotateKubeletServerCertificate is not set to true
+  Try Fix:       Run remediation script: 1.3.6_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "(^|\s|,)RotateKubeletServerCertificate=true($|\s|,)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.6...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "(^|\s|,)RotateKubeletServerCertificate=true($|\s|,)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: RotateKubeletServerCertificate is not set to true
+[FIX_HINT] Run remediation script: 1.3.6_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: RotateKubeletServerCertificate is not set to true
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.4.2
+======================================================================
+  Title:         Ensure that the --bind-address argument is set to 127.0.0.1 (Automated)
+  Time:          0.09s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.4.2...
+[CMD] Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --bind-address is set to 127.0.0.1
+======================================================================
+
+======================================================================
+DETAILS - PASS - 1.4.1
+======================================================================
+  Title:         Ensure that the --profiling argument is set to false (Automated)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.4.1...
+[CMD] Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--profiling=false(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --profiling is set to false
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 1.3.7
+======================================================================
+  Title:         Ensure that the --bind-address argument is set to 127.0.0.1 (Automated)
+  Time:          0.15s
+  Reason:        Check Failed: --bind-address is not set to 127.0.0.1
+  Try Fix:       Run remediation script: 1.3.7_remediate.sh
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 1.3.7...
+[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+[INFO] Check Failed
+[FAIL_REASON] Check Failed: --bind-address is not set to 127.0.0.1
+[FIX_HINT] Run remediation script: 1.3.7_remediate.sh
+
+- Audit Result:
+  [-] FAIL
+ - Reason(s) for audit failure:
+ - Check Failed: --bind-address is not set to 127.0.0.1
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.2
+======================================================================
+  Title:         Ensure that the --client-cert-auth argument is set to true (Automated)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--client-cert-auth=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.2...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--client-cert-auth=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --client-cert-auth is set to true
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.5
+======================================================================
+  Title:         Ensure that the --peer-client-cert-auth argument is set to true (Automated)
+  Time:          0.1s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-client-cert-auth=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.5...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-client-cert-auth=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --peer-client-cert-auth is set to true
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.3
+======================================================================
+  Title:         Ensure that the --auto-tls argument is not set to true (Automated)
+  Time:          0.14s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--auto-tls=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.3...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--auto-tls=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --auto-tls is not set to true
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.6
+======================================================================
+  Title:         Ensure that the --peer-auto-tls argument is not set to true (Automated)
+  Time:          0.09s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-auto-tls=true(\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.6...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-auto-tls=true(\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --peer-auto-tls is not set to true
+======================================================================
+
+======================================================================
+DETAILS - PASS - 4.1.1
+======================================================================
+  Title:         Ensure that the kubelet service file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.03s
+
+  [i] Raw Output:
+[INFO] Starting check for 4.1.1...
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf not found (Audit not applicable or file missing)
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.10
+======================================================================
+  Title:         Minimize access to the proxy sub-resource of nodes (Manual)
+  Time:          0.03s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.1.1
+======================================================================
+  Title:         Client certificate authentication should not be used for users (Manual)
+  Time:          0.12s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--client-ca-file"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.11
+======================================================================
+  Title:         Minimize access to the approval sub-resource of certificatesigningrequests objects (Manual)
+  Time:          0.03s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.2.1
+======================================================================
+  Title:         Ensure that a minimal audit policy is created (Manual)
+  Time:          0.06s
+  Reason:        Check Failed: --audit-policy-file is not set
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--audit-policy-file"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.1.2
+======================================================================
+  Title:         Service account token authentication should not be used for users (Manual)
+  Time:          0.09s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=true"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.12
+======================================================================
+  Title:         Minimize access to webhook configuration objects (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.2
+======================================================================
+  Title:         Minimize access to secrets (Manual)
+  Time:          0.01s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 3.1.3
+======================================================================
+  Title:         Bootstrap token authentication should not be used for users (Manual)
+  Time:          0.11s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--enable-bootstrap-token-auth=true"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.1
+======================================================================
+  Title:         Ensure that the --cert-file and --key-file arguments are set as appropriate (Automated)
+  Time:          0.24s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--cert-file(=|\s|$)" && \
+   $ Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.1...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--cert-file(=|\s|$)" && \
+[CMD] Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--key-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --cert-file and --key-file are set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.5
+======================================================================
+  Title:         Ensure that default service accounts are not actively used. (Manual)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.4
+======================================================================
+  Title:         Minimize access to create pods (Manual)
+  Time:          0.03s
+======================================================================
+
+======================================================================
+DETAILS - PASS - 2.4
+======================================================================
+  Title:         Ensure that the --peer-cert-file and --peer-key-file arguments are set as appropriate (Automated)
+  Time:          0.21s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-cert-file(=|\s|$)" && \
+   $ Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-key-file(=|\s|$)"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 2.4...
+[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-cert-file(=|\s|$)" && \
+[CMD] Executing: ps -ef | grep etcd | grep -v grep | grep -E -q "\s--peer-key-file(=|\s|$)"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: --peer-cert-file and --peer-key-file are set
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.13
+======================================================================
+  Title:         Minimize access to the service account token creation (Manual)
+  Time:          0.04s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.7
+======================================================================
+  Title:         Avoid use of system:masters group (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.8
+======================================================================
+  Title:         Limit use of the Bind, Impersonate and Escalate permissions in the Kubernetes cluster (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.6
+======================================================================
+  Title:         Ensure that Service Account Tokens are only mounted where necessary (Manual)
+  Time:          0.03s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.1.9
+======================================================================
+  Title:         Minimize access to create persistent volumes (Manual)
+  Time:          0.03s
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 5.1.1
+======================================================================
+  Title:         Ensure that the cluster-admin role is only used where required
+  Time:          0.28s
+  Reason:        Check Error: Unable to connect to Kubernetes cluster
+  Try Fix:       Check kubeconfig and cluster connectivity.
+
+  [Commands Ran]
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+   $ Executing: if ! kubectl cluster-info &>/dev/null; then
+
+  [i] Raw Output:
+[INFO] Starting check for 5.1.1...
+[CMD] Executing: if ! command -v kubectl &> /dev/null; then
+[CMD] Executing: if ! kubectl cluster-info &>/dev/null; then
+[INFO] Check Failed
+[FAIL_REASON] Check Error: Unable to connect to Kubernetes cluster
+[FIX_HINT] Check kubeconfig and cluster connectivity.
+
+- Audit Result:
+  [-] ERROR
+ - Check Error: Unable to connect to Kubernetes cluster
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.12
+======================================================================
+  Title:         Minimize the admission of containers which use HostPorts
+  Time:          0.65s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.12...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.3
+======================================================================
+  Title:         Minimize the admission of containers wishing to share the host process ID namespace
+  Time:          0.65s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.3...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.10
+======================================================================
+  Title:         Minimize the admission of Windows HostProcess Containers
+  Time:          0.69s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.10...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.3.1
+======================================================================
+  Title:         Ensure that the CNI in use supports Network Policies (Manual)
+  Time:          0.01s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.1
+======================================================================
+  Title:         Ensure that the cluster has at least one active policy control mechanism in place
+  Time:          0.78s
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.1...
+[CMD] Executing: # Verify kubectl is available
+[CMD] Executing: if ! command -v kubectl &> /dev/null; then
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name | test(\"^(kube-system|kube-public)$\") | not) | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.11
+======================================================================
+  Title:         Minimize the admission of HostPath volumes
+  Time:          0.84s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.11...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.2
+======================================================================
+  Title:         Minimize the admission of privileged containers
+  Time:          0.87s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.2...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 4.1.10
+======================================================================
+  Title:         If the kubelet config.yaml configuration file is being used validate file ownership is set to root:root (Automated)
+  Time:          0.06s
+  Try Fix:       Run remediation: sudo bash /home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.1.10_remediate.sh
+
+  [i] Raw Output:
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.1.10_audit.sh: line 44: syntax error near unexpected token `('
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.1.10_audit.sh: line 44: `           printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"'
+======================================================================
+
+======================================================================
+DETAILS - PASS - 4.1.2
+======================================================================
+  Title:         Ensure that the kubelet service file ownership is set to root:root (Automated)
+  Time:          0.02s
+
+  [Commands Ran]
+   $ Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/systemd/system/kubelet.service.d/10-kubeadm.conf Verify that the ownership is set to root:root.
+
+  [i] Raw Output:
+[INFO] Starting check for 4.1.2...
+[CMD] Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/systemd/system/kubelet.service.d/10-kubeadm.conf Verify that the ownership is set to root:root.
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf does not exist
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.5
+======================================================================
+  Title:         Minimize the admission of containers wishing to share the host network namespace
+  Time:          0.67s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.5...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.4
+======================================================================
+  Title:         Minimize the admission of containers wishing to share the host IPC namespace
+  Time:          0.92s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.4...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.3.2
+======================================================================
+  Title:         Ensure that all Namespaces have Network Policies defined
+  Time:          0.26s
+
+  [Commands Ran]
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+   $ Executing: namespaces=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.3.2...
+[CMD] Executing: if ! command -v kubectl &> /dev/null; then
+[CMD] Executing: namespaces=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have at least one NetworkPolicy
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.1.3
+======================================================================
+  Title:         If proxy kubeconfig file exists ensure permissions are set to 600 or more restrictive (Manual)
+  Time:          0.23s
+
+  [Commands Ran]
+   $ Executing: ## Find the kubeconfig file being used by kube-proxy by running the following command: ps -ef | grep kube-proxy If kube-proxy is running, get the kubeconfig file location from the --kubeconfig parameter.
+   $ Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %a <path><filename> Verify that a file is specified and it exists with permissions are 600 or more restrictive.
+   $ Executing: kube_proxy_kubeconfig=
+======================================================================
+
+======================================================================
+DETAILS - PASS - 4.1.6
+======================================================================
+  Title:         Ensure that the --kubeconfig kubelet.conf file ownership is set to root:root (Automated)
+  Time:          0.23s
+
+  [Commands Ran]
+   $ Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/kubernetes/kubelet.conf Verify that the ownership is set to root:root.
+   $ Executing: kubelet_config=
+   $ Executing: if stat -c %U:%G "/etc/kubernetes/kubelet.conf" | grep -q "root:root"; then
+
+  [i] Raw Output:
+[INFO] Starting check for 4.1.6...
+[CMD] Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/kubernetes/kubelet.conf Verify that the ownership is set to root:root.
+[CMD] Executing: kubelet_config=
+[CMD] Executing: if stat -c %U:%G "/etc/kubernetes/kubelet.conf" | grep -q "root:root"; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: /etc/kubernetes/kubelet.conf ownership is root:root
+grep: unrecognized option '--kubeconfig=[^'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+awk: cmd. line:1: '{print
+awk: cmd. line:1: ^ invalid char ''' in expression
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.1.7
+======================================================================
+  Title:         Ensure that the certificate authorities file permissions are set to 644 or more restrictive (Manual)
+  Time:          0.21s
+
+  [Commands Ran]
+   $ Executing: ## Run the following command: ps -ef | grep kubelet Find the file specified by the --client-ca-file argument. Run the following command: stat -c %a <filename> Verify that the permissions are 644 or more
+   $ Executing: ## Command hint: Run the following command: ps -ef | grep kubelet Find the file specified by the --client-ca-file argument. Run the following command: stat -c %a <filename> Verify that the permissions are 644 or more restrictive.
+   $ Executing: client_ca_file=
+   $ Executing: if stat -c %a "/etc/kubernetes/pki/ca.crt" | grep -qE \'^[0-6][0-4][0-4]$\'; then
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 4.2.10
+======================================================================
+  Title:         Ensure that the --rotate-certificates argument is not set to false (Automated)
+  Time:          0.02s
+  Try Fix:       Run remediation: sudo bash /home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.10_remediate.sh
+
+  [i] Raw Output:
+[INFO] Starting check for 4.2.10...
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.10_audit.sh: command substitution: line 15: syntax error near unexpected token `('
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.10_audit.sh: command substitution: line 15: `ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"'
+======================================================================
+
+======================================================================
+DETAILS - PASS - 4.1.5
+======================================================================
+  Title:         Ensure that the --kubeconfig kubelet.conf file permissions are set to 600 or more restrictive (Automated)
+  Time:          0.29s
+
+  [Commands Ran]
+   $ Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %a /etc/kubernetes/kubelet.conf Verify that the ownership is set to root:root.Verify that the permissions are 600 or more restrictive.
+   $ Executing: kubelet_config=
+   $ Executing: if stat -c %a "/etc/kubernetes/kubelet.conf" | grep -qE \'^[0-6]00$\'; then
+
+  [i] Raw Output:
+[INFO] Starting check for 4.1.5...
+[CMD] Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %a /etc/kubernetes/kubelet.conf Verify that the ownership is set to root:root.Verify that the permissions are 600 or more restrictive.
+[CMD] Executing: kubelet_config=
+[CMD] Executing: if stat -c %a "/etc/kubernetes/kubelet.conf" | grep -qE \'^[0-6]00$\'; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: /etc/kubernetes/kubelet.conf permissions are 600 or more restrictive
+grep: unrecognized option '--kubeconfig=[^'
+awk: Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+cmd. line:1: '{print
+awk: cmd. line:1: ^ invalid char ''' in expression
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.11
+======================================================================
+  Title:         Verify that the RotateKubeletServerCertificate argument is set to true (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.1.4
+======================================================================
+  Title:         If proxy kubeconfig file exists ensure ownership is set to root:root (Manual)
+  Time:          0.32s
+
+  [Commands Ran]
+   $ Executing: ## Find the kubeconfig file being used by kube-proxy by running the following command: ps -ef | grep kube-proxy If kube-proxy is running, get the kubeconfig file location from the --kubeconfig parameter.
+   $ Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G <path><filename> Verify that the ownership is set to root:root.
+   $ Executing: kube_proxy_kubeconfig=
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.12
+======================================================================
+  Title:         Ensure that the Kubelet only makes use of Strong Cryptographic Ciphers (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.14
+======================================================================
+  Title:         Ensure that the --seccomp-default parameter is set to true (Manual)
+  Time:          0.03s
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.8
+======================================================================
+  Title:         Minimize the admission of containers with the NET_RAW capability
+  Time:          0.6s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.8...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.13
+======================================================================
+  Title:         Ensure that a limit is set on pod PIDs (Manual)
+  Time:          0.04s
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 4.2.2
+======================================================================
+  Title:         Ensure that the --authorization-mode argument is not set to AlwaysAllow (Automated)
+  Time:          0.03s
+  Try Fix:       Run remediation: sudo bash /home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.2_remediate.sh
+
+  [i] Raw Output:
+[INFO] Starting check for 4.2.2...
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.2_audit.sh: command substitution: line 15: syntax error near unexpected token `('
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.2_audit.sh: command substitution: line 15: `ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"'
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.4
+======================================================================
+  Title:         Verify that if defined, readOnlyPort is set to 0 (Manual)
+  Time:          0.04s
+======================================================================
+
+======================================================================
+DETAILS - PASS - 4.1.9
+======================================================================
+  Title:         If the kubelet config.yaml configuration file is being used validate permissions set to 600 or more restrictive (Automated)
+  Time:          0.13s
+
+  [Commands Ran]
+   $ Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %a /var/lib/kubelet/config.yaml Verify that the permissions are 600 or more restrictive.
+   $ Executing: kubelet_config_yaml=
+   $ Executing: if stat -c %a "/var/lib/kubelet/config.yaml" | grep -qE \'^[0-6]00$\'; then
+
+  [i] Raw Output:
+[INFO] Starting check for 4.1.9...
+[CMD] Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %a /var/lib/kubelet/config.yaml Verify that the permissions are 600 or more restrictive.
+[CMD] Executing: kubelet_config_yaml=
+[CMD] Executing: if stat -c %a "/var/lib/kubelet/config.yaml" | grep -qE \'^[0-6]00$\'; then
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: /var/lib/kubelet/config.yaml permissions are 600 or more restrictive
+grep: unrecognized option '--config=[^'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+awk: cmd. line:1: '{print
+awk: cmd. line:1: ^ invalid char ''' in expression
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 4.2.3
+======================================================================
+  Title:         Ensure that the --client-ca-file argument is set as appropriate (Automated)
+  Time:          0.04s
+  Try Fix:       Run remediation: sudo bash /home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.3_remediate.sh
+
+  [i] Raw Output:
+[INFO] Starting check for 4.2.3...
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.3_audit.sh: command substitution: line 15: syntax error near unexpected token `('
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.3_audit.sh: command substitution: line 15: `ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"'
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 4.2.1
+======================================================================
+  Title:         Ensure that the --anonymous-auth argument is set to false (Automated)
+  Time:          0.08s
+  Try Fix:       Run remediation: sudo bash /home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.1_remediate.sh
+
+  [i] Raw Output:
+[INFO] Starting check for 4.2.1...
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.1_audit.sh: command substitution: line 15: syntax error near unexpected token `('
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.1_audit.sh: command substitution: line 15: `ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"'
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 4.2.6
+======================================================================
+  Title:         Ensure that the --make-iptables-util-chains argument is set to true (Automated)
+  Time:          0.02s
+  Try Fix:       Run remediation: sudo bash /home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.6_remediate.sh
+
+  [i] Raw Output:
+[INFO] Starting check for 4.2.6...
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.6_audit.sh: command substitution: line 15: syntax error near unexpected token `('
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/4.2.6_audit.sh: command substitution: line 15: `ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"'
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.5
+======================================================================
+  Title:         Ensure that the --streaming-connection-idle-timeout argument is not set to 0 (Manual)
+  Time:          0.04s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 5.6.1
+======================================================================
+  Title:         Create administrative boundaries between resources using namespaces (Manual)
+  Time:          0.53s
+
+  [Commands Ran]
+   $ Executing: total_namespaces=
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.1.8
+======================================================================
+  Title:         Ensure that the client certificate authorities file ownership is set to root:root (Manual)
+  Time:          0.19s
+
+  [Commands Ran]
+   $ Executing: ## Run the following command: ps -ef | grep kubelet Find the file specified by the --client-ca-file argument. Run the following command: stat -c %U:%G <filename> Verify that the ownership is set to root:
+   $ Executing: ## Command hint: Run the following command: ps -ef | grep kubelet Find the file specified by the --client-ca-file argument. Run the following command: stat -c %U:%G <filename> Verify that the ownership is set to root:root.
+   $ Executing: client_ca_file=
+   $ Executing: if stat -c %U:%G "/etc/kubernetes/pki/ca.crt" | grep -q "root:root"; then
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.9
+======================================================================
+  Title:         Ensure that the --tls-cert-file and --tls-private-key-file arguments are set as appropriate (Manual)
+  Time:          0.02s
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.3.1
+======================================================================
+  Title:         Ensure that the kube-proxy metrics service is bound to localhost (Manual)
+  Time:          0.01s
+
+  [Commands Ran]
+   $ Executing: ## review the start-up flags provided to kube proxy Run the following command on each node: ps -ef | grep -i kube-proxy Ensure that the --metrics-bind-address parameter is not set to a value other than
+   $ Executing: ## Command hint: review the start-up flags provided to kube proxy Run the following command on each node: ps -ef | grep -i kube-proxy Ensure that the --metrics-bind-address parameter is not set to a value other than
+   $ Executing: a_output+=(" - Command: ps -ef | grep kube-proxy (Check --metrics-bind-address)")
+======================================================================
+
+======================================================================
+DETAILS - FAIL - 5.1.3
+======================================================================
+  Title:         Minimize wildcard use in Roles and ClusterRoles (Automated)
+  Time:          0.01s
+  Try Fix:       Run remediation: sudo bash /home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/5.1.3_remediate.sh
+
+  [Commands Ran]
+   $ Executing: # Verify kubectl is available
+   $ Executing: if ! command -v kubectl &> /dev/null; then
+
+  [i] Raw Output:
+[INFO] Starting check for 5.1.3...
+[CMD] Executing: # Verify kubectl is available
+[CMD] Executing: if ! command -v kubectl &> /dev/null; then
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/5.1.3_audit.sh: command substitution: line 28: syntax error near unexpected token `('
+/home/master/CIS_Kubernetes_Benchmark_V1.12.0/Level_1_Worker_Node/5.1.3_audit.sh: command substitution: line 28: `kubectl get roles,clusterroles -A -o json 2>/dev/null | jq -r \'.items[] | select(.metadata.name | test(\"^(system:|kubeadm:)\") | not) | select(.rules[]? | select((.resources[]? == \"*\" or .verbs[]? == \"*\"))) | \"\\(.kind): \\(.metadata.namespace):\\(.metadata.name)\"\' | sort -u)"'
+======================================================================
+
+======================================================================
+DETAILS - MANUAL - 4.2.7
+======================================================================
+  Title:         Ensure that the --hostname-override argument is not set (Manual)
+  Time:          0.04s
+
+  [Commands Ran]
+   $ Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--hostname-override(=|\s|$)"; then
+======================================================================
+
+======================================================================
+DETAILS - PASS - 5.2.6
+======================================================================
+  Title:         Minimize the admission of containers with allowPrivilegeEscalation
+  Time:          0.69s
+
+  [Commands Ran]
+   $ Executing: missing_labels=
+
+  [i] Raw Output:
+[INFO] Starting check for 5.2.6...
+[CMD] Executing: missing_labels=
+[INFO] Check Passed
+
+- Audit Result:
+  [+] PASS
+ - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label
+jq: error: syntax error, unexpected INVALID_CHARACTER (Unix shell quoting issues?) at <top-level>, line 1:
+.items[] | select(.metadata.name != \"kube-system\" and .metadata.name != \"kube-public\") | select(.metadata.labels[\"pod-security.kubernetes.io/enforce\"] == null) | .metadata.name
+jq: 1 compile error
+======================================================================
+
+
+[+] Audit Complete.
+
+   [*] Reports Saved in: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/reports/2025-11-28/audit/run_20251128_030527
+      - summary.txt
+      - failed_items.txt
+      - component_summary.txt
+      - report.csv
+      - report.json
+      - report.html
+
+======================================================================
+STATISTICS SUMMARY
+======================================================================
+
+  MASTER:
+    [+] Pass:    54
+    [-] Fail:    15
+    [!] Manual:  24
+    [>>] Skipped: 0
+    [✓] Ignored: 0
+    [*] Total:   93
+    [%] Success: 58%
+
+  WORKER:
+    [+] Pass:    4
+    [-] Fail:    7
+    [!] Manual:  13
+    [>>] Skipped: 0
+    [✓] Ignored: 0
+    [*] Total:   24
+    [%] Success: 16%
+
+TOP 5 SLOWEST CHECKS:
+  1. 5.2.4             0.92s - PASS
+  2. 5.2.2             0.87s - PASS
+  3. 5.2.11            0.84s - PASS
+  4. 5.2.1             0.78s - PASS
+  5. 5.2.10            0.69s - PASS
+
+======================================================================
+[DEBUG] Snapshot saved: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/history/snapshot_20251128_030540_audit_all_1.json
+
+======================================================================
+RESULTS MENU:
+======================================================================
+
+  1) View summary report
+  2) View failed/manual items
+  3) View detailed report
+  4) Return to main menu
+
+Choose [1-4]:

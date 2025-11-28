@@ -1,18 +1,18 @@
 #!/bin/bash
 # CIS Benchmark: 5.1.1
-# Title: Ensure that the cluster-admin role is only used where required (Manual)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the cluster-admin role is only used where necessary
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+echo "[INFO] Remediating 5.1.1..."
 
-	a_output+=(" - Remediation: This is a manual check. Remove unnecessary clusterrolebindings to cluster-admin.")
-	return 0
-}
+# 2. Pre-Check
+# Manual check.
 
-remediate_rule
-exit $?
+# 3. Apply Fix
+echo "[WARN] Manual intervention required: Review ClusterRoleBindings for 'cluster-admin' and remove unnecessary subjects."
+echo "[INFO] Run: kubectl get clusterrolebindings -o=custom-columns=NAME:.metadata.name,ROLE:.roleRef.name,SUBJECT:.subjects[*].name | grep cluster-admin"
+
+# 4. Verification
+exit 0

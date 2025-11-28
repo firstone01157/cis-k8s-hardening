@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--anonymous-auth=false"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q \"\\s--anonymous-auth=false(\\s|$)\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--anonymous-auth=false(\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --anonymous-auth is set to false")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --anonymous-auth is NOT set to false")
+		echo "[FAIL_REASON] Check Failed: --anonymous-auth is NOT set to false"
+		echo "[FIX_HINT] Run remediation script: 1.2.1_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

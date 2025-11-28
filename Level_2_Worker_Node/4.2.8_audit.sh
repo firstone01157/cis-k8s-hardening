@@ -4,6 +4,7 @@
 # Level: • Level 2 - Worker Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.2.8..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -14,9 +15,12 @@ audit_rule() {
 	# We will check if it is explicitly set or if the default is active.
 	# Since it is manual, we log the value.
 
+	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -q \"eventRecordQPS\"; then"
 	if ps -ef | grep kubelet | grep -v grep | grep -q "eventRecordQPS"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: eventRecordQPS is explicitly set (verify value)")
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: eventRecordQPS not set (using default 5)")
 	fi
 

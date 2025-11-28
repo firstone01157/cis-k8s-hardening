@@ -4,14 +4,20 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.10..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -- "--enable-admission-plugins" | grep -q "AlwaysAdmit"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E \"\\s--enable-admission-plugins(=|\\s|$)\" | grep -q \"AlwaysAdmit\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins(=|\s|$)" | grep -q "AlwaysAdmit"; then
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: AlwaysAdmit is enabled")
+		echo "[FAIL_REASON] Check Failed: AlwaysAdmit is enabled"
+		echo "[FIX_HINT] Run remediation script: 1.2.10_remediate.sh"
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: AlwaysAdmit is not enabled")
 	fi
 

@@ -1,57 +1,56 @@
 #!/bin/bash
 # CIS Benchmark: 5.3.2
-# Title: Ensure that all Namespaces have Network Policies defined (Automated)
-# Level: • Level 2 - Master Node
+# Title: Ensure that all Namespaces have Network Policies defined
+# Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.3.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	# Verify kubectl and jq are available
-	if ! command -v kubectl &> /dev/null || ! command -v jq &> /dev/null; then
-		a_output2+=(" - Check Error: kubectl or jq command not found")
+	# Verify kubectl is available
+	echo "[CMD] Executing: if ! command -v kubectl &> /dev/null; then"
+	if ! command -v kubectl &> /dev/null; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Error: kubectl command not found")
+		echo "[FAIL_REASON] Check Error: kubectl command not found"
+		echo "[FIX_HINT] Ensure kubectl is installed and in the PATH."
 		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
 		return 2
 	fi
 
-	# Verify cluster is reachable
-	if ! kubectl cluster-info &>/dev/null; then
-		a_output2+=(" - Check Error: Unable to connect to Kubernetes cluster")
-		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
-		return 2
-	fi
-
-	# Query namespaces without NetworkPolicies, excluding system namespaces
-	local namespaces_without_policy=""
+	# Check if each non-system namespace has at least one NetworkPolicy
+	# Exclude system namespaces: kube-system, kube-public
 	
-	kubectl get namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.name | IN("kube-system","kube-public","kube-node-lease","default") | not) | .metadata.name' | while read -r ns; do
-		[ -z "$ns" ] && continue
-		local count
-		count=$(kubectl get networkpolicies -n "$ns" -o json 2>/dev/null | jq '.items | length')
+	echo "[CMD] Executing: namespaces=$(kubectl get ns -o json 2>/dev/null | jq -r '.items[] | select(.metadata.name | test("^(kube-system|kube-public)$") | not) | .metadata.name')"
+	namespaces=$(kubectl get ns -o json 2>/dev/null | jq -r '.items[] | select(.metadata.name | test("^(kube-system|kube-public)$") | not) | .metadata.name')
+	
+	failed_namespaces=""
+	
+	for ns in $namespaces; do
+		echo "[CMD] Executing: count=$(kubectl get networkpolicies -n \"$ns\" --no-headers 2>/dev/null | wc -l)"
+		count=$(kubectl get networkpolicies -n "$ns" --no-headers 2>/dev/null | wc -l)
 		if [ "$count" -eq 0 ]; then
-			namespaces_without_policy+="$ns "
+			failed_namespaces+="$ns "
 		fi
 	done
 	
-	# Note: Due to subshell in pipeline, we need to re-check. This is acceptable as double-check is safer
-	namespaces_without_policy=$(kubectl get namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.name | IN("kube-system","kube-public","kube-node-lease","default") | not) | .metadata.name' | while read -r ns; do
-		[ -z "$ns" ] && continue
-		count=$(kubectl get networkpolicies -n "$ns" -o json 2>/dev/null | jq '.items | length')
-		if [ "$count" -eq 0 ]; then
-			echo "$ns"
-		fi
-	done)
-
-	if [ -z "$namespaces_without_policy" ]; then
-		a_output+=(" - Check Passed: All non-system namespaces have Network Policies defined")
+	if [ -n "$failed_namespaces" ]; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: The following namespaces have 0 NetworkPolicies:")
+		echo "[FAIL_REASON] Check Failed: The following namespaces have 0 NetworkPolicies:"
+		echo "[FIX_HINT] Run remediation script: 5.3.2_remediate.sh"
+		for ns in $failed_namespaces; do
+			echo "[INFO] Check Failed"
+			a_output2+=(" - $ns")
+			echo "[FAIL_REASON] $ns"
+			echo "[FIX_HINT] Run remediation script: 5.3.2_remediate.sh"
+		done
 	else
-		a_output2+=(" - Check Failed: The following namespaces lack Network Policies:")
-		while IFS= read -r ns; do
-			[ -z "$ns" ] && continue
-			a_output2+=(" - Namespace: $ns")
-		done <<< "$namespaces_without_policy"
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: All non-system namespaces have at least one NetworkPolicy")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

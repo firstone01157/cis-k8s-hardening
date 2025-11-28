@@ -4,20 +4,21 @@
 # Level: • Level 1 - Worker Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.2.7..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	## Description from CSV:
-	## Run the following command on each node: ps -ef | grep kubelet Verify that --hostname-override argument does not exist. Note This setting is not configurable via the Kubelet config file.
-	##
-	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that --hostname-override argument does not exist. Note This setting is not configurable via the Kubelet config file.
-	##
-
-	if ps -ef | grep kubelet | grep -v grep | grep -q "\--hostname-override"; then
+	# 1. Check Flag (Only source)
+	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--hostname-override(=|\\s|$)\"; then"
+	if ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--hostname-override(=|\s|$)"; then
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --hostname-override is set")
+		echo "[FAIL_REASON] Check Failed: --hostname-override is set"
+		echo "[FIX_HINT] Run remediation script: 4.2.7_remediate.sh"
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --hostname-override is NOT set")
 	fi
 

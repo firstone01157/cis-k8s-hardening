@@ -1,47 +1,53 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.3.1
 # Title: Ensure that the --terminated-pod-gc-threshold argument is set as appropriate
-# Level: • Level 1 - Master Node
-# Remediation Script
+# Level: Level 1 - Master Node
+# Remediation Script - Config-Driven
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# --- CONFIG (from environment, with defaults) ---
+THRESHOLD="${CONFIG_THRESHOLD:-12500}"
+CONFIG_FILE="${CONFIG_CONFIG_FILE:-/etc/kubernetes/manifests/kube-controller-manager.yaml}"
 
-    l_file="/etc/kubernetes/manifests/kube-controller-manager.yaml"
-    l_flag="--terminated-pod-gc-threshold"
-    l_value="12500" # ค่าแนะนำ (ปรับได้ตามความเหมาะสม)
+BINARY_NAME="kube-controller-manager"
+KEY="--terminated-pod-gc-threshold"
+VALUE="$THRESHOLD"
+FULL_PARAM="${KEY}=${VALUE}"
 
-    if [ -e "$l_file" ]; then
-        # 1. Backup First
-        cp "$l_file" "$l_file.bak_$(date +%s)"
+echo "[INFO] Remediating CIS 1.3.1: Terminated Pod GC Threshold"
+echo "[INFO] TARGET_THRESHOLD=$THRESHOLD"
+echo "[INFO] CONFIG_FILE=$CONFIG_FILE"
 
-        # 2. Check & Apply
-        if grep -q -- "$l_flag" "$l_file"; then
-            # Case A: Flag exists -> Update value
-            sed -i "s/$l_flag=[^ \"]*/$l_flag=$l_value/g" "$l_file"
-            a_output+=(" - Remediation applied: Updated existing $l_flag to $l_value")
-        else
-            # Case B: Flag missing -> Insert new line
-            # เทคนิค: หาบรรทัดที่มีคำสั่ง binary (- kube-controller-manager) แล้วแทรกบรรทัดใหม่ต่อจากนั้น
-            sed -i "/- kube-controller-manager/a \    - $l_flag=$l_value" "$l_file"
-            a_output+=(" - Remediation applied: Inserted new flag $l_flag=$l_value")
-        fi
-    else
-        a_output2+=(" - Remediation failed: $l_file not found")
-        return 1
-    fi
+# 1. Pre-check: Does the parameter already have the correct value?
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[PASS] ${FULL_PARAM} is already set correctly."
+    exit 0
+fi
 
-    # 3. Verify
-    if grep -q -- "$l_flag=$l_value" "$l_file"; then
-        return 0
-    else
-        a_output2+=(" - Remediation verification failed")
-        return 1
-    fi
-}
+# 2. Backup the original file
+BACKUP_FILE="${CONFIG_FILE}.bak.$(date +%s)"
+cp "${CONFIG_FILE}" "${BACKUP_FILE}"
+echo "[INFO] Backup created: ${BACKUP_FILE}"
 
-remediate_rule
-exit $?
+# 3. Apply fix
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    echo "[INFO] Updating existing ${KEY} parameter..."
+    sed -i "s|${KEY}=.*|${FULL_PARAM}|g" "${CONFIG_FILE}"
+else
+    echo "[INFO] Adding new ${KEY} parameter..."
+    sed -i "/  - ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
+fi
+
+# 4. Verify the fix was applied
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[PASS] Successfully applied ${FULL_PARAM}"
+    echo "[INFO] The kubelet will now garbage collect terminated pods after $THRESHOLD pods have terminated."
+    echo "[INFO] Configuration will take effect after the next kube-controller-manager restart."
+    exit 0
+else
+    echo "[FAIL] Failed to apply ${FULL_PARAM}"
+    echo "[INFO] Rolling back to backup: ${BACKUP_FILE}"
+    cp "${BACKUP_FILE}" "${CONFIG_FILE}"
+    exit 1
+fi

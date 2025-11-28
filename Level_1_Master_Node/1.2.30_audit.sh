@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.30..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-extend-token-expiration=false"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q \"\\s--service-account-extend-token-expiration=false(\\s|$)\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--service-account-extend-token-expiration=false(\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --service-account-extend-token-expiration is set to false")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --service-account-extend-token-expiration is not set to false")
+		echo "[FAIL_REASON] Check Failed: --service-account-extend-token-expiration is not set to false"
+		echo "[FIX_HINT] Run remediation script: 1.2.30_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

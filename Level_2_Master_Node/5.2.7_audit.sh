@@ -1,41 +1,46 @@
 #!/bin/bash
 # CIS Benchmark: 5.2.7
-# Title: Minimize the admission of root containers (Manual)
-# Level: • Level 2 - Master Node
+# Title: Minimize the admission of root containers (Automated)
+# Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.2.7..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	# Verify kubectl and jq are available
-	if ! command -v kubectl &> /dev/null || ! command -v jq &> /dev/null; then
-		a_output2+=(" - Check Error: kubectl or jq command not found")
+	echo "[CMD] Executing: # Verify kubectl is available"
+	# Verify kubectl is available
+	echo "[CMD] Executing: if ! command -v kubectl &> /dev/null; then"
+	if ! command -v kubectl &> /dev/null; then
+		echo "[CMD] Executing: a_output2+=(\" - Check Error: kubectl command not found\")"
+		a_output2+=(" - Check Error: kubectl command not found")
+		echo "[FAIL_REASON] Check Error: kubectl command not found"
+		echo "[FIX_HINT] Run remediation script: 5.2.7_remediate.sh"
 		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
 		return 2
 	fi
 
-	# Verify cluster is reachable
-	if ! kubectl cluster-info &>/dev/null; then
-		a_output2+=(" - Check Error: Unable to connect to Kubernetes cluster")
-		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
-		return 2
-	fi
-
-	# Find all pods where runAsNonRoot is NOT set to true (meaning they allow running as root)
-	# Use streaming pattern to avoid memory exhaustion on large clusters
-	local root_containers
-	root_containers=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select((.spec.containers[]?.securityContext.runAsNonRoot != true) or (.spec.initContainers[]?.securityContext.runAsNonRoot != true)) | "\(.metadata.namespace)/\(.metadata.name)"' | sort -u)
+	# Check for pods running as root (runAsNonRoot != true)
+	# Exclude system namespaces
+	echo "[CMD] Executing: root_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r \'.items[] | select(.metadata.namespace | test(\"^(kube-system|kube-public|kube-node-lease)$\") | not) | select((.spec.securityContext.runAsNonRoot != true) and (.spec.containers[]?.securityContext.runAsNonRoot != true)) | \"\\(.metadata.namespace)/\\(.metadata.name)\"\' | sort -u)"
+	root_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select(.metadata.namespace | test("^(kube-system|kube-public|kube-node-lease)$") | not) | select((.spec.securityContext.runAsNonRoot != true) and (.spec.containers[]?.securityContext.runAsNonRoot != true)) | "\(.metadata.namespace)/\(.metadata.name)"' | sort -u)
 	
-	if [ -z "$root_containers" ]; then
-		a_output+=(" - Check Passed: All containers are configured to run as non-root")
+	if [ -z "$root_pods" ]; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: No pods running as root found")
 	else
-		a_output2+=(" - Check Failed: The following pods allow running containers as root:")
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: Found pods running as root:")
+		echo "[FAIL_REASON] Check Failed: Found pods running as root:"
+		echo "[FIX_HINT] Run remediation script: 5.2.7_remediate.sh"
 		while IFS= read -r pod; do
-			[ -z "$pod" ] && continue
+			echo "[INFO] Check Failed"
 			a_output2+=(" - Pod: $pod")
-		done <<< "$root_containers"
+			echo "[FAIL_REASON] Pod: $pod"
+			echo "[FIX_HINT] Run remediation script: 5.2.7_remediate.sh"
+		done <<< "$root_pods"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

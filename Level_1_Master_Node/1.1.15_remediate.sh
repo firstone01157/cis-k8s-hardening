@@ -1,37 +1,35 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.15
-# Title: Ensure that the scheduler.conf file permissions are set to 600 or more restrictive (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the scheduler.conf file permissions are set to 600 or more restrictive
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+CONFIG_FILE="/etc/kubernetes/scheduler.conf"
+MAX_PERM=600
 
-	l_file="/etc/kubernetes/scheduler.conf"
-	if [ -e "$l_file" ]; then
-		l_mode=$(stat -c %a "$l_file")
-		if [ "$l_mode" -le 600 ]; then
-			a_output+=(" - Remediation not needed: Permissions on $l_file are $l_mode")
-			return 0
-		else
-			chmod 600 "$l_file"
-			l_mode_new=$(stat -c %a "$l_file")
-			if [ "$l_mode_new" -le 600 ]; then
-				a_output+=(" - Remediation applied: Permissions on $l_file changed to $l_mode_new")
-				return 0
-			else
-				a_output2+=(" - Remediation failed: Could not change permissions on $l_file")
-				return 1
-			fi
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-		return 0
-	fi
-}
+echo "[INFO] Remediating permissions for $CONFIG_FILE..."
 
-remediate_rule
-exit $?
+# 2. Pre-Check
+if [ -e "$CONFIG_FILE" ]; then
+    CURRENT_PERM=$(stat -c %a "$CONFIG_FILE")
+    if [ "$CURRENT_PERM" -le "$MAX_PERM" ]; then
+        echo "[FIXED] Permissions on $CONFIG_FILE are already $CURRENT_PERM (<= $MAX_PERM)."
+        exit 0
+    fi
+else
+    echo "[INFO] $CONFIG_FILE not found. Skipping."
+    exit 0
+fi
+
+# 3. Apply Fix
+chmod "$MAX_PERM" "$CONFIG_FILE"
+
+# 4. Verification
+CURRENT_PERM=$(stat -c %a "$CONFIG_FILE")
+if [ "$CURRENT_PERM" -le "$MAX_PERM" ]; then
+    echo "[FIXED] Successfully applied permissions $MAX_PERM to $CONFIG_FILE"
+else
+    echo "[ERROR] Failed to apply permissions to $CONFIG_FILE"
+    exit 1
+fi

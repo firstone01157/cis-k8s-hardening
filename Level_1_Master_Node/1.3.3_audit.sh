@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.3.3..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-controller-manager | grep -v grep | grep -q -- "--use-service-account-credentials=true"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q \"\\s--use-service-account-credentials=true(\\s|$)\"; then"
+	if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--use-service-account-credentials=true(\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --use-service-account-credentials is set to true")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --use-service-account-credentials is not set to true")
+		echo "[FAIL_REASON] Check Failed: --use-service-account-credentials is not set to true"
+		echo "[FIX_HINT] Run remediation script: 1.3.3_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

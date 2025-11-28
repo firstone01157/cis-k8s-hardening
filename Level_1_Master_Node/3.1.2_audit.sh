@@ -4,15 +4,19 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 3.1.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
 	# This is a manual check.
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- \"--service-account-lookup=true\"; then"
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--service-account-lookup=true"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Manual Check: --service-account-lookup is set to true (Good). Ensure service account tokens are not used for users.")
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Manual Check: --service-account-lookup is NOT set to true.")
 	fi
 

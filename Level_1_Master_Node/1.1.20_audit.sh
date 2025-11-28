@@ -1,9 +1,10 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.20
-# Title: Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive (Manual)
+# Title: Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive (Automated)
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.1.20..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -12,22 +13,29 @@ audit_rule() {
 	l_dir="/etc/kubernetes/pki"
 	if [ -d "$l_dir" ]; then
 		while IFS= read -r -d '' l_file; do
+			echo "[CMD] Executing: l_mode=$(stat -c %a \"$l_file\")"
 			l_mode=$(stat -c %a "$l_file")
 			# 644 or more restrictive means user can be rw(6), group/other max r(4) and NO execute.
 			# Strictly <= 644 in octal isn't fully correct for "more restrictive" (e.g. 700 is restrictive for group/other but loose for user), 
 			# but for cert files, 644 or 600 or 444 or 400 are expected.
 			# We will assume "more restrictive" implies numerical comparison <= 644 is a good approximation for standard file modes.
 			if [ "$l_mode" -le 644 ]; then
+				echo "[INFO] Check Passed"
 				a_output+=(" - Check Passed: Permissions on $l_file are $l_mode")
 			else
+				echo "[INFO] Check Failed"
 				a_output2+=(" - Check Failed: Permissions on $l_file are $l_mode (should be 644 or more restrictive)")
+				echo "[FAIL_REASON] Check Failed: Permissions on $l_file are $l_mode (should be 644 or more restrictive)"
+				echo "[FIX_HINT] Run remediation script: 1.1.20_remediate.sh"
 			fi
 		done < <(find "$l_dir" -name "*.crt" -print0)
 		
 		if [ ${#a_output[@]} -eq 0 ] && [ ${#a_output2[@]} -eq 0 ]; then
+             echo "[INFO] Check Passed"
              a_output+=(" - Check Passed: No .crt files found in $l_dir")
         fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $l_dir directory not found")
 	fi
 

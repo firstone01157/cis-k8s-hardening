@@ -1,40 +1,35 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.13
-# Title: Ensure that the default administrative credential file permissions are set to 600 (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the admin.conf file permissions are set to 600 or more restrictive
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+CONFIG_FILE="/etc/kubernetes/admin.conf"
+MAX_PERM=600
 
-	for l_file in "/etc/kubernetes/admin.conf" "/etc/kubernetes/super-admin.conf"; do
-		if [ -e "$l_file" ]; then
-			l_mode=$(stat -c %a "$l_file")
-			if [ "$l_mode" -le 600 ]; then
-				a_output+=(" - Remediation not needed: Permissions on $l_file are $l_mode")
-			else
-				chmod 600 "$l_file"
-				l_mode_new=$(stat -c %a "$l_file")
-				if [ "$l_mode_new" -le 600 ]; then
-					a_output+=(" - Remediation applied: Permissions on $l_file changed to $l_mode_new")
-				else
-					a_output2+=(" - Remediation failed: Could not change permissions on $l_file")
-				fi
-			fi
-		else
-			a_output+=(" - Remediation not needed: $l_file not found")
-		fi
-	done
+echo "[INFO] Remediating permissions for $CONFIG_FILE..."
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		return 0
-	else
-		return 1
-	fi
-}
+# 2. Pre-Check
+if [ -e "$CONFIG_FILE" ]; then
+    CURRENT_PERM=$(stat -c %a "$CONFIG_FILE")
+    if [ "$CURRENT_PERM" -le "$MAX_PERM" ]; then
+        echo "[FIXED] Permissions on $CONFIG_FILE are already $CURRENT_PERM (<= $MAX_PERM)."
+        exit 0
+    fi
+else
+    echo "[INFO] $CONFIG_FILE not found. Skipping."
+    exit 0
+fi
 
-remediate_rule
-exit $?
+# 3. Apply Fix
+chmod "$MAX_PERM" "$CONFIG_FILE"
+
+# 4. Verification
+CURRENT_PERM=$(stat -c %a "$CONFIG_FILE")
+if [ "$CURRENT_PERM" -le "$MAX_PERM" ]; then
+    echo "[FIXED] Successfully applied permissions $MAX_PERM to $CONFIG_FILE"
+else
+    echo "[ERROR] Failed to apply permissions to $CONFIG_FILE"
+    exit 1
+fi

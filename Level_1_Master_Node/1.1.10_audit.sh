@@ -1,9 +1,10 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.10
-# Title: Ensure that the Container Network Interface file ownership is set to root:root (Manual)
+# Title: Ensure that the Container Network Interface file ownership is set to root:root (Automated)
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.1.10..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -12,18 +13,25 @@ audit_rule() {
 	l_cni_dir="/etc/cni/net.d"
 	if [ -d "$l_cni_dir" ]; then
 		while IFS= read -r -d '' l_file; do
+			echo "[CMD] Executing: l_owner=$(stat -c %U:%G \"$l_file\")"
 			l_owner=$(stat -c %U:%G "$l_file")
 			if [ "$l_owner" == "root:root" ]; then
+				echo "[INFO] Check Passed"
 				a_output+=(" - Check Passed: Ownership on $l_file is $l_owner")
 			else
+				echo "[INFO] Check Failed"
 				a_output2+=(" - Check Failed: Ownership on $l_file is $l_owner (should be root:root)")
+				echo "[FAIL_REASON] Check Failed: Ownership on $l_file is $l_owner (should be root:root)"
+				echo "[FIX_HINT] Run remediation script: 1.1.10_remediate.sh"
 			fi
-		done < <(find "$l_cni_dir" -maxdepth 1 -type f -print0)
+		done < <(find "$l_cni_dir" -maxdepth 1 -type f \( -name "*.conf" -o -name "*.conflist" -o -name "*.json" \) -print0)
 
 		if [ ${#a_output[@]} -eq 0 ] && [ ${#a_output2[@]} -eq 0 ]; then
+             echo "[INFO] Check Passed"
              a_output+=(" - Check Passed: No CNI configuration files found in $l_cni_dir")
         fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $l_cni_dir directory not found")
 	fi
 

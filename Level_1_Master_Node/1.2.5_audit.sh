@@ -4,15 +4,25 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.5..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--kubelet-certificate-authority"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q \"\\s--kubelet-certificate-authority(=|\\s|$)\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-certificate-authority(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --kubelet-certificate-authority is set")
+	elif [ -f "/etc/kubernetes/manifests/kube-apiserver.yaml" ] && \
+	     grep -q -- "--kubelet-certificate-authority" "/etc/kubernetes/manifests/kube-apiserver.yaml"; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --kubelet-certificate-authority is set in manifest")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --kubelet-certificate-authority is NOT set")
+		echo "[FAIL_REASON] Check Failed: --kubelet-certificate-authority is NOT set"
+		echo "[FIX_HINT] Run remediation script: 1.2.5_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

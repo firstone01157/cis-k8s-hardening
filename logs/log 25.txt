@@ -1,0 +1,983 @@
+dos2unix: converting file ./kube-bench/entrypoint.sh to Unix format...
+dos2unix: converting file ./kube-bench/helper_scripts/check_files_owner_in_dir.sh to Unix format...
+dos2unix: converting file ./master_remediate_only.sh to Unix format...
+dos2unix: Failed to open temporary output file: Permission denied
+dos2unix: problems converting file ./remediation_artifacts/5.2.1_pod_security_fix.sh
+dos2unix: Failed to open temporary output file: Permission denied
+dos2unix: problems converting file ./remediation_artifacts/5.1.1_fix.sh
+master@terramaster:~/CIS_Kubernetes_Benchmark_V1.12.0$ sudo python3 cis_k8s_unified.py -vv
+
+======================================================================
+  CIS Kubernetes Benchmark - Unified Interactive Runner
+  ตัวรันเครื่องมือตรวจสอบ CIS Kubernetes แบบรวมและโต้ตอบ
+  Version: 1.0 (Optimized)
+  Date: 2025-11-28 08:50:01
+======================================================================
+
+[*] Checking Cluster Health...
+[DEBUG] Using Kubeconfig: /etc/kubernetes/admin.conf
+    -> OK (Healthy)
+
+======================================================================
+SELECT MODE
+======================================================================
+
+  1) Audit only (non-destructive)
+  2) Remediation only (DESTRUCTIVE)
+  3) Both (Audit then Remediation)
+  4) Health Check
+  5) Help
+  0) Exit
+
+Choose [0-5]: 2
+
+[!] WARNING: REMEDIATION WILL MODIFY YOUR CLUSTER!
+
+  Kubernetes Role:
+    1) Master only
+    2) Worker only
+    3) Both
+
+  Select role [3]: 1
+
+  CIS Level:
+    1) Level 1
+    2) Level 2
+    3) All
+
+  Select level [3]: 1
+
+Confirm remediation? [y/n]: y
+
+[*] Creating Backup...
+   -> Saved to: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/backups/backup_20251128_085005
+
+[*] Starting Remediation...
+
+======================================================================
+[IGNORED] 1.1.12 - Ensure that the etcd data directory ownership is set to etcd:etcd
+======================================================================
+  Reason: Excluded: RISK_ACCEPTED
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[PASS] 1.1.16 - Ensure that the scheduler.conf file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for /etc/kubernetes/scheduler.conf...
+[FIXED] Ownership on /etc/kubernetes/scheduler.conf is already root:root.
+
+
+======================================================================
+[PASS] 1.1.14 - Ensure that the admin.conf file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for /etc/kubernetes/admin.conf...
+[FIXED] Ownership on /etc/kubernetes/admin.conf is already root:root.
+
+
+======================================================================
+[PASS] 1.1.17 - Ensure that the controller-manager.conf file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /etc/kubernetes/controller-manager.conf...
+[FIXED] Permissions on /etc/kubernetes/controller-manager.conf are already 600 (<= 600).
+
+
+======================================================================
+[PASS] 1.1.13 - Ensure that the admin.conf file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /etc/kubernetes/admin.conf...
+[FIXED] Permissions on /etc/kubernetes/admin.conf are already 600 (<= 600).
+
+
+======================================================================
+[PASS] 1.1.10 - Ensure that the Container Network Interface file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for files in /etc/cni/net.d...
+[INFO] Ownership on /etc/cni/net.d/.kubernetes-cni-keep is already root:root.
+[INFO] Ownership on /etc/cni/net.d/10-flannel.conflist is already root:root.
+[FIXED] Successfully verified ownership for all files in /etc/cni/net.d
+
+
+======================================================================
+[PASS] 1.1.19 - Ensure that the Kubernetes PKI directory and file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for files in /etc/kubernetes/pki...
+[FIXED] All files in /etc/kubernetes/pki are already owned by root:root.
+
+
+======================================================================
+[PASS] 1.1.15 - Ensure that the scheduler.conf file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /etc/kubernetes/scheduler.conf...
+[FIXED] Permissions on /etc/kubernetes/scheduler.conf are already 600 (<= 600).
+
+
+======================================================================
+[PASS] 1.1.18 - Ensure that the controller-manager.conf file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for /etc/kubernetes/controller-manager.conf...
+[FIXED] Ownership on /etc/kubernetes/controller-manager.conf is already root:root.
+
+
+======================================================================
+[PASS] 1.1.1 - Ensure that the API server pod specification file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /etc/kubernetes/manifests/kube-apiserver.yaml...
+[FIXED] Permissions on /etc/kubernetes/manifests/kube-apiserver.yaml are already 600 (<= 600).
+
+
+======================================================================
+[PASS] 1.1.3 - Ensure that the controller manager pod specification file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /etc/kubernetes/manifests/kube-controller-manager.yaml...
+[FIXED] Permissions on /etc/kubernetes/manifests/kube-controller-manager.yaml are already 600 (<= 600).
+
+
+======================================================================
+[PASS] 1.1.4 - Ensure that the controller manager pod specification file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for /etc/kubernetes/manifests/kube-controller-manager.yaml...
+[FIXED] Ownership on /etc/kubernetes/manifests/kube-controller-manager.yaml is already root:root.
+
+
+======================================================================
+[PASS] 1.1.11 - Ensure that the etcd data directory permissions are set to 700 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /var/lib/etcd...
+[FIXED] Permissions on /var/lib/etcd are already 700 (<= 700).
+
+
+======================================================================
+[PASS] 1.1.8 - Ensure that the etcd pod specification file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for /etc/kubernetes/manifests/etcd.yaml...
+[FIXED] Ownership on /etc/kubernetes/manifests/etcd.yaml is already root:root.
+
+
+======================================================================
+[PASS] 1.1.2 - Ensure that the API server pod specification file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for /etc/kubernetes/manifests/kube-apiserver.yaml...
+[FIXED] Ownership on /etc/kubernetes/manifests/kube-apiserver.yaml is already root:root.
+
+
+======================================================================
+[PASS] 1.1.5 - Ensure that the scheduler pod specification file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /etc/kubernetes/manifests/kube-scheduler.yaml...
+[FIXED] Permissions on /etc/kubernetes/manifests/kube-scheduler.yaml are already 600 (<= 600).
+
+
+======================================================================
+[IGNORED] 1.2.15 - Ensure that the --profiling argument is set to false
+======================================================================
+  Reason: Excluded: IGNORED
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[MANUAL] 1.2.10 - Ensure that the --admission-control-config-file argument is set
+======================================================================
+
+  [Output]
+[INFO] Remediating --admission-control-config-file...
+[WARN] Manual intervention required: --admission-control-config-file must be set to a valid configuration file.
+[WARN] Please create the file and update /etc/kubernetes/manifests/kube-apiserver.yaml manually.
+grep: unrecognized option '--admission-control-config-file'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+
+
+======================================================================
+[PASS] 1.1.6 - Ensure that the scheduler pod specification file ownership is set to root:root
+======================================================================
+
+  [Output]
+[INFO] Remediating ownership for /etc/kubernetes/manifests/kube-scheduler.yaml...
+[FIXED] Ownership on /etc/kubernetes/manifests/kube-scheduler.yaml is already root:root.
+
+
+======================================================================
+[PASS] 1.2.11 - Ensure that the --enable-admission-plugins argument is set to a value that does not include AlwaysAdmit
+======================================================================
+
+  [Output]
+[INFO] Remediating --enable-admission-plugins to remove AlwaysAdmit...
+[FIXED] --enable-admission-plugins does not include AlwaysAdmit.
+grep: unrecognized option '--enable-admission-plugins=.*AlwaysAdmit'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+
+
+======================================================================
+[PASS] 1.1.7 - Ensure that the etcd pod specification file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for /etc/kubernetes/manifests/etcd.yaml...
+[FIXED] Permissions on /etc/kubernetes/manifests/etcd.yaml are already 600 (<= 600).
+
+
+======================================================================
+[PASS] 1.2.18 - Ensure that the --audit-log-maxbackup argument is set to 10 or as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --audit-log-maxbackup...
+[PASS] --audit-log-maxbackup=10 is already set.
+
+
+======================================================================
+[PASS] 1.2.20 - Ensure that the --request-timeout argument is set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --request-timeout...
+[FIXED] --request-timeout is already set.
+
+
+======================================================================
+[PASS] 1.2.1 - Ensure that the --anonymous-auth argument is set to false
+======================================================================
+
+  [Output]
+[INFO] Remediating --anonymous-auth...
+[FIXED] --anonymous-auth=false is already set.
+
+
+======================================================================
+[PASS] 1.2.17 - Ensure that the --audit-log-maxage argument is set to 30 or as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --audit-log-maxage...
+[PASS] --audit-log-maxage=30 is already set.
+
+
+======================================================================
+[PASS] 1.1.9 - Ensure that the Container Network Interface file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for files in /etc/cni/net.d...
+[INFO] Permissions on /etc/cni/net.d/.kubernetes-cni-keep are already 600 (<= 600).
+[INFO] Permissions on /etc/cni/net.d/10-flannel.conflist are already 600 (<= 600).
+[FIXED] Successfully verified permissions for all files in /etc/cni/net.d
+
+
+======================================================================
+[PASS] 1.2.19 - Ensure that the --audit-log-maxsize argument is set to 100 or as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --audit-log-maxsize...
+[PASS] --audit-log-maxsize=100 is already set.
+
+
+======================================================================
+[PASS] 1.2.22 - Ensure that the --service-account-key-file argument is set as appropriate
+======================================================================
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[PASS] 1.2.25 - Ensure that the --client-ca-file argument is set as appropriate
+======================================================================
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[PASS] 1.2.24 - Ensure that the --tls-cert-file and --tls-private-key-file arguments are set as appropriate
+======================================================================
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[PASS] 1.2.21 - Ensure that the --service-account-lookup argument is set to true
+======================================================================
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[PASS] 1.2.29 - Ensure that the --tls-cipher-suites argument is set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --tls-cipher-suites...
+[PASS] --tls-cipher-suites is already set.
+
+
+======================================================================
+[MANUAL] 1.2.27 - Ensure that the --encryption-provider-config argument is set as appropriate
+======================================================================
+
+  [Output]
+Manual intervention required for 1.2.27
+
+
+======================================================================
+[PASS] 1.2.16 - Ensure that the --audit-log-path argument is set
+======================================================================
+
+  [Output]
+[INFO] Remediating --audit-log-path...
+[PASS] Successfully applied --audit-log-path=/var/log/k8s-audit.log
+
+
+======================================================================
+[MANUAL] 1.2.28 - Ensure that the encryption provider is set to aescbc
+======================================================================
+
+  [Output]
+Manual intervention required for 1.2.28
+
+
+======================================================================
+[PASS] 1.2.26 - Ensure that the --etcd-cafile argument is set as appropriate
+======================================================================
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[PASS] 1.2.23 - Ensure that the --etcd-certfile and --etcd-keyfile arguments are set as appropriate
+======================================================================
+
+  [Output]
+  (no output)
+
+
+======================================================================
+[PASS] 1.2.4 - Ensure that the --kubelet-https argument is set to true
+======================================================================
+
+  [Output]
+[INFO] Remediating --kubelet-https...
+[FIXED] --kubelet-https=true is already set.
+
+
+======================================================================
+[PASS] 1.1.20 - Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for *.crt files in /etc/kubernetes/pki...
+[INFO] Permissions on /etc/kubernetes/pki/apiserver-kubelet-client.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/peer.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/server.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/ca.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/healthcheck-client.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/apiserver.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/front-proxy-ca.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/front-proxy-client.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/apiserver-etcd-client.crt are already compliant (644).
+[INFO] Permissions on /etc/kubernetes/pki/ca.crt are already compliant (644).
+[FIXED] Successfully verified permissions for all *.crt files in /etc/kubernetes/pki
+
+
+======================================================================
+[PASS] 1.2.30 - Ensure that the --service-account-extend-token-expiration argument is set to false
+======================================================================
+
+  [Output]
+[INFO] Remediating --service-account-extend-token-expiration...
+[PASS] --service-account-extend-token-expiration=false is already set.
+
+
+======================================================================
+[PASS] 1.2.3 - Ensure that the --token-auth-file argument is not set
+======================================================================
+
+  [Output]
+[INFO] Remediating --token-auth-file...
+[FIXED] --token-auth-file is not set.
+grep: unrecognized option '--token-auth-file'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+
+
+======================================================================
+[PASS] 1.2.2 - Ensure that the --basic-auth-file argument is not set
+======================================================================
+
+  [Output]
+[INFO] Remediating --basic-auth-file...
+[FIXED] --basic-auth-file is not set.
+grep: unrecognized option '--basic-auth-file'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+
+
+======================================================================
+[PASS] 1.2.7 - Ensure that the --authorization-mode argument includes Node
+======================================================================
+
+  [Output]
+[INFO] Remediating --authorization-mode...
+[FIXED] --authorization-mode includes Node.
+
+
+======================================================================
+[PASS] 1.2.6 - Ensure that the --kubelet-certificate-authority argument is set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --kubelet-certificate-authority...
+[FIXED] --kubelet-certificate-authority=/etc/kubernetes/pki/ca.crt is already set.
+
+
+======================================================================
+[PASS] 1.2.9 - Ensure that the --authorization-mode argument includes RBAC
+======================================================================
+
+  [Output]
+[INFO] Remediating --authorization-mode...
+[FIXED] --authorization-mode includes RBAC.
+
+
+======================================================================
+[PASS] 1.2.8 - Ensure that the --authorization-mode argument includes RBAC
+======================================================================
+
+  [Output]
+[INFO] Remediating --authorization-mode...
+[FIXED] --authorization-mode includes RBAC.
+
+
+======================================================================
+[PASS] 1.3.3 - Ensure that the --use-service-account-credentials argument is set to true
+======================================================================
+
+  [Output]
+[INFO] Remediating --use-service-account-credentials...
+[FIXED] --use-service-account-credentials=true is already set.
+
+
+======================================================================
+[PASS] 1.1.21 - Ensure that the Kubernetes PKI key file permissions are set to 600
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for *.key files in /etc/kubernetes/pki...
+[INFO] Permissions on /etc/kubernetes/pki/front-proxy-client.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/apiserver.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/peer.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/server.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/ca.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/etcd/healthcheck-client.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/sa.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/ca.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/apiserver-etcd-client.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/apiserver-kubelet-client.key are already compliant (600).
+[INFO] Permissions on /etc/kubernetes/pki/front-proxy-ca.key are already compliant (600).
+[FIXED] Successfully verified permissions for all *.key files in /etc/kubernetes/pki
+
+
+======================================================================
+[PASS] 1.3.6 - Ensure that the RotateKubeletServerCertificate argument is set to true
+======================================================================
+
+  [Output]
+[INFO] Remediating --feature-gates...
+[PASS] --feature-gates=RotateKubeletServerCertificate=true is already set.
+
+
+======================================================================
+[PASS] 1.3.2 - Ensure that the --profiling argument is set to false
+======================================================================
+
+  [Output]
+[INFO] Remediating --profiling...
+[PASS] --profiling=false is already set.
+
+
+======================================================================
+[PASS] 1.3.5 - Ensure that the --root-ca-file argument is set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --root-ca-file...
+[FIXED] --root-ca-file=/etc/kubernetes/pki/ca.crt is already set.
+
+
+======================================================================
+[PASS] 1.3.4 - Ensure that the --service-account-private-key-file argument is set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --service-account-private-key-file...
+[FIXED] --service-account-private-key-file=/etc/kubernetes/pki/sa.key is already set.
+
+
+======================================================================
+[PASS] 1.3.1 - Ensure that the --terminated-pod-gc-threshold argument is set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating CIS 1.3.1: Terminated Pod GC Threshold
+[INFO] TARGET_THRESHOLD=12500
+[INFO] CONFIG_FILE=/etc/kubernetes/manifests/kube-controller-manager.yaml
+[PASS] --terminated-pod-gc-threshold=12500 is already set correctly.
+
+
+======================================================================
+[PASS] 1.2.5 - Ensure that the --kubelet-client-certificate and --kubelet-client-key arguments are set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --kubelet-client-certificate and --kubelet-client-key...
+[FIXED] --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt is already set.
+[FIXED] --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key is already set.
+[FIXED] Successfully applied both parameters
+
+
+======================================================================
+[PASS] 2.3 - Ensure that the --auto-tls argument is not set to true
+======================================================================
+
+  [Output]
+[INFO] Remediating --auto-tls...
+[FIXED] --auto-tls is not set to true.
+grep: unrecognized option '--auto-tls=true'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+
+
+======================================================================
+[PASS] 1.3.7 - Ensure that the --bind-address argument is set to 127.0.0.1
+======================================================================
+
+  [Output]
+[INFO] Remediating --bind-address...
+[PASS] --bind-address=127.0.0.1 is already set.
+
+
+======================================================================
+[PASS] 1.4.2 - Ensure that the --bind-address argument is set to 127.0.0.1
+======================================================================
+
+  [Output]
+[INFO] Remediating --bind-address...
+[PASS] --bind-address=127.0.0.1 is already set.
+
+
+======================================================================
+[MANUAL] 3.1.2 - Service account token authentication should not be used for users
+======================================================================
+
+  [Output]
+[INFO] Remediating 3.1.2...
+[WARN] Manual intervention required: Ensure service account token authentication is not used for users.
+[INFO] Review RBAC bindings and ServiceAccount usage.
+
+
+======================================================================
+[PASS] 2.1 - Ensure that the --cert-file and --key-file arguments are set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --cert-file and --key-file...
+[PASS] Both parameters are already set.
+
+
+======================================================================
+[PASS] 2.5 - Ensure that the --peer-client-cert-auth argument is set to true
+======================================================================
+
+  [Output]
+[INFO] Remediating --peer-client-cert-auth...
+[FIXED] --peer-client-cert-auth=true is already set.
+
+
+======================================================================
+[PASS] 1.4.1 - Ensure that the --profiling argument is set to false
+======================================================================
+
+  [Output]
+[INFO] Remediating --profiling...
+[PASS] --profiling=false is already set.
+
+
+======================================================================
+[PASS] 4.1.1 - Ensure that the kubelet service file permissions are set to 600 or more restrictive
+======================================================================
+
+  [Output]
+[INFO] Remediating permissions for kubelet service files...
+
+
+======================================================================
+[MANUAL] 3.1.1 - Client certificate authentication should not be used for users
+======================================================================
+
+  [Output]
+[INFO] Remediating 3.1.1...
+[WARN] Manual intervention required: Ensure client certificate authentication is not used for users.
+[INFO] Review your PKI and kubeconfig distribution processes.
+
+
+======================================================================
+[PASS] 2.2 - Ensure that the --client-cert-auth argument is set to true
+======================================================================
+
+  [Output]
+[INFO] Remediating --client-cert-auth...
+[FIXED] --client-cert-auth=true is already set.
+
+
+======================================================================
+[MANUAL] 5.1.10 - Minimize access to the proxy sub-resource of nodes
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.10...
+[WARN] Manual intervention required: Remove access to proxy sub-resource of node objects.
+
+
+======================================================================
+[MANUAL] 5.1.12 - Minimize access to webhook configuration objects
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.12...
+[WARN] Manual intervention required: Remove access to webhook configurations where possible.
+
+
+======================================================================
+[PASS] 2.6 - Ensure that the --peer-auto-tls argument is not set to true
+======================================================================
+
+  [Output]
+[INFO] Remediating --peer-auto-tls...
+[FIXED] --peer-auto-tls is not set to true.
+grep: unrecognized option '--peer-auto-tls=true'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+
+
+======================================================================
+[MANUAL] 5.1.11 - Minimize access to the approval sub-resource of certificatesigningrequests objects
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.11...
+[WARN] Manual intervention required: Remove access to approval sub-resource of CSRs.
+
+
+======================================================================
+[PASS] 2.4 - Ensure that the --peer-cert-file and --peer-key-file arguments are set as appropriate
+======================================================================
+
+  [Output]
+[INFO] Remediating --peer-cert-file and --peer-key-file...
+[FIXED] --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt is already set.
+[FIXED] --peer-key-file=/etc/kubernetes/pki/etcd/peer.key is already set.
+[FIXED] Successfully applied both parameters
+
+
+======================================================================
+[PASS] 3.1.3 - Bootstrap token authentication should not be used for users
+======================================================================
+
+  [Output]
+[INFO] Remediating --enable-bootstrap-token-auth...
+[FIXED] --enable-bootstrap-token-auth=false is already set.
+
+
+======================================================================
+[MANUAL] 5.1.1 - Ensure that the cluster-admin role is only used where necessary
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.1...
+[WARN] Manual intervention required: Review ClusterRoleBindings for 'cluster-admin' and remove unnecessary subjects.
+[INFO] Run: kubectl get clusterrolebindings -o=custom-columns=NAME:.metadata.name,ROLE:.roleRef.name,SUBJECT:.subjects[*].name | grep cluster-admin
+
+
+======================================================================
+[MANUAL] 5.1.13 - Minimize access to the service account token creation
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.13...
+[WARN] Manual intervention required: Remove access to token sub-resource of serviceaccounts.
+
+
+======================================================================
+[MANUAL] 5.1.8 - Limit use of the Bind, Impersonate and Escalate permissions in the Kubernetes cluster
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.8...
+[WARN] Manual intervention required: Remove impersonate, bind, and escalate rights where possible.
+[INFO] Review Roles and ClusterRoles for these verbs.
+
+
+======================================================================
+[MANUAL] 5.1.2 - Minimize access to secrets
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.2...
+[WARN] Manual intervention required: Restrict access to Secret objects.
+[INFO] Review Roles and ClusterRoles for 'secrets' resource access.
+
+
+======================================================================
+[MANUAL] 5.2.10 - Minimize the admission of Windows HostProcess Containers
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.10...
+[WARN] Manual intervention required: Remove HostProcess: true from Windows pods where not required.
+
+
+======================================================================
+[MANUAL] 5.1.9 - Minimize access to create persistent volumes
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.9...
+[WARN] Manual intervention required: Remove create access to PersistentVolume objects where possible.
+
+
+======================================================================
+[MANUAL] 5.2.12 - Minimize the admission of containers which use HostPorts
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.12...
+[WARN] Manual intervention required: Remove HostPorts from pods where not required.
+
+
+======================================================================
+[MANUAL] 5.2.11 - Minimize the admission of HostPath volumes
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.11...
+[WARN] Manual intervention required: Remove HostPath volumes from pods where not required.
+
+
+======================================================================
+[PASS] 3.2.1 - Ensure that a minimal audit policy is created
+======================================================================
+
+  [Output]
+[INFO] Remediating CIS 3.2.1: Audit Policy Configuration
+[INFO] AUDIT_LEVEL=Metadata, LOG_SENSITIVE=true
+[INFO] Creating audit policy file at /etc/kubernetes/audit-policy.yaml...
+[PASS] Audit policy file created.
+[INFO] Adding audit-policy-file flag to kube-apiserver...
+[INFO] Verifying audit policy configuration...
+[PASS] Successfully configured audit policy for CIS 3.2.1
+[INFO] Audit policy file: /etc/kubernetes/audit-policy.yaml
+[INFO] Audit log directory: /var/log/kubernetes/audit
+
+
+======================================================================
+[MANUAL] 5.1.5 - Ensure that default service accounts are not actively used
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.5...
+[WARN] Manual intervention required: Set automountServiceAccountToken: false for default service accounts.
+[INFO] Run: kubectl patch serviceaccount default -p '{"automountServiceAccountToken": false}'
+
+
+======================================================================
+[MANUAL] 5.1.4 - Minimize access to create pods
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.4...
+[WARN] Manual intervention required: Remove create access to Pod objects where possible.
+[INFO] Review Roles and ClusterRoles for 'pods' create permission.
+
+
+======================================================================
+[MANUAL] 5.1.7 - Avoid use of system:masters group
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.7...
+[WARN] Manual intervention required: Remove system:masters group from users.
+[INFO] Review ClusterRoleBindings for system:masters.
+
+
+======================================================================
+[MANUAL] 5.1.6 - Ensure that Service Account Tokens are only mounted where necessary
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.1.6...
+[WARN] Manual intervention required: Set automountServiceAccountToken: false for ServiceAccounts that do not need it.
+[INFO] Review Pod specs and ServiceAccount definitions.
+
+
+======================================================================
+[MANUAL] 5.2.3 - Minimize the admission of containers wishing to share the host process ID namespace
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.3...
+[WARN] Manual intervention required: Add policies to restrict admission of hostPID containers.
+
+
+======================================================================
+[MANUAL] 5.2.4 - Minimize the admission of containers wishing to share the host IPC namespace
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.4...
+[WARN] Manual intervention required: Add policies to restrict admission of hostIPC containers.
+
+
+======================================================================
+[MANUAL] 5.2.8 - Minimize the admission of containers with the NET_RAW capability
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.8...
+[WARN] Manual intervention required: Drop NET_RAW capability in pods where not required.
+
+
+======================================================================
+[MANUAL] 5.3.1 - Ensure that the CNI in use supports Network Policies
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.3.1...
+[WARN] Manual intervention required: Install a CNI that supports Network Policies if not present.
+
+
+======================================================================
+[MANUAL] 5.2.5 - Minimize the admission of containers wishing to share the host network namespace
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.5...
+[WARN] Manual intervention required: Add policies to restrict admission of hostNetwork containers.
+
+
+======================================================================
+[MANUAL] 5.2.1 - Pod Security Standards
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.1...
+[INFO] Generated remediation script at ./remediation_artifacts/5.2.1_pod_security_fix.sh
+[WARN] Manual intervention required: Review and run the generated script to apply Pod Security Standards.
+
+
+======================================================================
+[MANUAL] 5.2.2 - Minimize the admission of privileged containers
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.2...
+[WARN] Manual intervention required: Add policies to restrict admission of privileged containers.
+[INFO] Use Pod Security Standards (restricted profile) or OPA Gatekeeper.
+
+
+======================================================================
+[MANUAL] 5.2.6 - Minimize the admission of containers with allowPrivilegeEscalation
+======================================================================
+
+  [Output]
+[INFO] Remediating 5.2.6...
+[WARN] Manual intervention required: Set allowPrivilegeEscalation: false in pods where not required.
+
+
+======================================================================
+[FAIL] 5.6.1 - Create administrative boundaries between resources using namespaces
+======================================================================
+
+  [Output]
+[INFO] Remediating CIS 5.6.1: Administrative Boundaries via Namespaces
+[INFO] CREATE_SECURE_ZONE=true
+[INFO] Secure Zone Name: secure-zone
+[INFO] Enforce Level: restricted
+[INFO] Creating secure zone namespace: secure-zone
+[FAIL] Failed to create namespace secure-zone
+
+
+[+] Remediation Complete.
+
+   [*] Reports saved to: /home/master/CIS_Kubernetes_Benchmark_V1.12.0/reports/2025-11-28/remediation/run_20251128_085001
+
+======================================================================
+STATISTICS SUMMARY
+======================================================================
+
+  MASTER:
+    Pass:    61
+    Fail:    1
+    Manual:  28
+    Skipped: 0
+    Total:   90
+    Success: 67%
+
+======================================================================
+
+======================================================================
+TREND ANALYSIS (Score Comparison)
+======================================================================
+  Current Score:   67.78%
+  Previous Score:  67.39%
+  Change:          📈 +0.39%
+======================================================================
+
+======================================================================
+RESULTS MENU
+======================================================================
+
+  1) View summary
+  2) View failed items
+  3) View HTML report
+  4) Return to main menu
+
+Choose [1-4]:

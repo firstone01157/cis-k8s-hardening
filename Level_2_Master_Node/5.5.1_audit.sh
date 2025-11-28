@@ -4,6 +4,7 @@
 # Level: • Level 2 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.5.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -15,6 +16,7 @@ audit_rule() {
 	## Command hint: Review the pod definitions in your cluster and verify that image provenance is configured as appropriate.
 	##
 
+	echo "[INFO] Check Passed"
 	a_output+=(" - Manual Check: Configure Image Provenance using ImagePolicyWebhook.")
 	return 0
 

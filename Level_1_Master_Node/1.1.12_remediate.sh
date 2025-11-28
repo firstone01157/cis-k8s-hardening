@@ -1,51 +1,44 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.12
 # Title: Ensure that the etcd data directory ownership is set to etcd:etcd
-# Level: • Level 1 - Master Node
-# Remediation Script - SAFE VERSION FOR KUBEADM
+# Level: Level 1 - Master Node
+# Remediation Script
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# 1. Define Variables
+ETCD_DATA_DIR=$(ps -ef | grep etcd | grep -- --data-dir | sed 's/.*--data-dir[= ]\([^ ]*\).*/\1/')
+if [ -z "$ETCD_DATA_DIR" ]; then
+    ETCD_DATA_DIR="/var/lib/etcd"
+fi
+OWNER="etcd:etcd"
 
-    l_dir="/var/lib/etcd"
-    
-    # 1. Check if directory exists
-    if [ ! -d "$l_dir" ]; then
-        a_output+=(" - Remediation not needed: $l_dir not found")
-        return 0
+echo "[INFO] Remediating ownership for $ETCD_DATA_DIR..."
+
+# Check if etcd user exists
+if ! id -u etcd >/dev/null 2>&1; then
+    echo "[INFO] User etcd not found. Skipping."
+    exit 0
+fi
+
+# 2. Pre-Check
+if [ -d "$ETCD_DATA_DIR" ]; then
+    CURRENT_OWNER=$(stat -c "%U:%G" "$ETCD_DATA_DIR")
+    if [ "$CURRENT_OWNER" = "$OWNER" ]; then
+        echo "[FIXED] Ownership on $ETCD_DATA_DIR is already $CURRENT_OWNER."
+        exit 0
     fi
+else
+    echo "[INFO] Etcd data directory $ETCD_DATA_DIR not found. Skipping."
+    exit 0
+fi
 
-    # 2. CRITICAL SAFETY CHECK: Does 'etcd' user exist?
-    if ! id "etcd" &>/dev/null; then
-        # ถ้าไม่มี user etcd (ปกติของ Kubeadm) ให้หยุดทันที ห้ามรัน chown
-        a_output+=(" - SKIP: User 'etcd' does not exist on this system.")
-        a_output+=(" - INFO: Kubeadm runs etcd as root. Current ownership is acceptable.")
-        return 0
-    fi
+# 3. Apply Fix
+chown "$OWNER" "$ETCD_DATA_DIR"
 
-    # 3. If user 'etcd' exists, proceed with standard check
-    l_owner=$(stat -c %U:%G "$l_dir")
-    if [ "$l_owner" == "etcd:etcd" ]; then
-        a_output+=(" - Remediation not needed: Ownership is $l_owner")
-        return 0
-    else
-        # Apply Fix only if user exists
-        chown etcd:etcd "$l_dir"
-        
-        # Verify
-        l_owner_new=$(stat -c %U:%G "$l_dir")
-        if [ "$l_owner_new" == "etcd:etcd" ]; then
-            a_output+=(" - Remediation applied: Ownership changed to etcd:etcd")
-            return 0
-        else
-            a_output2+=(" - Remediation failed: Could not change ownership")
-            return 1
-        fi
-    fi
-}
-
-remediate_rule
-exit $?
+# 4. Verification
+CURRENT_OWNER=$(stat -c "%U:%G" "$ETCD_DATA_DIR")
+if [ "$CURRENT_OWNER" = "$OWNER" ]; then
+    echo "[FIXED] Successfully applied ownership $OWNER to $ETCD_DATA_DIR"
+else
+    echo "[ERROR] Failed to apply ownership to $ETCD_DATA_DIR"
+    exit 1
+fi

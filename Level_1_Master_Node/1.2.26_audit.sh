@@ -4,15 +4,25 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.26..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--etcd-cafile"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q \"\\s--etcd-cafile(=|\\s|$)\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--etcd-cafile(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --etcd-cafile is set")
+	elif [ -f "/etc/kubernetes/manifests/kube-apiserver.yaml" ] && \
+	     grep -q -- "--etcd-cafile" "/etc/kubernetes/manifests/kube-apiserver.yaml"; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --etcd-cafile is set in manifest")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --etcd-cafile is not set")
+		echo "[FAIL_REASON] Check Failed: --etcd-cafile is not set"
+		echo "[FIX_HINT] Run remediation script: 1.2.26_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.3.6..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-controller-manager | grep -v grep | grep -q "RotateKubeletServerCertificate=true"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q \"(^|\\s|,)RotateKubeletServerCertificate=true($|\\s|,)\"; then"
+	if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "(^|\s|,)RotateKubeletServerCertificate=true($|\s|,)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: RotateKubeletServerCertificate is set to true")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: RotateKubeletServerCertificate is not set to true")
+		echo "[FAIL_REASON] Check Failed: RotateKubeletServerCertificate is not set to true"
+		echo "[FIX_HINT] Run remediation script: 1.3.6_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

@@ -1,7 +1,7 @@
 #!/bin/bash
 # CIS Benchmark: 4.1.9
-# Title: If the kubelet config.yaml configuration file is being used validate permissions set to 600 or more restrictive (Automated)
-# Level: • Level 1 - Worker Node
+# Title: Ensure that the kubelet configuration file has permissions set to 600 or more restrictive
+# Level: Level 1 - Worker Node
 # Remediation Script
 
 remediate_rule() {
@@ -10,22 +10,33 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## Description from CSV:
-	## Run the following command (using the config file location identified in the Audit step) chmod 600 /var/lib/kubelet/config.yaml
-	##
-	## Command hint: Run the following command (using the config file location identified in the Audit step) chmod 600 /var/lib/kubelet/config.yaml
-	##
-	## Safety Check: Verify if remediation is needed before applying
+	# Check for kubelet config file
+	# Usually /var/lib/kubelet/config.yaml
+	# Or detected via --config
+	
+	l_file="/var/lib/kubelet/config.yaml"
+	if [ ! -e "$l_file" ]; then
+		l_file=$(ps -ef | grep kubelet | grep -- --config | sed 's/.*--config[= ]\([^ ]*\).*/\1/')
+	fi
 
-	kubelet_config_yaml=$(ps -ef | grep kubelet | grep -v grep | grep -o ' --config=[^ ]*' | awk -F= '{print $2}')
-	[ -z "$kubelet_config_yaml" ] && kubelet_config_yaml="/var/lib/kubelet/config.yaml"
-
-	if [ -f "$kubelet_config_yaml" ]; then
-		chmod 600 "$kubelet_config_yaml"
-		a_output+=(" - Remediation applied: Set permissions of $kubelet_config_yaml to 600")
-		return 0
+	if [ -e "$l_file" ]; then
+		l_mode=$(stat -c %a "$l_file")
+		if [ "$l_mode" -le 600 ]; then
+			a_output+=(" - Remediation not needed: Permissions on $l_file are $l_mode")
+			return 0
+		else
+			chmod 600 "$l_file"
+			l_mode_new=$(stat -c %a "$l_file")
+			if [ "$l_mode_new" -le 600 ]; then
+				a_output+=(" - Remediation applied: Permissions on $l_file changed to $l_mode_new")
+				return 0
+			else
+				a_output2+=(" - Remediation failed: Could not change permissions on $l_file")
+				return 1
+			fi
+		fi
 	else
-		a_output+=(" - Remediation skipped: $kubelet_config_yaml does not exist")
+		a_output+=(" - Remediation not needed: kubelet config file not found")
 		return 0
 	fi
 }

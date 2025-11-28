@@ -4,6 +4,7 @@
 # Level: • Level 1 - Worker Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.1.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -12,17 +13,24 @@ audit_rule() {
 	## Description from CSV:
 	## Automated AAC auditing has been modified to allow CIS-CAT to input a variable for the <PATH>/<FILENAME> of the kubelet service config file. Please set $kubelet_service_config=<PATH> based on the file 
 	##
+	echo "[CMD] Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/systemd/system/kubelet.service.d/10-kubeadm.conf Verify that the ownership is set to root:root."
 	## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/systemd/system/kubelet.service.d/10-kubeadm.conf Verify that the ownership is set to root:root.
 	##
 
 	file_path="/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"
 	if [ -f "$file_path" ]; then
+		echo "[CMD] Executing: if stat -c %U:%G \"$file_path\" | grep -q \"root:root\"; then"
 		if stat -c %U:%G "$file_path" | grep -q "root:root"; then
+			echo "[INFO] Check Passed"
 			a_output+=(" - Check Passed: $file_path ownership is root:root")
 		else
+			echo "[INFO] Check Failed"
 			a_output2+=(" - Check Failed: $file_path ownership is not root:root")
+			echo "[FAIL_REASON] Check Failed: $file_path ownership is not root:root"
+			echo "[FIX_HINT] Run remediation script: 4.1.2_remediate.sh"
 		fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $file_path does not exist")
 	fi
 

@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.4.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-scheduler | grep -v grep | grep -q -- "--bind-address=127.0.0.1"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q \"\\s--bind-address=127.0.0.1(\\s|$)\"; then"
+	if ps -ef | grep kube-scheduler | grep -v grep | grep -E -q "\s--bind-address=127.0.0.1(\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --bind-address is set to 127.0.0.1")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --bind-address is not set to 127.0.0.1")
+		echo "[FAIL_REASON] Check Failed: --bind-address is not set to 127.0.0.1"
+		echo "[FIX_HINT] Run remediation script: 1.4.2_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

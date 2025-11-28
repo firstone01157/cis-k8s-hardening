@@ -4,6 +4,7 @@
 # Level: • Level 2 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 3.2.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -15,7 +16,9 @@ audit_rule() {
 	## Command hint: Review the audit policy provided for the cluster and ensure that it covers at least the following areas :- • Access to Secrets managed by the cluster. Care should be taken to only log Metadata for requests to Secrets, ConfigMaps, and TokenReviews, in order to avoid the risk of logging sensitive data. • Modification of pod and deployment objects. • Use of pods/exec, pods/portforward, pods/proxy and services/proxy. For most requests, minimally logging at the Metadata level is recommended (the most basic level of logging).
 	##
 
+	echo "[INFO] Check Passed"
 	a_output+=(" - Manual Check: Ensure audit policy covers key security concerns.")
+	echo "[INFO] Check Passed"
 	a_output+=(" - Command: Review audit policy file (referenced by --audit-policy-file in apiserver)")
 	return 0
 

@@ -4,21 +4,42 @@
 # Level: • Level 1 - Worker Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.2.12..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	## Description from CSV:
-	## The set of cryptographic ciphers currently considered secure is the following: • TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY130
-	##
-	## Command hint: The set of cryptographic ciphers currently considered secure is the following: • TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 • TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 • TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 • TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305 • TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 Run the following command on each node: ps -ef | grep kubelet If the --tls-cipher-suites argument is present, ensure it only contains values included in this set. If it is not present check that there is a Kubelet config file specified by --config, and that file sets tlsCipherSuites: to only include values from this set.  Internal Only - General
-	##
+	# 1. Detect Config File
+	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"
+	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP '(?<=--config=)[^ ]+' | head -n 1)
+	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
 
-	if ps -ef | grep kubelet | grep -v grep | grep "\--feature-gates" | grep -q "RotateKubeletServerCertificate=true"; then
-		a_output+=(" - Check Passed: RotateKubeletServerCertificate is enabled")
+	# 2. Priority 1: Check Flag
+	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--tls-cipher-suites(=|\\s|$)\"; then"
+	if ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--tls-cipher-suites(=|\s|$)"; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --tls-cipher-suites is set (Flag)")
+	
+	# 3. Priority 2: Check Config File
+	elif [ -f "$config_path" ]; then
+		echo "[CMD] Executing: if grep -E -q \"tlsCipherSuites:\" \"$config_path\"; then"
+		if grep -E -q "tlsCipherSuites:" "$config_path"; then
+			echo "[INFO] Check Passed"
+			a_output+=(" - Check Passed: tlsCipherSuites is set in $config_path")
+		else
+			echo "[INFO] Check Failed"
+			a_output2+=(" - Check Failed: tlsCipherSuites is NOT set in $config_path (or missing)")
+			echo "[FAIL_REASON] Check Failed: tlsCipherSuites is NOT set in $config_path (or missing)"
+			echo "[FIX_HINT] Run remediation script: 4.2.12_remediate.sh"
+		fi
+	
+	# 4. Priority 3: Default
 	else
-		a_output2+=(" - Check Failed: RotateKubeletServerCertificate is NOT enabled")
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: --tls-cipher-suites not set and config file not found (Default: missing/insecure)")
+		echo "[FAIL_REASON] Check Failed: --tls-cipher-suites not set and config file not found (Default: missing/insecure)"
+		echo "[FIX_HINT] Run remediation script: 4.2.12_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

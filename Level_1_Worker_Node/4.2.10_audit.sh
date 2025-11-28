@@ -4,21 +4,46 @@
 # Level: • Level 1 - Worker Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.2.10..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	## Description from CSV:
-	## Run the following command on each node: ps -ef | grep kubelet Verify that the RotateKubeletServerCertificate argument is not present, or is set to true. If the RotateKubeletServerCertificate argument 
-	##
-	## Command hint: Run the following command on each node: ps -ef | grep kubelet Verify that the RotateKubeletServerCertificate argument is not present, or is set to true. If the RotateKubeletServerCertificate argument is not present, verify that if there is a Kubelet config file specified by --config, that file does not contain RotateKubeletServerCertificate: false.
-	##
+	# 1. Detect Config File
+	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o \" --config=[^ ]*\" | awk -F= '{print $2}' | head -n 1)"
+	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o " --config=[^ ]*" | awk -F= '{print $2}' | head -n 1)
+	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
 
-	if ps -ef | grep kubelet | grep -v grep | grep -q "\--rotate-certificates=false"; then
-		a_output2+=(" - Check Failed: --rotate-certificates is set to false")
+	# 2. Priority 1: Check Flag
+	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--rotate-certificates=false(\\s|$)\"; then"
+	if ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--rotate-certificates=false(\s|$)"; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: --rotate-certificates is set to false (Flag)")
+		echo "[FAIL_REASON] Check Failed: --rotate-certificates is set to false (Flag)"
+		echo "[FIX_HINT] Run remediation script: 4.2.10_remediate.sh"
+	echo "[CMD] Executing: elif ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--rotate-certificates=true(\\s|$)\"; then"
+	elif ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--rotate-certificates=true(\s|$)"; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --rotate-certificates is set to true (Flag)")
+	
+	# 3. Priority 2: Check Config File
+	elif [ -f "$config_path" ]; then
+		echo "[CMD] Executing: if grep -E -q \"rotateCertificates:\\s*false\" \"$config_path\"; then"
+		if grep -E -q "rotateCertificates:\s*false" "$config_path"; then
+			echo "[INFO] Check Failed"
+			a_output2+=(" - Check Failed: rotateCertificates is set to false in $config_path")
+			echo "[FAIL_REASON] Check Failed: rotateCertificates is set to false in $config_path"
+			echo "[FIX_HINT] Run remediation script: 4.2.10_remediate.sh"
+		else
+			echo "[INFO] Check Passed"
+			a_output+=(" - Check Passed: rotateCertificates is not set to false in $config_path (Default: true)")
+		fi
+	
+	# 4. Priority 3: Default
 	else
-		a_output+=(" - Check Passed: --rotate-certificates is NOT set to false")
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --rotate-certificates not set (Default: true)")
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

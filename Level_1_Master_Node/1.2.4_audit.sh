@@ -4,16 +4,27 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.4..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--kubelet-client-certificate" && \
-	   ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--kubelet-client-key"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q \"\\s--kubelet-client-certificate(=|\\s|$)\" && \\"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-client-certificate(=|\s|$)" && \
+	   ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--kubelet-client-key(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --kubelet-client-certificate and --kubelet-client-key are set")
+	elif [ -f "/etc/kubernetes/manifests/kube-apiserver.yaml" ] && \
+	     grep -q -- "--kubelet-client-certificate" "/etc/kubernetes/manifests/kube-apiserver.yaml" && \
+	     grep -q -- "--kubelet-client-key" "/etc/kubernetes/manifests/kube-apiserver.yaml"; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --kubelet-client-certificate and --kubelet-client-key are set in manifest")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --kubelet-client-certificate and/or --kubelet-client-key are NOT set")
+		echo "[FAIL_REASON] Check Failed: --kubelet-client-certificate and/or --kubelet-client-key are NOT set"
+		echo "[FIX_HINT] Run remediation script: 1.2.4_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

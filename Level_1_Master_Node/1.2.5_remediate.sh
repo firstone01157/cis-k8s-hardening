@@ -1,47 +1,52 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.5
-# Title: Ensure that the --kubelet-certificate-authority argument is set as appropriate
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --kubelet-client-certificate and --kubelet-client-key arguments are set as appropriate
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY1="--kubelet-client-certificate"
+VALUE1="/etc/kubernetes/pki/apiserver-kubelet-client.crt"
+FULL_PARAM1="${KEY1}=${VALUE1}"
+KEY2="--kubelet-client-key"
+VALUE2="/etc/kubernetes/pki/apiserver-kubelet-client.key"
+FULL_PARAM2="${KEY2}=${VALUE2}"
+BINARY_NAME="kube-apiserver"
 
-    l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-    l_flag="--kubelet-certificate-authority"
-    # Standard path for Kubeadm
-    l_value="/etc/kubernetes/pki/ca.crt"
+echo "[INFO] Remediating ${KEY1} and ${KEY2}..."
 
-    if [ -e "$l_file" ]; then
-        # 1. Backup First
-        cp "$l_file" "$l_file.bak_$(date +%s)"
+# Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
 
-        # 2. Check & Apply
-        if grep -q -- "$l_flag" "$l_file"; then
-            # Case A: Flag exists -> Update value
-            sed -i "s|$l_flag=[^ \"]*|$l_flag=$l_value|g" "$l_file"
-            a_output+=(" - Remediation applied: Updated existing $l_flag to $l_value")
-        else
-            # Case B: Flag missing -> Insert new line
-            sed -i "/- kube-apiserver/a \    - $l_flag=$l_value" "$l_file"
-            a_output+=(" - Remediation applied: Inserted new flag $l_flag=$l_value")
-        fi
+# Process KEY1
+if grep -Fq -- "${FULL_PARAM1}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${FULL_PARAM1} is already set."
+else
+    if grep -Fq -- "${KEY1}" "${CONFIG_FILE}"; then
+        sed -i "s|${KEY1}=.*|${FULL_PARAM1}|g" "${CONFIG_FILE}"
     else
-        a_output2+=(" - Remediation failed: $l_file not found")
-        return 1
+        sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM1}" "${CONFIG_FILE}"
     fi
+fi
 
-    # 3. Verify
-    if grep -q -- "$l_flag" "$l_file"; then
-        return 0
+# Process KEY2
+if grep -Fq -- "${FULL_PARAM2}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${FULL_PARAM2} is already set."
+else
+    if grep -Fq -- "${KEY2}" "${CONFIG_FILE}"; then
+        sed -i "s|${KEY2}=.*|${FULL_PARAM2}|g" "${CONFIG_FILE}"
     else
-        a_output2+=(" - Remediation verification failed")
-        return 1
+        sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM2}" "${CONFIG_FILE}"
     fi
-}
+fi
 
-remediate_rule
-exit $?
+# Verify
+if grep -Fq -- "${FULL_PARAM1}" "${CONFIG_FILE}" && grep -Fq -- "${FULL_PARAM2}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied both parameters"
+else
+    echo "[ERROR] Failed to apply one or both parameters"
+    exit 1
+fi

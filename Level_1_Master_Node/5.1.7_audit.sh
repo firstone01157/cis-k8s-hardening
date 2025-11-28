@@ -4,20 +4,29 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.1.7..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
 	# Get all ClusterRoleBindings that reference system:masters group
+	echo "[CMD] Executing: kubectl get clusterrolebindings -o json | jq filter for system:masters group"
 	violations=$(kubectl get clusterrolebindings -o json 2>/dev/null | jq -r '.items[] | select(.subjects[]? | select(.kind == "Group" and .name == "system:masters")) | "ClusterRoleBinding: \(.metadata.name)"' | sort -u)
 	
 	if [ -n "$violations" ]; then
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: ClusterRoleBindings using system:masters group found:")
+		echo "[FAIL_REASON] Check Failed: ClusterRoleBindings using system:masters group found:"
+		echo "[FIX_HINT] Run remediation script: 5.1.7_remediate.sh"
 		while IFS= read -r line; do
+			[ -n "$line" ] && echo "[INFO] Check Failed"
 			[ -n "$line" ] && a_output2+=(" - $line")
+ echo "[FAIL_REASON] $line"
+ echo "[FIX_HINT] Run remediation script: 5.1.7_remediate.sh"
 		done <<< "$violations"
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: No ClusterRoleBindings using system:masters group")
 	fi
 

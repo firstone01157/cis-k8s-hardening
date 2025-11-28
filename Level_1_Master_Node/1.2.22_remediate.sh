@@ -1,7 +1,7 @@
 #!/bin/bash
 # CIS Benchmark: 1.2.22
-# Title: Ensure that the --service-account-key-file argument is set as appropriate (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --service-account-key-file argument is set as appropriate
+# Level: Level 1 - Master Node
 # Remediation Script
 
 remediate_rule() {
@@ -12,19 +12,20 @@ remediate_rule() {
 
 	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
 	if [ -e "$l_file" ]; then
-		if grep -q -- "--service-account-key-file" "$l_file"; then
-			a_output+=(" - Remediation not needed: --service-account-key-file is present")
-		else
-			a_output2+=(" - Remediation Required: Please MANUALLY add '--service-account-key-file=<file>' to $l_file")
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-	fi
+		# Backup
+		cp "$l_file" "$l_file.bak_$(date +%s)"
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
+		if grep -q -- "--service-account-key-file" "$l_file"; then
+			:
+		else
+			# Default path
+			sed -i "/- kube-apiserver/a \    - --service-account-key-file=/etc/kubernetes/pki/sa.pub" "$l_file"
+			a_output+=(" - Remediation applied: Inserted --service-account-key-file in $l_file")
+		fi
 		return 0
 	else
-		return 1
+		a_output+=(" - Remediation not needed: $l_file not found")
+		return 0
 	fi
 }
 

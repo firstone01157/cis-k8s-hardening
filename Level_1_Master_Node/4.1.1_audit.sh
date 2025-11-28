@@ -4,6 +4,7 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.1.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -11,13 +12,19 @@ audit_rule() {
 
 	l_file="/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"
 	if [ -e "$l_file" ]; then
+		echo "[CMD] Executing: l_mode=$(stat -c %a \"$l_file\")"
 		l_mode=$(stat -c %a "$l_file")
 		if [ "$l_mode" -le 600 ]; then
+			echo "[INFO] Check Passed"
 			a_output+=(" - Check Passed: Permissions on $l_file are $l_mode (<= 600)")
 		else
+			echo "[INFO] Check Failed"
 			a_output2+=(" - Check Failed: Permissions on $l_file are $l_mode (should be <= 600)")
+			echo "[FAIL_REASON] Check Failed: Permissions on $l_file are $l_mode (should be <= 600)"
+			echo "[FIX_HINT] Run remediation script: 4.1.1_remediate.sh"
 		fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $l_file not found (Audit not applicable or file missing)")
 	fi
 

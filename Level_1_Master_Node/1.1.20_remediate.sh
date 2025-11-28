@@ -1,49 +1,49 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.20
-# Title: Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive (Manual)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the Kubernetes PKI certificate file permissions are set to 644 or more restrictive
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+PKI_DIR="/etc/kubernetes/pki"
+MAX_PERM=644
 
-	l_dir="/etc/kubernetes/pki"
-	if [ -d "$l_dir" ]; then
-		l_remediated=0
-		l_failed=0
-		while IFS= read -r l_file; do
-			l_mode=$(stat -c %a "$l_file")
-			if [ "$l_mode" -le 644 ]; then
-				: # OK
-			else
-				chmod 644 "$l_file"
-				l_mode_new=$(stat -c %a "$l_file")
-				if [ "$l_mode_new" -le 644 ]; then
-					l_remediated=$((l_remediated + 1))
-				else
-					l_failed=$((l_failed + 1))
-				fi
-			fi
-		done < <(find "$l_dir" -name "*.crt" -type f)
+echo "[INFO] Remediating permissions for *.crt files in $PKI_DIR..."
 
-		if [ "$l_failed" -gt 0 ]; then
-			a_output2+=(" - Remediation failed: Could not change permissions on $l_failed .crt files in $l_dir")
-			return 1
-		elif [ "$l_remediated" -gt 0 ]; then
-			a_output+=(" - Remediation applied: Permissions changed on $l_remediated .crt files in $l_dir")
-			return 0
-		else
-			a_output+=(" - Remediation not needed: Permissions on .crt files in $l_dir are correct")
-			return 0
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_dir not found")
-		return 0
-	fi
-}
+# 2. Pre-Check & 3. Apply Fix (Iterative)
+if [ -d "$PKI_DIR" ]; then
+    find "$PKI_DIR" -name "*.crt" | while read -r l_file; do
+        CURRENT_PERM=$(stat -c %a "$l_file")
+        # Check if permission is greater than MAX_PERM (e.g. 666, 777)
+        # Simple check: if it allows group write or other write, it's bad.
+        # We enforce 644.
+        if [ "$CURRENT_PERM" -ne 644 ] && [ "$CURRENT_PERM" -ne 600 ] && [ "$CURRENT_PERM" -ne 640 ] && [ "$CURRENT_PERM" -ne 444 ] && [ "$CURRENT_PERM" -ne 400 ]; then
+             echo "[INFO] Fixing permissions on $l_file (Current: $CURRENT_PERM)..."
+             chmod 644 "$l_file"
+        else
+             echo "[INFO] Permissions on $l_file are already compliant ($CURRENT_PERM)."
+        fi
+    done
+else
+    echo "[INFO] PKI directory $PKI_DIR not found. Skipping."
+    exit 0
+fi
 
-remediate_rule
-exit $?
+# 4. Verification
+FAILED=0
+if [ -d "$PKI_DIR" ]; then
+    while read -r l_file; do
+        CURRENT_PERM=$(stat -c %a "$l_file")
+        if [ "$CURRENT_PERM" -ne 644 ] && [ "$CURRENT_PERM" -ne 600 ] && [ "$CURRENT_PERM" -ne 640 ] && [ "$CURRENT_PERM" -ne 444 ] && [ "$CURRENT_PERM" -ne 400 ]; then
+            echo "[ERROR] Failed to apply permissions to $l_file (Current: $CURRENT_PERM)"
+            FAILED=1
+        fi
+    done < <(find "$PKI_DIR" -name "*.crt")
+fi
+
+if [ "$FAILED" -eq 0 ]; then
+    echo "[FIXED] Successfully verified permissions for all *.crt files in $PKI_DIR"
+    exit 0
+else
+    exit 1
+fi

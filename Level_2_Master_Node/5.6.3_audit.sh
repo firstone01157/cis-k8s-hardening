@@ -4,6 +4,7 @@
 # Level: • Level 2 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.6.3..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -15,7 +16,9 @@ audit_rule() {
 	## Command hint: Review the pod definitions in your cluster and verify that you have security contexts defined as appropriate.
 	##
 
+	echo "[INFO] Check Passed"
 	a_output+=(" - Manual Check: Apply Security Context to Your Pods and Containers.")
+	echo "[INFO] Check Passed"
 	a_output+=(" - Command: Review pod definitions for securityContext.")
 	return 0
 

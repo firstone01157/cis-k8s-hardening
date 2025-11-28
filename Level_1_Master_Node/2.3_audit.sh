@@ -4,14 +4,20 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 2.3..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep etcd | grep -v grep | grep -q -- "--auto-tls=true"; then
+	echo "[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q \"\\s--auto-tls=true(\\s|$)\"; then"
+	if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--auto-tls=true(\s|$)"; then
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --auto-tls is set to true")
+		echo "[FAIL_REASON] Check Failed: --auto-tls is set to true"
+		echo "[FIX_HINT] Run remediation script: 2.3_remediate.sh"
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --auto-tls is not set to true")
 	fi
 

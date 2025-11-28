@@ -4,6 +4,7 @@
 # Level: • Level 1 - Worker Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 4.1.6..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -12,19 +13,27 @@ audit_rule() {
 	## Description from CSV:
 	## Automated AAC auditing has been modified to allow CIS-CAT to input a variable for the <PATH>/<FILENAME> of the kubelet config file. Please set $kubelet_config=<PATH> based on the file location on your
 	##
+	echo "[CMD] Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/kubernetes/kubelet.conf Verify that the ownership is set to root:root."
 	## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %U:%G /etc/kubernetes/kubelet.conf Verify that the ownership is set to root:root.
 	##
 
+	echo "[CMD] Executing: kubelet_config=$(ps -ef | grep kubelet | grep -v grep | grep -o \' --kubeconfig=[^ ]*\' | awk -F= \'{print $2}\')"
 	kubelet_config=$(ps -ef | grep kubelet | grep -v grep | grep -o ' --kubeconfig=[^ ]*' | awk -F= '{print $2}')
 	[ -z "$kubelet_config" ] && kubelet_config="/etc/kubernetes/kubelet.conf"
 	
 	if [ -f "$kubelet_config" ]; then
+		echo "[CMD] Executing: if stat -c %U:%G \"$kubelet_config\" | grep -q \"root:root\"; then"
 		if stat -c %U:%G "$kubelet_config" | grep -q "root:root"; then
+			echo "[INFO] Check Passed"
 			a_output+=(" - Check Passed: $kubelet_config ownership is root:root")
 		else
+			echo "[INFO] Check Failed"
 			a_output2+=(" - Check Failed: $kubelet_config ownership is not root:root")
+			echo "[FAIL_REASON] Check Failed: $kubelet_config ownership is not root:root"
+			echo "[FIX_HINT] Run remediation script: 4.1.6_remediate.sh"
 		fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $kubelet_config does not exist")
 	fi
 

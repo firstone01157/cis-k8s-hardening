@@ -4,6 +4,7 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.1.11..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -11,13 +12,19 @@ audit_rule() {
 
 	l_dir="/var/lib/etcd"
 	if [ -d "$l_dir" ]; then
+		echo "[CMD] Executing: l_mode=$(stat -c %a \"$l_dir\")"
 		l_mode=$(stat -c %a "$l_dir")
 		if [ "$l_mode" -le 700 ]; then
+			echo "[INFO] Check Passed"
 			a_output+=(" - Check Passed: Permissions on $l_dir are $l_mode")
 		else
+			echo "[INFO] Check Failed"
 			a_output2+=(" - Check Failed: Permissions on $l_dir are $l_mode (should be 700 or more restrictive)")
+			echo "[FAIL_REASON] Check Failed: Permissions on $l_dir are $l_mode (should be 700 or more restrictive)"
+			echo "[FIX_HINT] Run remediation script: 1.1.11_remediate.sh"
 		fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $l_dir directory not found (assuming etcd not installed or different data dir)")
 	fi
 

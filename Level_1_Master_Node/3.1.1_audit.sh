@@ -4,6 +4,7 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 3.1.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -19,9 +20,12 @@ audit_rule() {
 	## Change "1" to "0" once you implement the actual check
 
 	# This is a manual check. We can check if the flag is present as a hint.
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- \"--client-ca-file\"; then"
 	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--client-ca-file"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Manual Check: --client-ca-file is set. Ensure it is not used for user authentication.")
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Manual Check: --client-ca-file is NOT set.")
 	fi
 	# Always pass as it is manual

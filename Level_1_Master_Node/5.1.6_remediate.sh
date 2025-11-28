@@ -1,18 +1,18 @@
 #!/bin/bash
 # CIS Benchmark: 5.1.6
-# Title: Ensure that Service Account Tokens are only mounted where necessary (Manual)
-# Level: • Level 1 - Master Node
+# Title: Ensure that Service Account Tokens are only mounted where necessary
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+echo "[INFO] Remediating 5.1.6..."
 
-	a_output+=(" - Remediation: This is a manual check. Set automountServiceAccountToken: false where appropriate.")
-	return 0
-}
+# 2. Pre-Check
+# Manual check.
 
-remediate_rule
-exit $?
+# 3. Apply Fix
+echo "[WARN] Manual intervention required: Set automountServiceAccountToken: false for ServiceAccounts that do not need it."
+echo "[INFO] Review Pod specs and ServiceAccount definitions."
+
+# 4. Verification
+exit 0

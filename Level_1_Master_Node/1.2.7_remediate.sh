@@ -1,38 +1,41 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.7
-# Title: Ensure that the --authorization-mode argument includes Node (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --authorization-mode argument includes Node
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY="--authorization-mode"
+VALUE="Node"
+BINARY_NAME="kube-apiserver"
 
-	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-	if [ -e "$l_file" ]; then
-		if grep -q "\--authorization-mode" "$l_file"; then
-			if grep -q "Node" "$l_file"; then
-				a_output+=(" - Remediation not needed: Node is present in --authorization-mode in $l_file")
-			else
-				cp "$l_file" "$l_file.bak_$(date +%s)"
-				sed -i 's/\(--authorization-mode=[^ ]*\)/\1,Node/' "$l_file"
-				a_output+=(" - Remediation applied: Appended Node to --authorization-mode")
-			fi
-		else
-			a_output2+=(" - Remediation required: --authorization-mode flag is missing in $l_file. Please add it (e.g., Node,RBAC) manually.")
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-	fi
+echo "[INFO] Remediating ${KEY}..."
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		return 0
-	else
-		return 1
-	fi
-}
+# 1. Pre-check using 'grep -F --' to handle dashes safely
+if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${KEY} includes ${VALUE}."
+    exit 0
+fi
 
-remediate_rule
-exit $?
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
+
+# 3. Apply Fix using sed
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    # Key exists, append value to comma-separated list
+    sed -i "s|${KEY}=|&${VALUE},|" "${CONFIG_FILE}"
+else
+    # Key missing, insert with default Node,RBAC
+    sed -i "/- ${BINARY_NAME}/a \    - ${KEY}=Node,RBAC" "${CONFIG_FILE}"
+fi
+
+# 4. Verify
+if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied ${KEY} includes ${VALUE}"
+else
+    echo "[ERROR] Failed to apply ${KEY}"
+    exit 1
+fi

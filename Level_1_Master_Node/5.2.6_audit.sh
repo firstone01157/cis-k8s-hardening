@@ -1,33 +1,56 @@
 #!/bin/bash
 # CIS Benchmark: 5.2.6
-# Title: Minimize the admission of containers with allowPrivilegeEscalation (Manual)
+# Title: Minimize the admission of containers with allowPrivilegeEscalation
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.2.6..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	# Check for containers with allowPrivilegeEscalation:true or not explicitly set to false
-	escalation_pods=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select((.spec.containers[]?.securityContext.allowPrivilegeEscalation==true) or (.spec.initContainers[]?.securityContext.allowPrivilegeEscalation==true)) | "\(.metadata.namespace)/\(.metadata.name)"' | sort -u)
+	# Verify kubectl and jq are available
+	if ! command -v kubectl &> /dev/null; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Error: kubectl command not found")
+		echo "[FAIL_REASON] Check Error: kubectl command not found"
+		echo "[FIX_HINT] Ensure kubectl is installed and in the PATH."
+		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
+		return 2
+	fi
 	
-	if [ -z "$escalation_pods" ]; then
-		a_output+=(" - Check Passed: No containers with allowPrivilegeEscalation set to true found")
-	else
-		a_output2+=(" - Check Failed: Found containers with allowPrivilegeEscalation enabled:")
-		while IFS= read -r pod; do
-			a_output2+=(" - Pod: $pod")
-		done <<< "$escalation_pods"
+	if ! command -v jq &> /dev/null; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Error: jq command not found")
+		echo "[FAIL_REASON] Check Error: jq command not found"
+		echo "[FIX_HINT] Ensure jq is installed and in the PATH."
+		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
+		return 2
 	fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
+	# Check for namespaces missing the label
+	echo "[CMD] Executing: kubectl get ns -o json"
+	ns_json=$(kubectl get ns -o json 2>/dev/null)
+	
+	echo "[CMD] Executing: jq filter for namespaces without enforce label"
+	missing_labels=$(echo "$ns_json" | jq -r '.items[] | select(.metadata.name != "kube-system" and .metadata.name != "kube-public") | select(.metadata.labels["pod-security.kubernetes.io/enforce"] == null) | .metadata.name')
+
+	if [ -n "$missing_labels" ]; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: The following namespaces are missing 'pod-security.kubernetes.io/enforce' label:")
+		echo "[FAIL_REASON] Check Failed: Namespaces missing PSS enforcement label"
+		echo "[FIX_HINT] Run remediation script: 5.2.6_remediate.sh"
+		for ns in $missing_labels; do
+			 a_output2+=(" - $ns")
+		done
+		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
+		return 1
+	else
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label")
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
 		return 0
-	else
-		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
-		return 1
 	fi
 }
 

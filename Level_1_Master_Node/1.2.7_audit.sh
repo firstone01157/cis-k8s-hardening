@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.7..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -- "--authorization-mode" | grep -q "Node"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- \"--authorization-mode=.*(,|$)Node(,|$)\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*(,|$)Node(,|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --authorization-mode includes Node")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --authorization-mode does NOT include Node")
+		echo "[FAIL_REASON] Check Failed: --authorization-mode does NOT include Node"
+		echo "[FIX_HINT] Run remediation script: 1.2.7_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

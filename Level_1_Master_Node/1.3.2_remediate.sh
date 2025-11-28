@@ -1,46 +1,41 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.3.2
 # Title: Ensure that the --profiling argument is set to false
-# Level: • Level 1 - Master Node
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-controller-manager.yaml"
+BINARY_NAME="kube-controller-manager"
+KEY="--profiling"
+VALUE="false"
+FULL_PARAM="${KEY}=${VALUE}"
 
-    l_file="/etc/kubernetes/manifests/kube-controller-manager.yaml"
-    l_flag="--profiling"
-    l_value="false"
+echo "[INFO] Remediating ${KEY}..."
 
-    if [ -e "$l_file" ]; then
-        # 1. Backup First
-        cp "$l_file" "$l_file.bak_$(date +%s)"
+# 1. Pre-check
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[PASS] ${FULL_PARAM} is already set."
+    exit 0
+fi
 
-        # 2. Check & Apply
-        if grep -q -- "$l_flag" "$l_file"; then
-            # Case A: Flag exists -> Update value
-            sed -i "s/$l_flag=[^ \"]*/$l_flag=$l_value/g" "$l_file"
-            a_output+=(" - Remediation applied: Updated existing $l_flag to $l_value")
-        else
-            # Case B: Flag missing -> Insert new line
-            sed -i "/- kube-controller-manager/a \    - $l_flag=$l_value" "$l_file"
-            a_output+=(" - Remediation applied: Inserted new flag $l_flag=$l_value")
-        fi
-    else
-        a_output2+=(" - Remediation failed: $l_file not found")
-        return 1
-    fi
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
 
-    # 3. Verify
-    if grep -q -- "$l_flag=$l_value" "$l_file"; then
-        return 0
-    else
-        a_output2+=(" - Remediation verification failed")
-        return 1
-    fi
-}
+# 3. Apply Fix
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    sed -i "s|${KEY}=.*|${FULL_PARAM}|g" "${CONFIG_FILE}"
+else
+    sed -i "/  - ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
+fi
 
-remediate_rule
-exit $?
+# 4. Verify
+if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
+    echo "[PASS] Successfully applied ${FULL_PARAM}"
+    exit 0
+else
+    echo "[FAIL] Failed to apply ${FULL_PARAM}"
+    exit 1
+fi

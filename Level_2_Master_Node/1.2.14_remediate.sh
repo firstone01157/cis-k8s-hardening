@@ -1,7 +1,7 @@
 #!/bin/bash
 # CIS Benchmark: 1.2.14
-# Title: Ensure that the admission control plugin NodeRestriction is set (Automated)
-# Level: • Level 2 - Master Node
+# Title: Ensure that the --disable-admission-plugins argument is set to a value that does not include NamespaceLifecycle
+# Level: Level 1 - Master Node
 # Remediation Script
 
 remediate_rule() {
@@ -10,15 +10,25 @@ remediate_rule() {
 	unset a_output
 	unset a_output2
 
-	## Description from CSV:
-	## Follow the Kubernetes documentation and configure NodeRestriction plug-in on kubelets. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the master node
-	##
-	## Command hint: Follow the Kubernetes documentation and configure NodeRestriction plug-in on kubelets. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the master node and set the --enable-admission-plugins parameter to a value that includes NodeRestriction. --enable-admission-plugins=...,NodeRestriction,...
-	##
-	## Safety Check: Verify if remediation is needed before applying
-
-	a_output+=(" - Remediation: Manual intervention required. Add 'NodeRestriction' to '--enable-admission-plugins' in /etc/kubernetes/manifests/kube-apiserver.yaml")
-	return 0
+	l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
+	if [ -e "$l_file" ]; then
+		if grep -q -- "--disable-admission-plugins" "$l_file"; then
+			if grep -q -- "--disable-admission-plugins=.*NamespaceLifecycle" "$l_file"; then
+				# Backup
+				cp "$l_file" "$l_file.bak_$(date +%s)"
+				
+				# Remove NamespaceLifecycle
+				sed -i 's/NamespaceLifecycle,//g' "$l_file"
+				sed -i 's/,NamespaceLifecycle//g' "$l_file"
+				sed -i 's/--disable-admission-plugins=NamespaceLifecycle//g' "$l_file"
+				
+				a_output+=(" - Remediation applied: Removed NamespaceLifecycle from --disable-admission-plugins in $l_file")
+			fi
+		fi
+		return 0
+	else
+		return 0
+	fi
 }
 
 remediate_rule

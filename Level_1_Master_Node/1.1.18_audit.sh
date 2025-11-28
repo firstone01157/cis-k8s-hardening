@@ -4,6 +4,7 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.1.18..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -11,13 +12,19 @@ audit_rule() {
 
 	l_file="/etc/kubernetes/controller-manager.conf"
 	if [ -e "$l_file" ]; then
+		echo "[CMD] Executing: l_owner=$(stat -c %U:%G \"$l_file\")"
 		l_owner=$(stat -c %U:%G "$l_file")
 		if [ "$l_owner" == "root:root" ]; then
+			echo "[INFO] Check Passed"
 			a_output+=(" - Check Passed: Ownership on $l_file is $l_owner")
 		else
+			echo "[INFO] Check Failed"
 			a_output2+=(" - Check Failed: Ownership on $l_file is $l_owner (should be root:root)")
+			echo "[FAIL_REASON] Check Failed: Ownership on $l_file is $l_owner (should be root:root)"
+			echo "[FIX_HINT] Run remediation script: 1.1.18_remediate.sh"
 		fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $l_file not found")
 	fi
 

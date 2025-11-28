@@ -1,19 +1,28 @@
 #!/bin/bash
 # CIS Benchmark: 1.2.20
-# Title: Ensure that the --request-timeout argument is set as appropriate (Manual)
+# Title: Ensure that the --request-timeout argument is set as appropriate (Automated)
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.2.20..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q -- "--request-timeout"; then
-		# If set, we assume it's appropriate for now as per manual check nature
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q \"\\s--request-timeout(=|\\s|$)\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -q "\s--request-timeout(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --request-timeout is set")
+	elif [ -f "/etc/kubernetes/manifests/kube-apiserver.yaml" ] && \
+	     grep -q -- "--request-timeout" "/etc/kubernetes/manifests/kube-apiserver.yaml"; then
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: --request-timeout is set in manifest")
 	else
-		a_output+=(" - Check Passed: --request-timeout is not set (using default)")
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: --request-timeout is not set")
+		echo "[FAIL_REASON] Check Failed: --request-timeout is not set"
+		echo "[FIX_HINT] Run remediation script: 1.2.20_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

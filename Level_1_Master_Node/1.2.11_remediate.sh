@@ -1,51 +1,36 @@
 #!/bin/bash
 # CIS Benchmark: 1.2.11
-# Title: Ensure that the admission control plugin AlwaysPullImages is set
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --enable-admission-plugins argument is set to a value that does not include AlwaysAdmit
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# 1. Define Variables
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY="--enable-admission-plugins"
+BAD_VALUE="AlwaysAdmit"
 
-    l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-    l_plugin="AlwaysPullImages"
+echo "[INFO] Remediating $KEY to remove $BAD_VALUE..."
 
-    if [ -e "$l_file" ]; then
-        # 1. Backup First
-        cp "$l_file" "$l_file.bak_$(date +%s)"
+# 2. Pre-Check
+if ! grep -q "$KEY=.*$BAD_VALUE" "$CONFIG_FILE"; then
+    echo "[FIXED] $KEY does not include $BAD_VALUE."
+    exit 0
+fi
 
-        # 2. Check & Apply
-        if grep -q -- "--enable-admission-plugins" "$l_file"; then
-            # Case A: Flag exists
-            if grep -q "$l_plugin" "$l_file"; then
-                a_output+=(" - Remediation not needed: $l_plugin is already present")
-            else
-                # Append plugin to the end of the list
-                sed -i "s/--enable-admission-plugins=[^\"]*/&,$l_plugin/" "$l_file"
-                a_output+=(" - Remediation applied: Appended $l_plugin to --enable-admission-plugins")
-            fi
-        else
-            # Case B: Flag MISSING -> Insert new line
-            # We add NodeRestriction as a safe default base along with the required plugin
-            sed -i "/- kube-apiserver/a \    - --enable-admission-plugins=NodeRestriction,$l_plugin" "$l_file"
-            a_output+=(" - Remediation applied: Inserted new flag --enable-admission-plugins=NodeRestriction,$l_plugin")
-        fi
-    else
-        a_output2+=(" - Remediation failed: $l_file not found")
-        return 1
-    fi
+# 3. Apply Fix
+# Remove AlwaysAdmit from comma-separated list
+# Handle: AlwaysAdmit, | ,AlwaysAdmit | AlwaysAdmit
+sed -i "s/$BAD_VALUE,//g" "$CONFIG_FILE"
+sed -i "s/,$BAD_VALUE//g" "$CONFIG_FILE"
+# If it was the only value, we might have empty value now.
+# We can check if line ends with = and remove it or warn.
+# But usually there are other plugins.
 
-    # 3. Verify
-    if grep -q "$l_plugin" "$l_file"; then
-        return 0
-    else
-        a_output2+=(" - Remediation verification failed")
-        return 1
-    fi
-}
-
-remediate_rule
-exit $?
+# 4. Verification
+if ! grep -q "$KEY=.*$BAD_VALUE" "$CONFIG_FILE"; then
+    echo "[FIXED] Successfully removed $BAD_VALUE from $KEY"
+    exit 0
+else
+    echo "[ERROR] Failed to remove $BAD_VALUE from $KEY"
+    exit 1
+fi

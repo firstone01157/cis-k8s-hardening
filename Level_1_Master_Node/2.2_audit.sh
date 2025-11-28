@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 2.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep etcd | grep -v grep | grep -q -- "--client-cert-auth=true"; then
+	echo "[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q \"\\s--client-cert-auth=true(\\s|$)\"; then"
+	if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--client-cert-auth=true(\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --client-cert-auth is set to true")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --client-cert-auth is not set to true")
+		echo "[FAIL_REASON] Check Failed: --client-cert-auth is not set to true"
+		echo "[FIX_HINT] Run remediation script: 2.2_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

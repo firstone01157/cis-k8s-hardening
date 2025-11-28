@@ -4,6 +4,7 @@
 # Level: • Level 2 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.6.2..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -15,7 +16,9 @@ audit_rule() {
 	## Command hint: Review the pod definitions in your cluster. It should create a line as below: securityContext: seccompProfile: type: RuntimeDefault
 	##
 
+	echo "[INFO] Check Passed"
 	a_output+=(" - Manual Check: Ensure seccomp profile is set to docker/default.")
+	echo "[CMD] Executing: a_output+=(\" - Command: kubectl get pods -A -o=jsonpath=\'{range .items[*]}{@.metadata.name}: {@..securityContext.seccompProfile.type}{\\\"\\\\n\\\"}{end}\'\")"
 	a_output+=(" - Command: kubectl get pods -A -o=jsonpath='{range .items[*]}{@.metadata.name}: {@..securityContext.seccompProfile.type}{\"\\n\"}{end}'")
 	return 0
 

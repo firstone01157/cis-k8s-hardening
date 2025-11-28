@@ -1,24 +1,42 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.20
-# Title: Ensure that the --request-timeout argument is set as appropriate (Manual)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the --request-timeout argument is set as appropriate
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# Configuration
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KEY="--request-timeout"
+VALUE="300s"
+FULL_PARAM="${KEY}=${VALUE}"
+BINARY_NAME="kube-apiserver"
 
-	# Manual check, remediation is only if needed.
-    a_output+=(" - Remediation not needed: This is a manual check. If you need to change timeout, edit /etc/kubernetes/manifests/kube-apiserver.yaml manually.")
+echo "[INFO] Remediating ${KEY}..."
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		return 0
-	else
-		return 1
-	fi
-}
+# 1. Pre-check using 'grep -F --' to handle dashes safely
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    echo "[FIXED] ${KEY} is already set."
+    exit 0
+fi
 
-remediate_rule
-exit $?
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
+
+# 3. Apply Fix using sed
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    # Key exists, leave as-is (assume appropriate value)
+    echo "[FIXED] ${KEY} is already set."
+else
+    # Key missing, insert default
+    sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
+fi
+
+# 4. Verify
+if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
+    echo "[FIXED] Successfully applied ${KEY}"
+else
+    echo "[ERROR] Failed to apply ${KEY}"
+    exit 1
+fi

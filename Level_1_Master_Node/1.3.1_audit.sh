@@ -4,15 +4,21 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.3.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep kube-controller-manager | grep -v grep | grep -q -- "--terminated-pod-gc-threshold"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q \"\\s--terminated-pod-gc-threshold(=|\\s|$)\"; then"
+	if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "\s--terminated-pod-gc-threshold(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --terminated-pod-gc-threshold is set")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --terminated-pod-gc-threshold is not set")
+		echo "[FAIL_REASON] Check Failed: --terminated-pod-gc-threshold is not set"
+		echo "[FIX_HINT] Run remediation script: 1.3.1_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

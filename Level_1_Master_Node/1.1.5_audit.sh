@@ -4,6 +4,7 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 1.1.5..."
 	l_output3=""
 	l_dl=""
 	unset a_output
@@ -11,13 +12,19 @@ audit_rule() {
 
 	l_file="/etc/kubernetes/manifests/kube-scheduler.yaml"
 	if [ -e "$l_file" ]; then
+		echo "[CMD] Executing: l_mode=$(stat -c %a \"$l_file\")"
 		l_mode=$(stat -c %a "$l_file")
 		if [ "$l_mode" -le 600 ]; then
+			echo "[INFO] Check Passed"
 			a_output+=(" - Check Passed: Permissions on $l_file are $l_mode")
 		else
+			echo "[INFO] Check Failed"
 			a_output2+=(" - Check Failed: Permissions on $l_file are $l_mode (should be 600 or more restrictive)")
+			echo "[FAIL_REASON] Check Failed: Permissions on $l_file are $l_mode (should be 600 or more restrictive)"
+			echo "[FIX_HINT] Run remediation script: 1.1.5_remediate.sh"
 		fi
 	else
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: $l_file not found")
 	fi
 

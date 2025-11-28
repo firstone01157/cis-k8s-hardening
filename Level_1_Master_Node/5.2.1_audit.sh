@@ -1,44 +1,59 @@
 #!/bin/bash
 # CIS Benchmark: 5.2.1
-# Title: Ensure that the cluster has at least one active policy control mechanism in place (Manual)
+# Title: Ensure that the cluster has at least one active policy control mechanism in place
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 5.2.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	# Check for Pod Security Admission, PSP, or other policy control mechanisms
-	# Method 1: Check for Pod Security Admission in kube-apiserver
-	psa_enabled=$(ps -ef 2>/dev/null | grep kube-apiserver | grep -v grep | grep -q "enable-admission-plugins" && echo "found" || echo "not found")
+	echo "[CMD] Executing: # Verify kubectl and jq are available"
+	# Verify kubectl and jq are available
+	if ! command -v kubectl &> /dev/null; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Error: kubectl command not found")
+		echo "[FAIL_REASON] Check Error: kubectl command not found"
+		echo "[FIX_HINT] Ensure kubectl is installed and in the PATH."
+		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
+		return 2
+	fi
 	
-	# Method 2: Check for PodSecurityPolicy resources
-	psp_count=$(kubectl get podsecuritypolicies -o json 2>/dev/null | jq '.items | length')
-	
-	# Method 3: Check for any Pod Security Standards labels on namespaces
-	pss_labels=$(kubectl get ns -o json 2>/dev/null | jq '[.items[] | select(.metadata.labels | select(. != null) | keys[] | select(startswith("pod-security.kubernetes.io")))] | length')
-	
-	if [ "$psp_count" -gt 0 ] || [ "$pss_labels" -gt 0 ] || [[ "$psa_enabled" == "found" ]]; then
-		a_output+=(" - Check Passed: Pod Security policy control mechanism is active")
-		[ "$psp_count" -gt 0 ] && a_output+=(" - PodSecurityPolicies found: $psp_count")
-		[ "$pss_labels" -gt 0 ] && a_output+=(" - Pod Security Standards labels found on namespaces: $pss_labels")
-		[[ "$psa_enabled" == "found" ]] && a_output+=(" - Pod Security Admission enabled in kube-apiserver")
-	else
-		a_output2+=(" - Check Failed: No active policy control mechanism found")
-		a_output2+=(" - Ensure one of the following is configured:")
-		a_output2+=(" - • Pod Security Admission (PSA) enabled in kube-apiserver")
-		a_output2+=(" - • PodSecurityPolicy (PSP) resources deployed")
-		a_output2+=(" - • Pod Security Standards labels applied to namespaces")
+	if ! command -v jq &> /dev/null; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Error: jq command not found")
+		echo "[FAIL_REASON] Check Error: jq command not found"
+		echo "[FIX_HINT] Ensure jq is installed and in the PATH."
+		printf '%s\n' "" "- Audit Result:" "  [-] ERROR" "${a_output2[@]}"
+		return 2
 	fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
+	# Check all Namespaces for PodSecurityAdmission labels (e.g., pod-security.kubernetes.io/enforce)
+	# Exclude system namespaces: kube-system, kube-public
+	
+	echo "[CMD] Executing: kubectl get ns -o json"
+	ns_json=$(kubectl get ns -o json 2>/dev/null)
+	
+	echo "[CMD] Executing: jq filter for namespaces without enforce label"
+	missing_labels=$(echo "$ns_json" | jq -r '.items[] | select(.metadata.name != "kube-system" and .metadata.name != "kube-public") | select(.metadata.labels["pod-security.kubernetes.io/enforce"] == null) | .metadata.name')
+	
+	if [ -n "$missing_labels" ]; then
+		echo "[INFO] Check Failed"
+		a_output2+=(" - Check Failed: The following namespaces are missing pod-security.kubernetes.io/enforce label:")
+		echo "[FAIL_REASON] Check Failed: The following namespaces are missing pod-security.kubernetes.io/enforce label:"
+		echo "[FIX_HINT] Run remediation script: 5.2.1_remediate.sh"
+		while IFS= read -r ns; do
+			[ -n "$ns" ] && a_output2+=(" - $ns")
+		done <<< "$missing_labels"
+		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
+		return 1
+	else
+		echo "[INFO] Check Passed"
+		a_output+=(" - Check Passed: All non-system namespaces have pod-security.kubernetes.io/enforce label")
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
 		return 0
-	else
-		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
-		return 1
 	fi
 }
 

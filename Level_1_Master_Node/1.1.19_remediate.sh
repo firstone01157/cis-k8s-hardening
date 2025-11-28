@@ -1,38 +1,37 @@
 #!/bin/bash
 # CIS Benchmark: 1.1.19
-# Title: Ensure that the Kubernetes PKI directory and file ownership is set to root:root (Automated)
-# Level: • Level 1 - Master Node
+# Title: Ensure that the Kubernetes PKI directory and file ownership is set to root:root
+# Level: Level 1 - Master Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+# 1. Define Variables
+PKI_DIR="/etc/kubernetes/pki"
+OWNER="root:root"
 
-	l_dir="/etc/kubernetes/pki"
-	if [ -d "$l_dir" ]; then
-		# Check if any file/dir is NOT root:root
-		if find "$l_dir" -not -user root -o -not -group root | grep -q .; then
-			chown -R root:root "$l_dir"
-			
-			# Verify again
-			if find "$l_dir" -not -user root -o -not -group root | grep -q .; then
-				a_output2+=(" - Remediation failed: Could not change ownership on some files in $l_dir")
-				return 1
-			else
-				a_output+=(" - Remediation applied: Ownership on $l_dir recursively changed to root:root")
-				return 0
-			fi
-		else
-			a_output+=(" - Remediation not needed: Ownership on $l_dir is correct")
-			return 0
-		fi
-	else
-		a_output+=(" - Remediation not needed: $l_dir not found")
-		return 0
-	fi
-}
+echo "[INFO] Remediating ownership for files in $PKI_DIR..."
 
-remediate_rule
-exit $?
+# 2. Pre-Check & 3. Apply Fix (Recursive)
+if [ -d "$PKI_DIR" ]; then
+    # Find files not owned by root:root
+    BAD_FILES=$(find "$PKI_DIR" ! -user root -o ! -group root)
+    if [ -z "$BAD_FILES" ]; then
+        echo "[FIXED] All files in $PKI_DIR are already owned by $OWNER."
+        exit 0
+    else
+        echo "[INFO] Found files with incorrect ownership. Fixing..."
+        chown -R "$OWNER" "$PKI_DIR"
+    fi
+else
+    echo "[INFO] PKI directory $PKI_DIR not found. Skipping."
+    exit 0
+fi
+
+# 4. Verification
+BAD_FILES=$(find "$PKI_DIR" ! -user root -o ! -group root)
+if [ -z "$BAD_FILES" ]; then
+    echo "[FIXED] Successfully verified ownership for all files in $PKI_DIR"
+    exit 0
+else
+    echo "[ERROR] Failed to apply ownership to some files in $PKI_DIR"
+    exit 1
+fi

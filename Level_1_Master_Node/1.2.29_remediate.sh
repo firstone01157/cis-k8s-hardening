@@ -1,43 +1,37 @@
 #!/bin/bash
+set -e
+
 # CIS Benchmark: 1.2.29
-# Title: Ensure that the API Server only makes use of Strong Cryptographic Ciphers
-# Level: • Level 1 - Master Node
-# Remediation Script - AUTO FIX
+# Title: Ensure that the --tls-cipher-suites argument is set as appropriate
+# Level: Level 1 - Master Node
+# Remediation Script
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+# --- CONFIG ---
+CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+BINARY_NAME="kube-apiserver"
+KEY="--tls-cipher-suites"
+VALUE="TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+FULL_PARAM="${KEY}=${VALUE}"
 
-    l_file="/etc/kubernetes/manifests/kube-apiserver.yaml"
-    l_flag="--tls-cipher-suites"
-    # ค่ามาตรฐาน CIS (ยาวหน่อยนะครับ)
-    l_val="TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_RSA_WITH_AES_256_GCM_SHA384,TLS_RSA_WITH_AES_128_GCM_SHA256"
+echo "[INFO] Remediating ${KEY}..."
 
-    if [ -e "$l_file" ]; then
-        cp "$l_file" "$l_file.bak_$(date +%s)"
+# 1. Pre-check
+if grep -Fq -- "${KEY}=" "${CONFIG_FILE}"; then
+    echo "[PASS] ${KEY} is already set."
+    exit 0
+fi
 
-        if grep -q -- "$l_flag" "$l_file"; then
-            # Update existing (ใช้ | เป็น delimiter เพราะใน value มีเครื่องหมายเยอะ)
-            sed -i "s|$l_flag=[^ \"]*|$l_flag=$l_val|g" "$l_file"
-            a_output+=(" - Remediation applied: Updated existing $l_flag")
-        else
-            # Insert new
-            sed -i "/- kube-apiserver/a \    - $l_flag=$l_val" "$l_file"
-            a_output+=(" - Remediation applied: Inserted $l_flag")
-        fi
-    else
-        a_output2+=(" - Remediation failed: $l_file not found")
-        return 1
-    fi
+# 2. Backup
+cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
 
-    if grep -q "$l_flag" "$l_file"; then
-        return 0
-    else
-        return 1
-    fi
-}
+# 3. Apply Fix
+sed -i "/  - ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
 
-remediate_rule
-exit $?
+# 4. Verify
+if grep -Fq -- "${KEY}=" "${CONFIG_FILE}"; then
+    echo "[PASS] Successfully applied ${KEY}"
+    exit 0
+else
+    echo "[FAIL] Failed to apply ${KEY}"
+    exit 1
+fi

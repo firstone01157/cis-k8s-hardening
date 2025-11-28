@@ -4,16 +4,23 @@
 # Level: • Level 1 - Master Node
 
 audit_rule() {
+	echo "[INFO] Starting check for 2.1..."
 	l_output3=""
 	l_dl=""
 	unset a_output
 	unset a_output2
 
-	if ps -ef | grep etcd | grep -v grep | grep -q -- "--cert-file" && \
-	   ps -ef | grep etcd | grep -v grep | grep -q -- "--key-file"; then
+	echo "[CMD] Executing: if ps -ef | grep etcd | grep -v grep | grep -E -q \"\\s--cert-file(=|\\s|$)\" && \\"
+	if ps -ef | grep etcd | grep -v grep | grep -E -q "\s--cert-file(=|\s|$)" && \
+	   echo "[CMD] Executing: ps -ef | grep etcd | grep -v grep | grep -E -q \"\\s--key-file(=|\\s|$)\"; then"
+	   ps -ef | grep etcd | grep -v grep | grep -E -q "\s--key-file(=|\s|$)"; then
+		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --cert-file and --key-file are set")
 	else
+		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: --cert-file and/or --key-file are not set")
+		echo "[FAIL_REASON] Check Failed: --cert-file and/or --key-file are not set"
+		echo "[FIX_HINT] Run remediation script: 2.1_remediate.sh"
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then
