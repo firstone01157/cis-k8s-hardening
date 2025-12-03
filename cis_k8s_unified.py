@@ -115,6 +115,7 @@ class CISUnifiedRunner:
         # Initialize API timeout settings with defaults
         self.api_check_interval = 5  # seconds
         self.api_max_retries = 60    # 60 * 5 = 300 seconds total (5 minutes)
+        self.api_settle_time = 15    # settle time after API becomes ready (seconds)
         self.wait_for_api_enabled = True
         
         if not os.path.exists(self.config_file):
@@ -137,10 +138,11 @@ class CISUnifiedRunner:
                 self.wait_for_api_enabled = self.remediation_global_config.get("wait_for_api", True)
                 self.api_check_interval = self.remediation_global_config.get("api_check_interval", 5)
                 self.api_max_retries = self.remediation_global_config.get("api_max_retries", 60)
+                self.api_settle_time = self.remediation_global_config.get("api_settle_time", 15)
                 
                 if self.verbose >= 1:
                     print(f"{Colors.BLUE}[DEBUG] Loaded remediation config for {len(self.remediation_checks_config)} checks{Colors.ENDC}")
-                    print(f"{Colors.BLUE}[DEBUG] API timeout settings: interval={self.api_check_interval}s, max_retries={self.api_max_retries}{Colors.ENDC}")
+                    print(f"{Colors.BLUE}[DEBUG] API timeout settings: interval={self.api_check_interval}s, max_retries={self.api_max_retries}, settle_time={self.api_settle_time}s{Colors.ENDC}")
         except json.JSONDecodeError as e:
             print(f"{Colors.RED}[!] Config parse error: {e}{Colors.ENDC}")
         except Exception as e:
@@ -303,10 +305,14 @@ class CISUnifiedRunner:
     def wait_for_healthy_cluster(self):
         """
         Wait for cluster to be healthy after API server restart
-        Uses configuration from cis_config.json for timeout settings
+        Uses robust 3-step verification from cis_config.json
         
-        Master Node: Checks kubectl get nodes (API server availability)
-        Worker Node: Checks systemctl is-active kubelet (kubelet service health)
+        MASTER NODE (3-Step Verification):
+        - Step 1 (TCP): Verify API server port is open
+        - Step 2 (Application Ready): Verify API responds to requests (kubectl get --raw='/readyz')
+        - Step 3 (Settle Time): Force sleep to allow etcd/scheduler/controller-manager to sync
+        
+        WORKER NODE: Checks systemctl is-active kubelet
         
         Returns True if cluster/node is healthy within timeout, False otherwise
         """
@@ -353,41 +359,74 @@ class CISUnifiedRunner:
                 print(f"{Colors.RED}    [FAIL] Error checking kubelet: {str(e)}{Colors.ENDC}")
                 return False
         
-        # --- MASTER NODE LOGIC ---
-        # If admin.conf exists, this is a Master Node
-        print(f"{Colors.YELLOW}[*] Master Node detected. Waiting for cluster health (Timeout: {total_timeout}s, Interval: {self.api_check_interval}s)...{Colors.ENDC}")
+        # --- MASTER NODE LOGIC (3-STEP VERIFICATION) ---
+        print(f"{Colors.YELLOW}[*] Master Node detected. 3-Step health verification (Timeout: {total_timeout}s)...{Colors.ENDC}")
         
         kubectl = self.get_kubectl_cmd()
         count = 0
+        step1_passed = False
         
         while count < self.api_max_retries:
-            try:
-                # Simple nodes check - indicates API server is responsive
-                nodes_result = subprocess.run(
-                    kubectl + ["get", "nodes"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                
-                if nodes_result.returncode == 0:
-                    elapsed = count * self.api_check_interval
-                    print(f"{Colors.GREEN}    [OK] Cluster is online. (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
-                    self.health_status = "OK (Healthy)"
-                    return True
-                
-            except subprocess.TimeoutExpired:
-                pass
-            except Exception:
-                pass
-            
             elapsed = count * self.api_check_interval
-            print(f"{Colors.YELLOW}    [WAIT] Cluster not ready... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
-            time.sleep(self.api_check_interval)
-            count += 1
+            
+            # --- STEP 1: TCP Check (Port Open) ---
+            if not step1_passed:
+                try:
+                    result = subprocess.run(
+                        ["nc", "-zv", "localhost", "6443"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    
+                    if result.returncode == 0:
+                        print(f"{Colors.GREEN}    [Step 1/3 OK] TCP port 6443 open (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                        step1_passed = True
+                    else:
+                        print(f"{Colors.YELLOW}    [Step 1/3 WAIT] TCP port 6443 not responding... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                        time.sleep(self.api_check_interval)
+                        count += 1
+                        continue
+                
+                except Exception:
+                    print(f"{Colors.YELLOW}    [Step 1/3 WAIT] TCP check failed... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                    time.sleep(self.api_check_interval)
+                    count += 1
+                    continue
+            
+            # --- STEP 2: Application Ready (kubectl readyz) ---
+            if step1_passed:
+                try:
+                    readyz_result = subprocess.run(
+                        kubectl + ["get", "--raw=/readyz"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    
+                    if readyz_result.returncode == 0:
+                        print(f"{Colors.GREEN}    [Step 2/3 OK] API server is ready (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                        
+                        # --- STEP 3: Settle Time (Allow components to sync) ---
+                        print(f"{Colors.CYAN}    [Step 3/3] Settling ({self.api_settle_time}s for etcd/scheduler/controller-manager sync)...{Colors.ENDC}")
+                        time.sleep(self.api_settle_time)
+                        
+                        self.health_status = "OK (Healthy - 3-Step Verified)"
+                        print(f"{Colors.GREEN}    [OK] Cluster is online and stable.{Colors.ENDC}")
+                        return True
+                    else:
+                        print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API not responding... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                
+                except subprocess.TimeoutExpired:
+                    print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API check timeout... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                except Exception:
+                    print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API check error... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                
+                time.sleep(self.api_check_interval)
+                count += 1
 
-        print(f"{Colors.RED}    [FAIL] Cluster did not recover within {total_timeout} seconds.{Colors.ENDC}")
-        self.health_status = "CRITICAL (Recovery Timeout)"
+        print(f"{Colors.RED}    [FAIL] Cluster did not achieve healthy state within {total_timeout} seconds (3-step verification failed).{Colors.ENDC}")
+        self.health_status = "CRITICAL (Recovery Timeout - 3-Step Failed)"
         return False
 
     def extract_metadata_from_script(self, script_path):
@@ -781,6 +820,8 @@ class CISUnifiedRunner:
         """
         Run scripts in parallel with progress tracking
         รันสคริปต์แบบขนานพร้อมการติดตามความคืบหน้า
+        
+        For remediation mode: Implements "Emergency Brake" - stops execution if cluster becomes unhealthy
         """
         futures = {executor.submit(self.run_script, s, mode): s for s in scripts}
         
@@ -799,6 +840,35 @@ class CISUnifiedRunner:
                     # Show progress / แสดงความคืบหน้า
                     progress_pct = (completed / len(scripts)) * 100
                     self._print_progress(result, completed, len(scripts), progress_pct)
+                    
+                    # EMERGENCY BRAKE: Check cluster health after remediation
+                    # If cluster fails after remediation script, stop immediately to prevent cascading damage
+                    if mode == "remediate" and result['status'] in ['PASS', 'FIXED']:
+                        if not self.wait_for_healthy_cluster():
+                            # CRITICAL: Cluster became unhealthy after this remediation
+                            error_banner = (
+                                f"\n{Colors.RED}{'='*70}\n"
+                                f"⛔ CRITICAL: CLUSTER UNHEALTHY - EMERGENCY BRAKE ACTIVATED\n"
+                                f"{'='*70}\n"
+                                f"Last Remediation: CIS {result['id']}\n"
+                                f"Status: {self.health_status}\n"
+                                f"Cluster Health: FAILED\n\n"
+                                f"Remediation loop aborted to prevent cascading failures.\n\n"
+                                f"Recovery Steps:\n"
+                                f"  1. Check cluster status: kubectl get nodes\n"
+                                f"  2. Check API server: kubectl get pods -n kube-system -l component=kube-apiserver\n"
+                                f"  3. Review kubelet logs: journalctl -u kubelet -n 50\n"
+                                f"  4. Review API server logs: kubectl logs -n kube-system -l component=kube-apiserver --tail=50\n"
+                                f"  5. Restore from backup if needed: /var/backups/cis-remediation/\n\n"
+                                f"For manual recovery:\n"
+                                f"  - Check /var/log/cis_runner.log for remediation history\n"
+                                f"  - Review recent manifest changes in /etc/kubernetes/manifests/\n"
+                                f"  - Revert the last remediation if necessary\n"
+                                f"{'='*70}{Colors.ENDC}\n"
+                            )
+                            print(error_banner)
+                            self.log_activity("EMERGENCY_BRAKE", f"Cluster failed after CIS {result['id']} remediation")
+                            sys.exit(1)
         
         except KeyboardInterrupt:
             self.stop_requested = True
@@ -824,10 +894,13 @@ class CISUnifiedRunner:
 
     def fix(self, target_level, target_role):
         """
-        Execute remediation with cluster health check
-        ดำเนินการแก้ไขพร้อมการตรวจสอบสุขภาพคลัสเตอร์
+        Execute remediation with split execution strategy
+        Group A (Critical/Config - IDs 1.x, 2.x, 3.x, 4.x): Run SEQUENTIALLY with health checks
+        Group B (Resources - IDs 5.x): Run in PARALLEL
+        
+        ดำเนินการแก้ไขพร้อมกลยุทธ์การแยกการดำเนิน
         """
-        # Prevent remediation if cluster is critical / ป้องกันการแก้ไขหากคลัสเตอร์อยู่ในสถานะวิกฤติ
+        # Prevent remediation if cluster is critical
         if "CRITICAL" in self.health_status:
             print(f"{Colors.RED}[-] Cannot remediate: Cluster health is CRITICAL.{Colors.ENDC}")
             self.log_activity("FIX_SKIPPED", "Cluster health critical")
@@ -837,20 +910,19 @@ class CISUnifiedRunner:
         self.log_activity("FIX_START", f"Level:{target_level}, Role:{target_role}")
         self.perform_backup()
         
-        print(f"\n{Colors.YELLOW}[*] Starting Remediation...{Colors.ENDC}")
+        print(f"\n{Colors.YELLOW}[*] Starting Remediation with Split Strategy...{Colors.ENDC}")
         scripts = self.get_scripts("remediate", target_level, target_role)
         self.results = []
         self._init_stats()
         
-        # Execute remediation scripts in parallel / ดำเนินการสคริปต์แก้ไขแบบขนาน
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            self._run_scripts_parallel(executor, scripts, "remediate")
+        # Execute remediation with split strategy
+        self._run_remediation_with_split_strategy(scripts)
         
         print(f"\n{Colors.GREEN}[+] Remediation Complete.{Colors.ENDC}")
         self.save_reports("remediate")
         self.print_stats_summary()
         
-        # Trend analysis / การวิเคราะห์แนวโน้ม
+        # Trend analysis
         current_score = self.calculate_score(self.stats)
         previous = self.get_previous_snapshot("remediate", target_role, target_level)
         if previous:
@@ -858,6 +930,125 @@ class CISUnifiedRunner:
         
         self.save_snapshot("remediate", target_role, target_level)
         self.show_results_menu("remediate")
+
+    def _run_remediation_with_split_strategy(self, scripts):
+        """
+        Execute remediation with split execution strategy for stability.
+        
+        SPLIT STRATEGY:
+        - GROUP A (Critical/Config): IDs starting with 1., 2., 3., 4.
+          These involve service restarts (API/Kubelet/Etcd) and are executed SEQUENTIALLY.
+          Health check called after EACH script to catch failures early.
+          
+        - GROUP B (Resources): IDs starting with 5.
+          These are API calls (NetworkPolicies, Namespaces) and are executed in PARALLEL.
+          More stable, no service restarts involved.
+        
+        Rationale: Critical config changes can cause race conditions when parallel.
+        Resources are safe to execute in parallel as they don't restart services.
+        """
+        # Split scripts into Group A (critical) and Group B (resources)
+        group_a = [s for s in scripts if any(s['id'].startswith(prefix) for prefix in ['1.', '2.', '3.', '4.'])]
+        group_b = [s for s in scripts if any(s['id'].startswith(prefix) for prefix in ['5.'])]
+        
+        print(f"\n{Colors.CYAN}{'='*70}")
+        print(f"REMEDIATION EXECUTION PLAN")
+        print(f"{'='*70}{Colors.ENDC}")
+        print(f"  Group A (Critical/Config - SEQUENTIAL): {len(group_a)} checks")
+        if group_a:
+            for s in group_a:
+                print(f"    • {s['id']}")
+        print(f"\n  Group B (Resources - PARALLEL): {len(group_b)} checks")
+        if group_b:
+            for s in group_b:
+                print(f"    • {s['id']}")
+        print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}\n")
+        
+        # --- EXECUTE GROUP A: SEQUENTIAL with Health Checks ---
+        if group_a:
+            print(f"\n{Colors.YELLOW}[*] Executing GROUP A (Critical/Config) - SEQUENTIAL mode...{Colors.ENDC}")
+            
+            for idx, script in enumerate(group_a, 1):
+                if self.stop_requested:
+                    break
+                
+                print(f"\n{Colors.CYAN}[Group A {idx}/{len(group_a)}] Running: {script['id']} (SEQUENTIAL)...{Colors.ENDC}")
+                
+                # Execute single script
+                result = self.run_script(script, "remediate")
+                
+                if result:
+                    self.results.append(result)
+                    self.update_stats(result)
+                    
+                    # Show progress
+                    progress_pct = (idx / len(group_a)) * 100
+                    self._print_progress(result, idx, len(group_a), progress_pct)
+                    
+                    # CRITICAL: After EACH Group A script, check cluster health
+                    if result['status'] in ['PASS', 'FIXED']:
+                        print(f"{Colors.YELLOW}    [Health Check] Verifying cluster stability after {script['id']}...{Colors.ENDC}")
+                        
+                        if not self.wait_for_healthy_cluster():
+                            # EMERGENCY BRAKE: Cluster became unhealthy
+                            error_banner = (
+                                f"\n{Colors.RED}{'='*70}\n"
+                                f"⛔ CRITICAL: CLUSTER UNHEALTHY - EMERGENCY BRAKE ACTIVATED\n"
+                                f"{'='*70}\n"
+                                f"Failed During: GROUP A (Critical/Config) - Sequential Execution\n"
+                                f"Last Remediation: CIS {result['id']}\n"
+                                f"Status: {self.health_status}\n"
+                                f"Cluster Health: FAILED\n\n"
+                                f"Remediation loop aborted to prevent cascading failures.\n"
+                                f"Group B (Resources) was NOT executed.\n\n"
+                                f"Recovery Steps:\n"
+                                f"  1. Check cluster status: kubectl get nodes\n"
+                                f"  2. Check API server: kubectl get pods -n kube-system -l component=kube-apiserver\n"
+                                f"  3. Review kubelet logs: journalctl -u kubelet -n 50\n"
+                                f"  4. Review API server logs: kubectl logs -n kube-system -l component=kube-apiserver --tail=50\n"
+                                f"  5. Restore from backup if needed: /var/backups/cis-remediation/\n\n"
+                                f"For manual recovery:\n"
+                                f"  - Check /var/log/cis_runner.log for remediation history\n"
+                                f"  - Review recent manifest changes in /etc/kubernetes/manifests/\n"
+                                f"  - Revert the last remediation if necessary\n"
+                                f"{'='*70}{Colors.ENDC}\n"
+                            )
+                            print(error_banner)
+                            self.log_activity("EMERGENCY_BRAKE", f"GROUP A failed after CIS {result['id']} - Cluster unhealthy")
+                            sys.exit(1)
+                        else:
+                            print(f"{Colors.GREEN}    [OK] Cluster stable. Continuing to next Group A check...{Colors.ENDC}")
+            
+            print(f"\n{Colors.GREEN}[+] GROUP A (Critical/Config) Complete.{Colors.ENDC}")
+        
+        # --- EXECUTE GROUP B: PARALLEL (Safe, no service restarts) ---
+        if group_b:
+            print(f"\n{Colors.YELLOW}[*] Executing GROUP B (Resources) - PARALLEL mode...{Colors.ENDC}")
+            
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                futures = {executor.submit(self.run_script, s, "remediate"): s for s in group_b}
+                
+                try:
+                    completed = 0
+                    for future in as_completed(futures):
+                        if self.stop_requested:
+                            break
+                        
+                        result = future.result()
+                        if result:
+                            self.results.append(result)
+                            self.update_stats(result)
+                            completed += 1
+                            
+                            # Show progress for parallel execution
+                            progress_pct = (completed / len(group_b)) * 100
+                            self._print_progress(result, completed, len(group_b), progress_pct)
+                
+                except KeyboardInterrupt:
+                    self.stop_requested = True
+                    print("\n[!] Aborted.")
+            
+            print(f"\n{Colors.GREEN}[+] GROUP B (Resources) Complete.{Colors.ENDC}")
 
     def _init_stats(self):
         """Initialize statistics dictionary / เริ่มต้นพจนานุกรมสถิติ"""

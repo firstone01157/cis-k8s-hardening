@@ -52,16 +52,16 @@ echo "[INFO] CIS 3.2.2: Automated Audit Policy Configuration"
 echo "========================================================"
 echo ""
 
-# Call the Python helper
+# Call the Python helper with --apply flag
 echo "[INFO] Executing Python automation helper..."
-python3 "$PYTHON_HELPER"
+python3 "$PYTHON_HELPER" --apply
 HELPER_RESULT=$?
 
 if [ $HELPER_RESULT -ne 0 ]; then
     echo ""
     echo "[FAIL] Automation helper failed with exit code: $HELPER_RESULT"
     echo "[INFO] Manual verification may be needed"
-    echo "[INFO] Run: python3 $PYTHON_HELPER for details"
+    echo "[INFO] Run: python3 $PYTHON_HELPER --apply for details"
     exit 1
 fi
 
