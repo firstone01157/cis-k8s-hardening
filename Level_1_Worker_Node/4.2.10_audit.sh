@@ -3,6 +3,9 @@
 # Title: Ensure that the --rotate-certificates argument is not set to false (Automated)
 # Level: • Level 1 - Worker Node
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 audit_rule() {
 	echo "[INFO] Starting check for 4.2.10..."
 	l_output3=""
@@ -11,9 +14,8 @@ audit_rule() {
 	unset a_output2
 
 	# 1. Detect Config File
-	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o \" --config=[^ ]*\" | awk -F= '{print $2}' | head -n 1)"
-	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o " --config=[^ ]*" | awk -F= '{print $2}' | head -n 1)
-	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
+	echo "[CMD] Executing: config_path=$(kubelet_config_path)"
+	config_path=$(kubelet_config_path)
 
 	# 2. Priority 1: Check Flag
 	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--rotate-certificates=false(\\s|$)\"; then"

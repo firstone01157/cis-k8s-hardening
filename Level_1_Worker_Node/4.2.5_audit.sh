@@ -3,6 +3,9 @@
 # Title: Ensure that the --streaming-connection-idle-timeout argument is not set to 0 (Manual)
 # Level: • Level 1 - Worker Node
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 audit_rule() {
 	echo "[INFO] Starting check for 4.2.5..."
 	l_output3=""
@@ -11,9 +14,8 @@ audit_rule() {
 	unset a_output2
 
 	# 1. Detect Config File
-	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"
-	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP '(?<=--config=)[^ ]+' | head -n 1)
-	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
+	echo "[CMD] Executing: config_path=$(kubelet_config_path)"
+	config_path=$(kubelet_config_path)
 
 	# 2. Priority 1: Check Flag
 	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--streaming-connection-idle-timeout=0(\\s|$)\"; then"

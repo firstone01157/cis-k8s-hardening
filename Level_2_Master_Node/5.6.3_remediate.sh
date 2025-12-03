@@ -1,25 +1,58 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 5.6.3
-# Title: Apply Security Context to Your Pods and Containers (Manual)
-# Level: • Level 2 - Master Node
-# Remediation Script
+# Title: Apply Security Context to Pods and Containers (Manual)
+# Level: Level 2 - Master Node
+# Remediation: This is a MANUAL remediation step
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="5.6.3_remediate.sh"
+echo "[INFO] Starting CIS Benchmark remediation: 5.6.3"
+echo "[INFO] This check requires MANUAL remediation"
 
-	## Description from CSV:
-	## Follow the Kubernetes documentation and apply security contexts to your pods. For a suggested list of security contexts, you may refer to the CIS Security Benchmark for Docker Containers.
-	##
-	## Command hint: Follow the Kubernetes documentation and apply security contexts to your pods. For a suggested list of security contexts, you may refer to the CIS Security Benchmark for Docker Containers.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-
-	a_output+=(" - Remediation: This is a manual check. Apply appropriate security contexts.")
-	return 0
-}
-
-remediate_rule
-exit $?
+echo ""
+echo "========================================================"
+echo "[INFO] CIS 5.6.3: Pod Security Context Configuration"
+echo "========================================================"
+echo ""
+echo "MANUAL REMEDIATION STEPS:"
+echo ""
+echo "1. Identify pods without security context (from audit):"
+echo "   ./5.6.3_audit.sh"
+echo ""
+echo "2. Apply pod-level security context:"
+echo ""
+echo "   spec:"
+echo "     securityContext:"
+echo "       runAsNonRoot: true"
+echo "       runAsUser: 1000"
+echo "       runAsGroup: 3000"
+echo "       fsGroup: 2000"
+echo "       fsGroupChangePolicy: \"OnRootMismatch\""
+echo "       seccompProfile:"
+echo "         type: RuntimeDefault"
+echo ""
+echo "3. Apply container-level security context:"
+echo ""
+echo "     containers:"
+echo "     - name: app"
+echo "       securityContext:"
+echo "         allowPrivilegeEscalation: false"
+echo "         readOnlyRootFilesystem: true"
+echo "         runAsNonRoot: true"
+echo "         runAsUser: 1000"
+echo "         capabilities:"
+echo "           drop:"
+echo "           - ALL"
+echo "           add:"
+echo "           - NET_BIND_SERVICE  # Only if needed"
+echo ""
+echo "4. Apply the updated pod specification:"
+echo "   kubectl apply -f updated-pod.yaml"
+echo ""
+echo "5. Verify security context is applied:"
+echo "   kubectl get pods -A -o yaml | grep -A 5 'securityContext:'"
+echo ""
+echo "[PASS] Manual remediation guidance provided"
+echo "[INFO] Please complete the manual steps above"
+exit 0

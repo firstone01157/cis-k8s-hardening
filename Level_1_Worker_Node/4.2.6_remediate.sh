@@ -1,47 +1,56 @@
 #!/bin/bash
 # CIS Benchmark: 4.2.6
 # Title: Ensure that the --make-iptables-util-chains argument is set to true
-# Level: • Level 1 - Worker Node
-# Remediation Script
+# Level: Level 1 - Worker Node
+# Remediation Script (Config-Driven)
 
-remediate_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+set -euo pipefail
 
-    l_file="/var/lib/kubelet/config.yaml"
-    
-    if [ -e "$l_file" ]; then
-        # Backup
-        cp "$l_file" "$l_file.bak_$(date +%s)"
-        
-        # Check if explicitly set to false
-        if grep -q "makeIPTablesUtilChains:\s*false" "$l_file"; then
-            # Change false to true
-            sed -i 's/makeIPTablesUtilChains:\s*false/makeIPTablesUtilChains: true/' "$l_file"
-            a_output+=(" - Remediation applied: Changed makeIPTablesUtilChains to true")
+KUBELET_CONFIG=${CONFIG_FILE:-/var/lib/kubelet/config.yaml}
+MAKE_IPTABLES=${CONFIG_MAKE_IPTABLES_UTIL_CHAINS:-true}
+
+# Determine project root and helper script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+HELPER_SCRIPT="$PROJECT_ROOT/kubelet_config_manager.py"
+
+# Fallback if running from root
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    HELPER_SCRIPT="./kubelet_config_manager.py"
+fi
+
+if [ ! -f "$KUBELET_CONFIG" ]; then
+    echo "[FAIL] Config file not found: $KUBELET_CONFIG"
+    exit 1
+fi
+
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    echo "[FAIL] Python helper not found at $HELPER_SCRIPT"
+    exit 1
+fi
+
+echo "[INFO] Setting makeIPTablesUtilChains to $MAKE_IPTABLES"
+
+# Call Python helper
+if python3 "$HELPER_SCRIPT" \
+    --config "$KUBELET_CONFIG" \
+    --key "makeIPTablesUtilChains" \
+    --value "$MAKE_IPTABLES"; then
+    echo "[INFO] Restarting kubelet..."
+    if systemctl restart kubelet 2>&1; then
+        sleep 2
+        if systemctl is-active --quiet kubelet; then
+            echo "[PASS] 4.2.6 remediation complete"
+            exit 0
         else
-            # If not present, we can either add it or verify it's not false.
-            # Since default is true, removing 'false' is enough, or adding 'true' explicitly.
-            if ! grep -q "makeIPTablesUtilChains:" "$l_file"; then
-                 # Optional: Explicitly add it if missing (not strictly required as default is true)
-                 # echo "makeIPTablesUtilChains: true" >> "$l_file"
-                 a_output+=(" - Remediation not needed: using default (true)")
-            else
-                 a_output+=(" - Remediation not needed: already set to true")
-            fi
+            echo "[FAIL] kubelet not running after restart"
+            exit 1
         fi
     else
-        a_output2+=(" - Remediation failed: $l_file not found")
-        return 1
+        echo "[FAIL] kubelet restart failed"
+        exit 1
     fi
-    
-    # Warn about restart
-    echo "[INFO] Action Required: Run 'systemctl daemon-reload && systemctl restart kubelet' to apply changes."
-
-    return 0
-}
-
-remediate_rule
-exit $?
+else
+    echo "[FAIL] Failed to update configuration"
+    exit 1
+fi

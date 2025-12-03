@@ -4,6 +4,9 @@
 # Level: • Level 1 - Worker Node
 # Remediation Script
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 remediate_rule() {
 	l_output3=""
 	l_dl=""
@@ -17,7 +20,7 @@ remediate_rule() {
 	##
 	## Safety Check: Verify if remediation is needed before applying
 
-	kube_proxy_kubeconfig=$(ps -ef | grep kube-proxy | grep -v grep | grep -o ' --kubeconfig=[^ ]*' | awk -F= '{print $2}')
+	kube_proxy_kubeconfig=$(kube_proxy_kubeconfig_path)
 	if [ -n "$kube_proxy_kubeconfig" ] && [ -f "$kube_proxy_kubeconfig" ]; then
 		chmod 600 "$kube_proxy_kubeconfig"
 		a_output+=(" - Remediation applied: Set permissions of $kube_proxy_kubeconfig to 600")

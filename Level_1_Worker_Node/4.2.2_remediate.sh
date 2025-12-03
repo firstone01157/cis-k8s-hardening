@@ -4,36 +4,77 @@
 # Level: Level 1 - Worker Node
 # Remediation Script
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+set -euo pipefail
 
-	l_file="/var/lib/kubelet/config.yaml"
-	if [ -e "$l_file" ]; then
-		# Backup
-		cp "$l_file" "$l_file.bak_$(date +%s)"
-
-		# Check for authorization: mode: AlwaysAllow (default insecure)
-		if grep -A 1 "authorization:" "$l_file" | grep -q "mode: AlwaysAllow"; then
-			sed -i '/authorization:/,+1 s/mode: AlwaysAllow/mode: Webhook/' "$l_file"
-			a_output+=(" - Remediation applied: Set authorization mode to Webhook in $l_file")
-		elif grep -A 1 "authorization:" "$l_file" | grep -q "mode: Webhook"; then
-			a_output+=(" - Remediation not needed: Authorization mode already Webhook in $l_file")
-		else
-			# Might be missing or different
-			a_output2+=(" - Remediation failed: Could not find 'authorization: mode: AlwaysAllow' pattern in $l_file")
-			echo "Manual intervention required for 4.2.2"
-		fi
-		
-		echo "Action Required: Run 'systemctl daemon-reload && systemctl restart kubelet' to apply changes."
-		return 0
+kubelet_config_path() {
+	local config
+	config=$(ps -eo args | grep -m1 '[k]ubelet' | sed -n 's/.*--config[= ]\([^ ]*\).*/\1/p')
+	if [ -n "$config" ]; then
+		printf '%s' "$config"
 	else
-		a_output+=(" - Remediation not needed: $l_file not found")
-		return 0
+		printf '%s' "/var/lib/kubelet/config.yaml"
 	fi
 }
 
-remediate_rule
-exit $?
+config_file=$(kubelet_config_path)
+if [ ! -f "$config_file" ]; then
+	echo "[WARN] kubelet config not found at $config_file; skipping 4.2.2."
+	exit 0
+fi
+
+backup_file="$config_file.bak.$(date +%s)"
+cp -p "$config_file" "$backup_file"
+
+status=$(python3 - "$config_file" <<'PY'
+from pathlib import Path
+import sys
+
+try:
+	import yaml
+except ImportError:
+	sys.exit('yaml module unavailable')
+
+path = Path(sys.argv[1])
+original_text = path.read_text()
+data = yaml.safe_load(original_text) or {}
+if not isinstance(data, dict):
+	data = {}
+
+changed = False
+
+def ensure_dict(parent, key):
+	value = parent.get(key)
+	if not isinstance(value, dict):
+		value = {}
+		parent[key] = value
+	return value
+
+auth = ensure_dict(data, 'authorization')
+current = auth.get('mode')
+if current == 'Webhook':
+	print('UNCHANGED')
+	sys.exit(0)
+
+auth['mode'] = 'Webhook'
+changed = True
+
+if changed:
+	new_text = yaml.safe_dump(data, sort_keys=False, default_flow_style=False, width=4096)
+	if not new_text.endswith('\n'):
+		new_text += '\n'
+	path.write_text(new_text)
+	print('UPDATED')
+else:
+	print('UNCHANGED')
+PY
+)
+
+if [ "$status" = "UPDATED" ]; then
+	echo "[FIXED] authorization mode set to Webhook in $config_file"
+	echo "[INFO] Reload kubelet: systemctl daemon-reload && systemctl restart kubelet"
+elif [ "$status" = "UNCHANGED" ]; then
+	echo "[INFO] authorization mode already Webhook in $config_file"
+else
+	echo "[ERROR] Unexpected status from YAML updater: $status"
+	exit 1
+fi

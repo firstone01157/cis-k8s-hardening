@@ -1,25 +1,76 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 5.2.7
-# Title: Minimize the admission of root containers (Manual)
-# Level: • Level 2 - Master Node
-# Remediation Script
+# Title: Minimize the admission of root containers (Automated)
+# Level: Level 2 - Master Node
+# Remediation: This is a MANUAL remediation step - requires pod policy updates
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="5.2.7_remediate.sh"
+echo "[INFO] Starting CIS Benchmark remediation: 5.2.7"
+echo "[INFO] This check requires MANUAL remediation"
 
-	## Description from CSV:
-	## Create a policy for each namespace in the cluster, ensuring that either MustRunAsNonRoot or MustRunAs with the range of UIDs not including 0, is set.
-	##
-	## Command hint: Create a policy for each namespace in the cluster, ensuring that either MustRunAsNonRoot or MustRunAs with the range of UIDs not including 0, is set.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-
-	a_output+=(" - Remediation: This is a manual check. Enforce runAsNonRoot: true in pods/policies.")
-	return 0
-}
-
-remediate_rule
-exit $?
+echo ""
+echo "========================================================"
+echo "[INFO] CIS 5.2.7: Minimize Root Container Admission"
+echo "========================================================"
+echo ""
+echo "MANUAL REMEDIATION STEPS:"
+echo ""
+echo "1. Identify pods running as root (from audit script):"
+echo "   ./5.2.7_audit.sh"
+echo ""
+echo "2. For each pod found, update its manifest to include:"
+echo "   spec:"
+echo "     securityContext:"
+echo "       runAsNonRoot: true"
+echo "       runAsUser: 1000  # Non-zero user ID"
+echo ""
+echo "3. Or, apply a Pod Security Policy to enforce at cluster level:"
+echo ""
+echo "   apiVersion: policy/v1beta1"
+echo "   kind: PodSecurityPolicy"
+echo "   metadata:"
+echo "     name: restricted"
+echo "   spec:"
+echo "     privileged: false"
+echo "     allowPrivilegeEscalation: false"
+echo "     requiredDropCapabilities:"
+echo "     - ALL"
+echo "     volumes:"
+echo "     - 'configMap'"
+echo "     - 'emptyDir'"
+echo "     - 'projected'"
+echo "     - 'secret'"
+echo "     - 'downwardAPI'"
+echo "     - 'persistentVolumeClaim'"
+echo "     hostNetwork: false"
+echo "     hostIPC: false"
+echo "     hostPID: false"
+echo "     runAsUser:"
+echo "       rule: 'MustRunAsNonRoot'"
+echo "     seLinux:"
+echo "       rule: 'MustRunAs'"
+echo "       seLinuxOptions:"
+echo "         level: 's0:c123,c456'"
+echo "     supplementalGroups:"
+echo "       rule: 'MustRunAs'"
+echo "       ranges:"
+echo "       - min: 1000"
+echo "         max: 65535"
+echo "     fsGroup:"
+echo "       rule: 'MustRunAs'"
+echo "       ranges:"
+echo "       - min: 1000"
+echo "         max: 65535"
+echo "     readOnlyRootFilesystem: false"
+echo ""
+echo "4. Apply the policy:"
+echo "   kubectl apply -f psp-restricted.yaml"
+echo ""
+echo "5. Verify the policy is enforced:"
+echo "   kubectl get psp"
+echo ""
+echo "[PASS] Manual remediation guidance provided"
+echo "[INFO] Please complete the manual steps above"
+exit 0

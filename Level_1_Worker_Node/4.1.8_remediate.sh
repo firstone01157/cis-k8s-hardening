@@ -4,6 +4,9 @@
 # Level: • Level 1 - Worker Node
 # Remediation Script
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 remediate_rule() {
 	l_output3=""
 	l_dl=""
@@ -17,7 +20,7 @@ remediate_rule() {
 	##
 	## Safety Check: Verify if remediation is needed before applying
 
-	client_ca_file=$(ps -ef | grep kubelet | grep -v grep | grep -o ' --client-ca-file=[^ ]*' | awk -F= '{print $2}')
+	client_ca_file=$(kubelet_arg_value "--client-ca-file")
 	if [ -n "$client_ca_file" ] && [ -f "$client_ca_file" ]; then
 		chown root:root "$client_ca_file"
 		a_output+=(" - Remediation applied: Set ownership of $client_ca_file to root:root")

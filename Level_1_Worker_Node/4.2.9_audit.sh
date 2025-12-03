@@ -3,6 +3,9 @@
 # Title: Ensure that the --tls-cert-file and --tls-private-key-file arguments are set as appropriate
 # Level: • Level 1 - Worker Node
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 audit_rule() {
 	echo "[INFO] Starting check for 4.2.9..."
 	l_output3=""
@@ -11,20 +14,27 @@ audit_rule() {
 	unset a_output2
 
 	# 1. Detect Config File
-	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"
-	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP '(?<=--config=)[^ ]+' | head -n 1)
-	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
+	echo "[CMD] Executing: config_path=$(kubelet_config_path)"
+	config_path=$(kubelet_config_path)
 
 	# 2. Priority 1: Check Flag
-	echo "[CMD] Executing: flag_cert=$(ps -ef | grep kubelet | grep -v grep | grep -E \"\\s--tls-cert-file(=|\\s|$)\")"
-	flag_cert=$(ps -ef | grep kubelet | grep -v grep | grep -E "\s--tls-cert-file(=|\s|$)")
-	echo "[CMD] Executing: flag_key=$(ps -ef | grep kubelet | grep -v grep | grep -E \"\\s--tls-private-key-file(=|\\s|$)\")"
-	flag_key=$(ps -ef | grep kubelet | grep -v grep | grep -E "\s--tls-private-key-file(=|\s|$)")
+	flag_cert_set=0
+	flag_key_set=0
+	flag_cert_cmd='ps -ef | grep kubelet | grep -v grep | grep -E "[[:space:]]--tls-cert-file(=|[[:space:]]|$)"'
+	flag_key_cmd='ps -ef | grep kubelet | grep -v grep | grep -E "[[:space:]]--tls-private-key-file(=|[[:space:]]|$)"'
+	echo "[CMD] Executing: $flag_cert_cmd"
+	if ps -ef | grep kubelet | grep -v grep | grep -E -q "[[:space:]]--tls-cert-file(=|[[:space:]]|$)"; then
+		flag_cert_set=1
+	fi
+	echo "[CMD] Executing: $flag_key_cmd"
+	if ps -ef | grep kubelet | grep -v grep | grep -E -q "[[:space:]]--tls-private-key-file(=|[[:space:]]|$)"; then
+		flag_key_set=1
+	fi
 
-	if [ -n "$flag_cert" ] && [ -n "$flag_key" ]; then
+	if [ "$flag_cert_set" -eq 1 ] && [ "$flag_key_set" -eq 1 ]; then
 		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --tls-cert-file and --tls-private-key-file are set (Flag)")
-	elif [ -n "$flag_cert" ] || [ -n "$flag_key" ]; then
+	elif [ "$flag_cert_set" -eq 1 ] || [ "$flag_key_set" -eq 1 ]; then
 		echo "[INFO] Check Failed"
 		a_output2+=(" - Check Failed: Only one of --tls-cert-file or --tls-private-key-file is set (Flag)")
 		echo "[FAIL_REASON] Check Failed: Only one of --tls-cert-file or --tls-private-key-file is set (Flag)"

@@ -1,43 +1,67 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 1.2.14
 # Title: Ensure that the admission control plugin NodeRestriction is set (Automated)
-# Level: • Level 2 - Master Node
+# Level: Level 2 - Master Node
+# Description: Ensure that NodeRestriction IS in the --enable-admission-plugins list
 
-audit_rule() {
-	echo "[INFO] Starting check for 1.2.14..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="1.2.14_audit.sh"
+echo "[INFO] Starting CIS Benchmark check: 1.2.14"
 
-	## Description from CSV:
-	echo "[CMD] Executing: ## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction."
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction.
-	##
-	echo "[CMD] Executing: ## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction."
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --enable-admission-plugins argument is set to a value that includes NodeRestriction.
-	##
+# Initialize variables
+audit_passed=true
+failure_reasons=()
 
-	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep \"\\--enable-admission-plugins\" | grep -q \"NodeRestriction\"; then"
-	if ps -ef | grep kube-apiserver | grep -v grep | grep "\--enable-admission-plugins" | grep -q "NodeRestriction"; then
-		echo "[INFO] Check Passed"
-		a_output+=(" - Check Passed: NodeRestriction is present in --enable-admission-plugins")
-	else
-		echo "[INFO] Check Failed"
-		a_output2+=(" - Check Failed: NodeRestriction is NOT present in --enable-admission-plugins")
-		echo "[FAIL_REASON] Check Failed: NodeRestriction is NOT present in --enable-admission-plugins"
-		echo "[FIX_HINT] Run remediation script: 1.2.14_remediate.sh"
-	fi
+# Verify kube-apiserver is running
+echo "[INFO] Checking kube-apiserver process..."
+if ! ps -ef | grep -v grep | grep -q "kube-apiserver"; then
+    echo "[FAIL] kube-apiserver process is not running"
+    exit 1
+fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
-		return 0
-	else
-		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
-		return 1
-	fi
-}
+echo "[INFO] Extracting kube-apiserver command line arguments..."
+# Use grep -o to extract the exact --enable-admission-plugins=<value> pattern
+# This is more robust than tr/tail which can fail if process output spans multiple lines
 
-audit_rule
-exit $?
+enable_plugins_flag=$(ps -ef | grep -v grep | grep "kube-apiserver" | grep -o -- '--enable-admission-plugins=[^ ]*')
+echo "[DEBUG] Full flag: $enable_plugins_flag"
+
+if [ -z "$enable_plugins_flag" ]; then
+    echo "[FAIL] --enable-admission-plugins is not set"
+    audit_passed=false
+    failure_reasons+=("--enable-admission-plugins flag not found")
+else
+    echo "[INFO] --enable-admission-plugins is set"
+    
+    # Extract just the value part (after the = sign)
+    # Remove the '--enable-admission-plugins=' prefix to get: NodeRestriction,AlwaysPullImages,...
+    enable_plugins="${enable_plugins_flag#--enable-admission-plugins=}"
+    echo "[DEBUG] Extracted plugins: $enable_plugins"
+    
+    # Check if NodeRestriction is in the enabled plugins list
+    # Use grep -F to do literal string matching (not regex)
+    if echo "$enable_plugins" | grep -F -q "NodeRestriction"; then
+        echo "[INFO] NodeRestriction found in enabled plugins"
+        echo "[PASS] NodeRestriction is present in --enable-admission-plugins"
+    else
+        echo "[FAIL] NodeRestriction is NOT in --enable-admission-plugins"
+        audit_passed=false
+        failure_reasons+=("NodeRestriction not found in enabled admission plugins")
+    fi
+fi
+
+# Report final result
+echo ""
+echo "==============================================="
+if [ "$audit_passed" = true ]; then
+    echo "[PASS] CIS 1.2.14: Admission plugin NodeRestriction is correctly configured"
+    exit 0
+else
+    echo "[FAIL] CIS 1.2.14: Admission plugin NodeRestriction is NOT correctly configured"
+    echo "Reasons:"
+    for reason in "${failure_reasons[@]}"; do
+        echo "  - $reason"
+    done
+    exit 1
+fi

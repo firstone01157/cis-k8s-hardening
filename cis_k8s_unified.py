@@ -23,6 +23,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import glob
+import socket
 
 # --- Constants / ค่าคงที่ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -184,6 +185,32 @@ class CISUnifiedRunner:
             print(f"{Colors.RED}[-] Missing: {', '.join(missing)}{Colors.ENDC}")
             sys.exit(1)
 
+    def detect_node_role(self):
+        """Detect current node role by inspecting labels / ตรวจจับบทบาทโหนดจากป้ายกำกับ"""
+        hostname = socket.gethostname()
+        kubectl = self.get_kubectl_cmd()
+
+        try:
+            result = subprocess.run(
+                kubectl + ["get", "node", hostname, "--no-headers", "-o", "jsonpath={.metadata.labels}"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                return None
+
+            labels = result.stdout.lower()
+            if not labels:
+                return None
+
+            if "control-plane" in labels or "master" in labels:
+                return "master"
+            return "worker"
+        except Exception:
+            return None
+
     def get_kubectl_cmd(self):
         """
         Detect kubeconfig and return kubectl command
@@ -210,78 +237,142 @@ class CISUnifiedRunner:
         ตรวจสอบสุขภาพของคลัสเตอร์ Kubernetes
         """
         print(f"{Colors.CYAN}[*] Checking Cluster Health...{Colors.ENDC}")
-        kubectl = self.get_kubectl_cmd()
-        
-        try:
-            # Check nodes / ตรวจสอบโหนด
-            nodes_result = subprocess.run(
-                kubectl + ["get", "nodes"],
-                capture_output=True, text=True, timeout=10
-            )
+        admin_conf = "/etc/kubernetes/admin.conf"
+
+        if os.path.exists(admin_conf):
+            kubectl = self.get_kubectl_cmd()
+
+            try:
+                # Check nodes / ตรวจสอบโหนด
+                nodes_result = subprocess.run(
+                    kubectl + ["get", "nodes"],
+                    capture_output=True, text=True, timeout=10
+                )
             
-            if nodes_result.returncode != 0:
-                self.health_status = "CRITICAL (Nodes Unreachable)"
-                print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
-                return self.health_status
-            
-            # Check pod status / ตรวจสอบสถานะพอด
-            pods_result = subprocess.run(
-                kubectl + ["get", "pods", "-n", "kube-system", 
-                          "--field-selector", "status.phase!=Running"],
-                capture_output=True, text=True, timeout=10
-            )
-            
-            unhealthy_pods = [
-                line for line in pods_result.stdout.split('\n')
-                if line.strip() and "NAME" not in line
-            ]
-            
-            if unhealthy_pods:
-                self.health_status = f"WARNING ({len(unhealthy_pods)} Unhealthy Pods)"
-                print(f"{Colors.YELLOW}    -> {self.health_status}{Colors.ENDC}")
-            else:
-                self.health_status = "OK (Healthy)"
-                print(f"{Colors.GREEN}    -> {self.health_status}{Colors.ENDC}")
+                if nodes_result.returncode != 0:
+                    self.health_status = "CRITICAL (Nodes Unreachable)"
+                    print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+                    return self.health_status
                 
-        except subprocess.TimeoutExpired:
-            self.health_status = "ERROR (Timeout)"
-            print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
-        except Exception as e:
-            self.health_status = f"ERROR ({str(e)})"
-            print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
-        
+                # Check pod status / ตรวจสอบสถานะพอด
+                pods_result = subprocess.run(
+                    kubectl + ["get", "pods", "-n", "kube-system", 
+                              "--field-selector", "status.phase!=Running"],
+                    capture_output=True, text=True, timeout=10
+                )
+                
+                unhealthy_pods = [
+                    line for line in pods_result.stdout.split('\n')
+                    if line.strip() and "NAME" not in line
+                ]
+                
+                if unhealthy_pods:
+                    self.health_status = f"WARNING ({len(unhealthy_pods)} Unhealthy Pods)"
+                    print(f"{Colors.YELLOW}    -> {self.health_status}{Colors.ENDC}")
+                else:
+                    self.health_status = "OK (Healthy)"
+                    print(f"{Colors.GREEN}    -> {self.health_status}{Colors.ENDC}")
+                
+            except subprocess.TimeoutExpired:
+                self.health_status = "ERROR (Timeout)"
+                print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+            except Exception as e:
+                self.health_status = f"ERROR ({str(e)})"
+                print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+        else:
+            try:
+                kubelet = subprocess.run(
+                    ["systemctl", "is-active", "kubelet"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if kubelet.returncode == 0 and kubelet.stdout.strip() == "active":
+                    self.health_status = "OK (Worker Kubelet Running)"
+                    print(f"{Colors.GREEN}    -> {self.health_status}{Colors.ENDC}")
+                else:
+                    self.health_status = "CRITICAL (Kubelet Down)"
+                    print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+            except subprocess.TimeoutExpired:
+                self.health_status = "ERROR (Timeout)"
+                print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+            except Exception as e:
+                self.health_status = f"ERROR ({str(e)})"
+                print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
+
         return self.health_status
 
     def wait_for_healthy_cluster(self):
         """
         Wait for cluster to be healthy after API server restart
         Uses configuration from cis_config.json for timeout settings
-        รอให้คลัสเตอร์มีสุขภาพแข็งแรงหลังจากการรีสตาร์ท API Server
         
-        Returns True if cluster recovers within timeout, False otherwise
+        Master Node: Checks kubectl get nodes (API server availability)
+        Worker Node: Checks systemctl is-active kubelet (kubelet service health)
+        
+        Returns True if cluster/node is healthy within timeout, False otherwise
         """
         if not self.wait_for_api_enabled:
             if self.verbose >= 1:
                 print(f"{Colors.CYAN}[*] API health check disabled in config.{Colors.ENDC}")
             return True
         
+        admin_conf = "/etc/kubernetes/admin.conf"
         total_timeout = self.api_check_interval * self.api_max_retries
-        print(f"{Colors.YELLOW}[*] Waiting for cluster to be healthy (Timeout: {total_timeout}s, Interval: {self.api_check_interval}s)...{Colors.ENDC}")
-        kubectl = self.get_kubectl_cmd()
         
+        # --- WORKER NODE LOGIC ---
+        # If admin.conf doesn't exist, this is a Worker Node
+        if not os.path.exists(admin_conf):
+            print(f"{Colors.YELLOW}[*] Worker Node detected. Checking kubelet health...{Colors.ENDC}")
+            
+            try:
+                kubelet_result = subprocess.run(
+                    ["systemctl", "is-active", "kubelet"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                
+                kubelet_status = kubelet_result.stdout.strip()
+                
+                # If kubelet is active, Worker Node is healthy
+                if kubelet_result.returncode == 0 and kubelet_status == "active":
+                    self.health_status = "OK (Worker Kubelet Running)"
+                    print(f"{Colors.GREEN}    [OK] Worker kubelet is active.{Colors.ENDC}")
+                    return True
+                else:
+                    # kubelet is inactive or failed
+                    self.health_status = "CRITICAL (Kubelet Not Active)"
+                    print(f"{Colors.RED}    [FAIL] Worker kubelet is {kubelet_status or 'not responding'}.{Colors.ENDC}")
+                    return False
+            
+            except subprocess.TimeoutExpired:
+                self.health_status = "CRITICAL (Kubelet Check Timeout)"
+                print(f"{Colors.RED}    [FAIL] Kubelet health check timed out.{Colors.ENDC}")
+                return False
+            except Exception as e:
+                self.health_status = f"CRITICAL (Kubelet Check Error: {str(e)})"
+                print(f"{Colors.RED}    [FAIL] Error checking kubelet: {str(e)}{Colors.ENDC}")
+                return False
+        
+        # --- MASTER NODE LOGIC ---
+        # If admin.conf exists, this is a Master Node
+        print(f"{Colors.YELLOW}[*] Master Node detected. Waiting for cluster health (Timeout: {total_timeout}s, Interval: {self.api_check_interval}s)...{Colors.ENDC}")
+        
+        kubectl = self.get_kubectl_cmd()
         count = 0
         
         while count < self.api_max_retries:
             try:
-                # Simple nodes check - indicates API is responsive
+                # Simple nodes check - indicates API server is responsive
                 nodes_result = subprocess.run(
                     kubectl + ["get", "nodes"],
-                    capture_output=True, text=True, timeout=10
+                    capture_output=True,
+                    text=True,
+                    timeout=10
                 )
                 
                 if nodes_result.returncode == 0:
                     elapsed = count * self.api_check_interval
-                    print(f"{Colors.GREEN}    [INFO] Cluster is ONLINE. (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                    print(f"{Colors.GREEN}    [OK] Cluster is online. (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
                     self.health_status = "OK (Healthy)"
                     return True
                 
@@ -290,13 +381,11 @@ class CISUnifiedRunner:
             except Exception:
                 pass
             
-            # Not ready yet, sleep and retry
             elapsed = count * self.api_check_interval
             print(f"{Colors.YELLOW}    [WAIT] Cluster not ready... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
             time.sleep(self.api_check_interval)
             count += 1
-        
-        # Timeout reached
+
         print(f"{Colors.RED}    [FAIL] Cluster did not recover within {total_timeout} seconds.{Colors.ENDC}")
         self.health_status = "CRITICAL (Recovery Timeout)"
         return False
@@ -411,11 +500,26 @@ class CISUnifiedRunner:
             # This handles cases where a previous remediation restarted the API server
             if mode == "remediate":
                 if not self.wait_for_healthy_cluster():
-                    return self._create_result(
-                        script, "SKIPPED",
-                        "Cluster unstable - skipping remediation",
-                        time.time() - start_time
+                    # EMERGENCY STOP: Cluster failure detected during remediation
+                    # Continuing would cause cascading failures
+                    error_msg = (
+                        f"\n{Colors.RED}{'='*70}\n"
+                        f"[CRITICAL] EMERGENCY STOP: Cluster Unavailable\n"
+                        f"{'='*70}\n"
+                        f"Status: {self.health_status}\n"
+                        f"Failed Check: {script_id}\n"
+                        f"Time to Failure: {round(time.time() - start_time, 2)}s\n\n"
+                        f"Remediation loop aborted to prevent cascading failures.\n"
+                        f"Manual intervention required:\n"
+                        f"  1. Verify cluster health: kubectl get nodes\n"
+                        f"  2. Check API server status: kubectl get pods -n kube-system\n"
+                        f"  3. Review logs: journalctl -u kubelet -n 100\n"
+                        f"  4. Restore from backup if needed: /var/backups/cis-remediation/\n"
+                        f"{'='*70}{Colors.ENDC}\n"
                     )
+                    print(error_msg)
+                    self.log_activity("REMEDIATION_EMERGENCY_STOP", f"Cluster unavailable at check {script_id}")
+                    sys.exit(1)
             
             # Prepare environment variables for remediation scripts / เตรียมตัวแปรสภาพแวดล้อมสำหรับสคริปต์การแก้ไข
             env = os.environ.copy()
@@ -632,10 +736,15 @@ class CISUnifiedRunner:
         
         print(f"   -> Saved to: {backup_path}")
 
-    def scan(self, target_level, target_role):
+    def scan(self, target_level, target_role, skip_menu=False):
         """
         Execute audit scan with parallel execution
         ดำเนินการสแกนการตรวจสอบพร้อมการดำเนินการแบบขนาน
+        
+        Args:
+            target_level: CIS level to audit ("1", "2", or "all")
+            target_role: Target node role ("master", "worker", or "all")
+            skip_menu: If True, skip results menu (used when in "Both" mode)
         """
         print(f"\n{Colors.CYAN}[*] Starting Audit Scan...{Colors.ENDC}")
         self.log_activity("AUDIT_START", 
@@ -661,7 +770,12 @@ class CISUnifiedRunner:
             self.show_trend_analysis(current_score, previous)
         
         self.save_snapshot("audit", target_role, target_level)
-        self.show_results_menu("audit")
+        
+        # Show results menu only if not skipped (e.g., in "Both" mode)
+        if not skip_menu:
+            self.show_results_menu("audit")
+        else:
+            print(f"\n{Colors.CYAN}[*] Audit Complete. Proceeding to Remediation phase...{Colors.ENDC}")
 
     def _run_scripts_parallel(self, executor, scripts, mode):
         """
@@ -997,7 +1111,7 @@ class CISUnifiedRunner:
             print(f"\n  {Colors.BOLD}{role.upper()}:{Colors.ENDC}")
             print(f"    Pass:    {s['pass']}")
             print(f"    Fail:    {s['fail']}")
-            print(f"    Manual:  {s['manual']}")
+            print(f"    Manual:  {Colors.YELLOW}{s['manual']}{Colors.ENDC}")
             print(f"    Skipped: {s['skipped']}")
             print(f"    Total:   {s['total']}")
             print(f"    Success: {success_rate}%")
@@ -1010,7 +1124,12 @@ class CISUnifiedRunner:
             return
         
         title = self.extract_metadata_from_script(res.get('path'))
-        color = Colors.GREEN if res['status'] in ['PASS', 'FIXED'] else Colors.RED
+        if res['status'] in ['PASS', 'FIXED']:
+            color = Colors.GREEN
+        elif res['status'] == 'MANUAL':
+            color = Colors.YELLOW
+        else:
+            color = Colors.RED
         
         print(f"\n{Colors.CYAN}{'='*70}")
         print(f"{color}[{res['status']}]{Colors.ENDC} {res['id']} - {title}")
@@ -1052,13 +1171,18 @@ class CISUnifiedRunner:
         print(f"\n{Colors.CYAN}AUDIT CONFIGURATION{Colors.ENDC}\n")
         
         # Role selection / การเลือกบทบาท
-        print("  Kubernetes Role:")
-        print("    1) Master only")
-        print("    2) Worker only")
-        print("    3) Both")
-        role = {"1": "master", "2": "worker", "3": "all"}.get(
-            input("\n  Select role [3]: ").strip() or "3", "all"
-        )
+        detected_role = self.detect_node_role()
+        if detected_role:
+            print(f"{Colors.GREEN}[+] Detected Role: {detected_role.capitalize()}{Colors.ENDC}")
+            role = detected_role
+        else:
+            print("  Kubernetes Role:")
+            print("    1) Master only")
+            print("    2) Worker only")
+            print("    3) Both")
+            role = {"1": "master", "2": "worker", "3": "all"}.get(
+                input("\n  Select role [3]: ").strip() or "3", "all"
+            )
         
         # Level selection / การเลือกระดับ
         print(f"\n  CIS Level:")
@@ -1076,13 +1200,18 @@ class CISUnifiedRunner:
         print(f"\n{Colors.RED}[!] WARNING: REMEDIATION WILL MODIFY YOUR CLUSTER!{Colors.ENDC}\n")
         
         # Role selection / การเลือกบทบาท
-        print("  Kubernetes Role:")
-        print("    1) Master only")
-        print("    2) Worker only")
-        print("    3) Both")
-        role = {"1": "master", "2": "worker", "3": "all"}.get(
-            input("\n  Select role [3]: ").strip() or "3", "all"
-        )
+        detected_role = self.detect_node_role()
+        if detected_role:
+            print(f"{Colors.GREEN}[+] Detected Role: {detected_role.capitalize()}{Colors.ENDC}")
+            role = detected_role
+        else:
+            print("  Kubernetes Role:")
+            print("    1) Master only")
+            print("    2) Worker only")
+            print("    3) Both")
+            role = {"1": "master", "2": "worker", "3": "all"}.get(
+                input("\n  Select role [3]: ").strip() or "3", "all"
+            )
         
         # Level selection / การเลือกระดับ
         print(f"\n  CIS Level:")
@@ -1193,7 +1322,7 @@ CIS Kubernetes Benchmark - HELP
                 self.verbose = verbose
                 self.script_timeout = timeout
                 self.log_activity("AUDIT_THEN_FIX", f"Level:{level}, Role:{role}")
-                self.scan(level, role)
+                self.scan(level, role, skip_menu=True)
                 
                 if self.confirm_action("Proceed to remediation?"):
                     self.fix(level, role)

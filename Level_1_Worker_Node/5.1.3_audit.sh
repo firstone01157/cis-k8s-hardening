@@ -3,18 +3,19 @@
 # Title: Minimize wildcard use in Roles and ClusterRoles (Automated)
 # Level: • Level 1 - Master Node
 
+set -x  # Enable debugging
+set -euo pipefail
+
 audit_rule() {
 	echo "[INFO] Starting check for 5.1.3..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+	local -a a_output a_output2
+	a_output=()
+	a_output2=()
 
-	echo "[CMD] Executing: # Verify kubectl is available"
+	echo "[CMD] Verifying kubectl is available"
 	# Verify kubectl is available
-	echo "[CMD] Executing: if ! command -v kubectl &> /dev/null; then"
 	if ! command -v kubectl &> /dev/null; then
-		echo "[CMD] Executing: a_output2+=(\" - Check Error: kubectl command not found\")"
+		echo "[ERROR] kubectl command not found"
 		a_output2+=(" - Check Error: kubectl command not found")
 		echo "[FAIL_REASON] Check Error: kubectl command not found"
 		echo "[FIX_HINT] Run remediation script: 5.1.3_remediate.sh"
@@ -24,22 +25,30 @@ audit_rule() {
 
 	# Get all Roles and ClusterRoles with wildcard permissions
 	# Exclude system roles
-	echo "[CMD] Executing: violations=$(kubectl get roles,clusterroles -A -o json 2>/dev/null | jq -r '.items[] | select(.metadata.name | test(\"^(system:|kubeadm:)\") | not) | select(.rules[]? | select(.resources[]? == \"*\" or .verbs[]? == \"*\")) | \"\\(.kind): \\(.metadata.namespace):\\(.metadata.name)\"' | sort -u)"
-	violations=$(kubectl get roles,clusterroles -A -o json 2>/dev/null | jq -r '.items[] | select(.metadata.name | test("^(system:|kubeadm:)") | not) | select(.rules[]? | select(.resources[]? == "*" or .verbs[]? == "*")) | "\(.kind): \(.metadata.namespace):\(.metadata.name)"' | sort -u)
-	
+	echo "[CMD] Querying roles/clusterroles for wildcard permissions..."
+	local violations
+	# Use single quotes to avoid shell interpretation, then pass to jq
+	violations=$(kubectl get roles,clusterroles -A -o json 2>/dev/null | \
+		jq -r '.items[] | 
+			select(.metadata.name | test("^(system:|kubeadm:)") | not) | 
+			select(.rules[]? | select(.resources[]? == "*" or .verbs[]? == "*")) | 
+			"\(.kind): \(.metadata.namespace):\(.metadata.name)"' \
+		2>/dev/null | sort -u || echo "")
+	echo "[DEBUG] violations result: ${violations:-<empty>}"
+
 	if [ -n "$violations" ]; then
-		echo "[INFO] Check Failed"
+		echo "[INFO] Check Failed - Wildcard permissions found"
 		a_output2+=(" - Check Failed: Roles/ClusterRoles with wildcard permissions found:")
 		echo "[FAIL_REASON] Check Failed: Roles/ClusterRoles with wildcard permissions found:"
 		echo "[FIX_HINT] Run remediation script: 5.1.3_remediate.sh"
 		while IFS= read -r line; do
-			[ -n "$line" ] && echo "[INFO] Check Failed"
-			[ -n "$line" ] && a_output2+=(" - $line")
- echo "[FAIL_REASON] $line"
- echo "[FIX_HINT] Run remediation script: 5.1.3_remediate.sh"
+			[ -z "$line" ] && continue
+			a_output2+=(" - $line")
+			echo "[FAIL_REASON] $line"
+			echo "[FIX_HINT] Review and restrict wildcard permissions"
 		done <<< "$violations"
 	else
-		echo "[INFO] Check Passed"
+		echo "[INFO] Check Passed - No wildcard permissions found"
 		a_output+=(" - Check Passed: No non-system Roles/ClusterRoles with wildcard permissions found")
 	fi
 
@@ -54,4 +63,5 @@ audit_rule() {
 }
 
 audit_rule
-exit $?
+RESULT="$?"
+exit "${RESULT:-1}"

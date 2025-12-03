@@ -3,60 +3,65 @@
 # Title: Ensure that the --anonymous-auth argument is set to false (Automated)
 # Level: • Level 1 - Worker Node
 
+set -e  # Exit on error
+set -u  # Exit on undefined variable
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 audit_rule() {
-	echo "[INFO] Starting check for 4.2.1..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+	echo "[INFO] Starting check for 4.2.1: anonymous-auth must be false"
+	local -a a_output=()
+	local -a a_output2=()
+	local config_path=""
+	local result=1
 
-	# 1. Detect Config File
-	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o \" --config=[^ ]*\" | awk -F= '{print $2}' | head -n 1)"
-	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o " --config=[^ ]*" | awk -F= '{print $2}' | head -n 1)
-	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
+	# Detect config file path
+	echo "[DEBUG] Detecting kubelet config path..."
+	config_path=$(kubelet_config_path)
+	echo "[DEBUG] config_path = $config_path"
 
-	# 2. Priority 1: Check Flag
-	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--anonymous-auth=false(\\s|$)\"; then"
-	if ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--anonymous-auth=false(\s|$)"; then
-		echo "[INFO] Check Passed"
+	# Priority 1: Check command-line flags
+	echo "[DEBUG] Checking for --anonymous-auth flag in process..."
+	if ps -ef | grep -v grep | grep "kubelet" | grep -q -- "--anonymous-auth=false"; then
+		echo "[PASS] Found --anonymous-auth=false in process"
 		a_output+=(" - Check Passed: --anonymous-auth is explicitly set to false (Flag)")
-	echo "[CMD] Executing: elif ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--anonymous-auth=true(\\s|$)\"; then"
-	elif ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--anonymous-auth=true(\s|$)"; then
-		echo "[INFO] Check Failed"
+		result=0
+	elif ps -ef | grep -v grep | grep "kubelet" | grep -q -- "--anonymous-auth=true"; then
+		echo "[FAIL] Found --anonymous-auth=true in process"
 		a_output2+=(" - Check Failed: --anonymous-auth is explicitly set to true (Flag)")
-		echo "[FAIL_REASON] Check Failed: --anonymous-auth is explicitly set to true (Flag)"
-		echo "[FIX_HINT] Run remediation script: 4.2.1_remediate.sh"
-	
-	# 3. Priority 2: Check Config File
+		result=1
+	# Priority 2: Check config file with YAML-aware grep
 	elif [ -f "$config_path" ]; then
-		# Check for authentication: anonymous: enabled: false
-		echo "[CMD] Executing: # Using grep -A to look into the block"
-		# Using grep -A to look into the block
-		echo "[CMD] Executing: if grep -A5 \"authentication:\" \"$config_path\" | grep -A2 \"anonymous:\" | grep -E -q \"enabled:\\s*false\"; then"
-		if grep -A5 "authentication:" "$config_path" | grep -A2 "anonymous:" | grep -E -q "enabled:\s*false"; then
-			echo "[INFO] Check Passed"
+		echo "[DEBUG] Checking YAML config file: $config_path"
+		
+		# Use context-aware grep to find 'enabled: false' within the anonymous block
+		# Look for 'anonymous:' then check the next 2-3 lines for 'enabled: false'
+		if grep -A 2 "anonymous:" "$config_path" | grep -q "enabled: false"; then
+			echo "[PASS] Config file shows authentication.anonymous.enabled = false"
 			a_output+=(" - Check Passed: authentication.anonymous.enabled is set to false in $config_path")
+			result=0
 		else
-			echo "[INFO] Check Failed"
-			a_output2+=(" - Check Failed: authentication.anonymous.enabled is NOT set to false in $config_path (or missing)")
-			echo "[FAIL_REASON] Check Failed: authentication.anonymous.enabled is NOT set to false in $config_path (or missing)"
-			echo "[FIX_HINT] Run remediation script: 4.2.1_remediate.sh"
+			echo "[FAIL] authentication.anonymous.enabled is NOT false in config"
+			a_output2+=(" - Check Failed: authentication.anonymous.enabled is NOT set to false in $config_path")
+			result=1
 		fi
-	
-	# 4. Priority 3: Default
 	else
-		echo "[INFO] Check Failed"
+		echo "[FAIL] Config file not found and no flag set"
 		a_output2+=(" - Check Failed: --anonymous-auth not set and config file not found (Default: true/insecure)")
-		echo "[FAIL_REASON] Check Failed: --anonymous-auth not set and config file not found (Default: true/insecure)"
-		echo "[FIX_HINT] Run remediation script: 4.2.1_remediate.sh"
+		result=1
 	fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
+	# Output audit results
+	if [ "${#a_output2[@]}" -eq 0 ]; then
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
 		return 0
 	else
 		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
+		if [ "${#a_output[@]}" -gt 0 ]; then
+			printf '%s\n' "- Correctly set:" "${a_output[@]}"
+		fi
+		echo "[FIX_HINT] Run remediation script: 4.2.1_remediate.sh"
 		return 1
 	fi
 }

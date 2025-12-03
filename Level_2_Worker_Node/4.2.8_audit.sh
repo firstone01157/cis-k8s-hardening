@@ -1,38 +1,70 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 4.2.8
 # Title: Ensure that the eventRecordQPS argument is set to a level which ensures appropriate event capture (Manual)
-# Level: • Level 2 - Worker Node
+# Level: Level 2 - Worker Node
+# Description: Verify that eventRecordQPS is configured appropriately for event logging
 
-audit_rule() {
-	echo "[INFO] Starting check for 4.2.8..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="4.2.8_audit.sh"
+echo "[INFO] Starting CIS Benchmark check: 4.2.8"
+echo "[INFO] This is a MANUAL CHECK - eventRecordQPS should be reviewed for appropriateness"
 
-	# Check for eventRecordQPS in kubelet config or arguments. 
-	# Defaults to 5 if not set. Recommendation implies setting it "appropriate".
-	# We will check if it is explicitly set or if the default is active.
-	# Since it is manual, we log the value.
+# Initialize variables
+audit_passed=true
+failure_reasons=()
+details=()
 
-	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -q \"eventRecordQPS\"; then"
-	if ps -ef | grep kubelet | grep -v grep | grep -q "eventRecordQPS"; then
-		echo "[INFO] Check Passed"
-		a_output+=(" - Check Passed: eventRecordQPS is explicitly set (verify value)")
-	else
-		echo "[INFO] Check Passed"
-		a_output+=(" - Check Passed: eventRecordQPS not set (using default 5)")
-	fi
+# Verify kubelet is running
+echo "[INFO] Checking kubelet process..."
+if ! ps -ef | grep -v grep | grep -q "kubelet"; then
+    echo "[FAIL] kubelet process is not running"
+    exit 1
+fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
-		return 0
-	else
-		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
-		return 1
-	fi
-}
+echo "[INFO] Checking kubelet eventRecordQPS configuration..."
+# Extract eventRecordQPS from kubelet arguments
+event_qps=$(ps -ef | grep -v grep | grep "kubelet" | tr ' ' '\n' | grep -A1 "^--event-record-qps$" | tail -1 || echo "NOT_FOUND")
 
-audit_rule
-exit $?
+if [ "$event_qps" = "NOT_FOUND" ] || [ -z "$event_qps" ]; then
+    echo "[INFO] eventRecordQPS not explicitly set - using default value of 5"
+    details+=("eventRecordQPS: Using default value (5)")
+    echo "[INFO] Default of 5 events per second is generally acceptable"
+else
+    echo "[DEBUG] Extracted eventRecordQPS: $event_qps"
+    details+=("eventRecordQPS: $event_qps")
+    
+    # Check if the value seems reasonable (between 0 and 100 for most deployments)
+    if [ "$event_qps" -lt 1 ] || [ "$event_qps" -gt 1000 ]; then
+        echo "[WARN] eventRecordQPS value may be outside recommended range: $event_qps"
+        failure_reasons+=("eventRecordQPS appears to be misconfigured: $event_qps")
+        audit_passed=false
+    else
+        echo "[PASS] eventRecordQPS is set to: $event_qps"
+    fi
+fi
+
+# Final report
+echo ""
+echo "==============================================="
+echo "[INFO] CIS 4.2.8 Audit Results:"
+echo "Details:"
+for detail in "${details[@]}"; do
+    echo "  - $detail"
+done
+
+if [ "$audit_passed" = true ]; then
+    echo "[PASS] CIS 4.2.8: eventRecordQPS appears to be appropriately configured"
+    echo "[INFO] Recommended values:"
+    echo "  - Low-traffic clusters: 5-10 QPS"
+    echo "  - Medium-traffic clusters: 15-25 QPS"
+    echo "  - High-traffic clusters: 50+ QPS"
+    exit 0
+else
+    echo "[FAIL] CIS 4.2.8: eventRecordQPS may be misconfigured"
+    echo "Reasons:"
+    for reason in "${failure_reasons[@]}"; do
+        echo "  - $reason"
+    done
+    exit 1
+fi

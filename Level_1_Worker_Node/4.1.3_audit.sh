@@ -3,6 +3,9 @@
 # Title: If proxy kubeconfig file exists ensure permissions are set to 600 or more restrictive (Manual)
 # Level: • Level 1 - Worker Node
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 audit_rule() {
 	echo "[INFO] Starting check for 4.1.3..."
 	l_output3=""
@@ -16,10 +19,8 @@ audit_rule() {
 	##
 	echo "[CMD] Executing: ## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %a <path><filename> Verify that a file is specified and it exists with permissions are 600 or more restrictive."
 	## Command hint: (based on the file location on your system) on the each worker node. For example, stat -c %a <path><filename> Verify that a file is specified and it exists with permissions are 600 or more restrictive.
-	##
-
-	echo "[CMD] Executing: kube_proxy_kubeconfig=$(ps -ef | grep kube-proxy | grep -v grep | grep -o \' --kubeconfig=[^ ]*\' | awk -F= \'{print $2}\')"
-	kube_proxy_kubeconfig=$(ps -ef | grep kube-proxy | grep -v grep | grep -o ' --kubeconfig=[^ ]*' | awk -F= '{print $2}')
+	echo "[CMD] Executing: kube_proxy_kubeconfig=$(kube_proxy_kubeconfig_path)"
+	kube_proxy_kubeconfig=$(kube_proxy_kubeconfig_path)
 	if [ -z "$kube_proxy_kubeconfig" ]; then
 		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: kube-proxy not running or --kubeconfig not set")

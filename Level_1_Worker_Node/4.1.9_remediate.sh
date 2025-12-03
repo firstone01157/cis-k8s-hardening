@@ -2,44 +2,41 @@
 # CIS Benchmark: 4.1.9
 # Title: Ensure that the kubelet configuration file has permissions set to 600 or more restrictive
 # Level: Level 1 - Worker Node
-# Remediation Script
+# Remediation Script (Config-Driven)
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+set -euo pipefail
 
-	# Check for kubelet config file
-	# Usually /var/lib/kubelet/config.yaml
-	# Or detected via --config
-	
-	l_file="/var/lib/kubelet/config.yaml"
-	if [ ! -e "$l_file" ]; then
-		l_file=$(ps -ef | grep kubelet | grep -- --config | sed 's/.*--config[= ]\([^ ]*\).*/\1/')
-	fi
+CONFIG_FILE=${CONFIG_FILE:-/var/lib/kubelet/config.yaml}
+CONFIG_MODE=${CONFIG_FILE_MODE:-600}
 
-	if [ -e "$l_file" ]; then
-		l_mode=$(stat -c %a "$l_file")
-		if [ "$l_mode" -le 600 ]; then
-			a_output+=(" - Remediation not needed: Permissions on $l_file are $l_mode")
-			return 0
-		else
-			chmod 600 "$l_file"
-			l_mode_new=$(stat -c %a "$l_file")
-			if [ "$l_mode_new" -le 600 ]; then
-				a_output+=(" - Remediation applied: Permissions on $l_file changed to $l_mode_new")
-				return 0
-			else
-				a_output2+=(" - Remediation failed: Could not change permissions on $l_file")
-				return 1
-			fi
-		fi
-	else
-		a_output+=(" - Remediation not needed: kubelet config file not found")
-		return 0
-	fi
-}
+# Determine project root and helper script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+HELPER_SCRIPT="$PROJECT_ROOT/kubelet_config_manager.py"
 
-remediate_rule
-exit $?
+# Fallback if running from root
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    HELPER_SCRIPT="./kubelet_config_manager.py"
+fi
+
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    echo "[FAIL] Python helper not found at $HELPER_SCRIPT"
+    exit 1
+fi
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "[FAIL] Config file not found: $CONFIG_FILE"
+    exit 1
+fi
+
+# Set file permissions
+chmod "$CONFIG_MODE" "$CONFIG_FILE"
+
+# Verify
+if [ "$(stat -c '%a' "$CONFIG_FILE")" = "$CONFIG_MODE" ]; then
+    echo "[PASS] 4.1.9 remediation complete"
+    exit 0
+else
+    echo "[FAIL] Failed to set permissions"
+    exit 1
+fi

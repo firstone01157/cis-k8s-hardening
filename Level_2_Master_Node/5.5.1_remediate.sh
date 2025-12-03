@@ -1,25 +1,55 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 5.5.1
-# Title: Configure Image Provenance using ImagePolicyWebhook admission controller (Manual)
-# Level: • Level 2 - Master Node
-# Remediation Script
+# Title: Configure Image Provenance using ImagePolicyWebhook (Manual)
+# Level: Level 2 - Master Node
+# Remediation: This is a MANUAL remediation step
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="5.5.1_remediate.sh"
+echo "[INFO] Starting CIS Benchmark remediation: 5.5.1"
+echo "[INFO] This check requires MANUAL remediation"
 
-	## Description from CSV:
-	## Follow the Kubernetes documentation and setup image provenance.
-	##
-	## Command hint: Follow the Kubernetes documentation and setup image provenance.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-
-	a_output+=(" - Remediation: This is a manual check. Configure ImagePolicyWebhook.")
-	return 0
-}
-
-remediate_rule
-exit $?
+echo ""
+echo "========================================================"
+echo "[INFO] CIS 5.5.1: Image Provenance Configuration"
+echo "========================================================"
+echo ""
+echo "MANUAL REMEDIATION STEPS:"
+echo ""
+echo "1. Enable ImagePolicyWebhook admission controller:"
+echo "   Edit /etc/kubernetes/manifests/kube-apiserver.yaml:"
+echo ""
+echo "   - Add to --enable-admission-plugins:"
+echo "     ImagePolicyWebhook"
+echo ""
+echo "2. Create image policy webhook configuration:"
+echo "   Create /etc/kubernetes/admission_config.json:"
+echo ""
+echo "   {"
+echo "     \"imagePolicy\": {"
+echo "       \"kubeConfigFile\": \"/etc/kubernetes/imagepolicy-webhook-config.yaml\","
+echo "       \"allowTTL\": 50,"
+echo "       \"denyTTL\": 50,"
+echo "       \"retryBackoff\": 0,"
+echo "       \"defaultAllow\": false"
+echo "     }"
+echo "   }"
+echo ""
+echo "3. Implement image signing:"
+echo "   - Use Docker Content Trust (DCT)"
+echo "   - Sign images with private key"
+echo "   - Distribute signing keys securely"
+echo ""
+echo "4. Update pod definitions to use signed images:"
+echo "   spec:"
+echo "     containers:"
+echo "     - image: myregistry.com/myimage:v1.0"
+echo "       imagePullPolicy: Always"
+echo ""
+echo "5. Verify image provenance:"
+echo "   notaryctl delegation list <registry>/repository"
+echo ""
+echo "[PASS] Manual remediation guidance provided"
+echo "[INFO] Please complete the manual steps above"
+exit 0

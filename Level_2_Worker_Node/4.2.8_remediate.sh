@@ -1,18 +1,56 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 4.2.8
 # Title: Ensure that the eventRecordQPS argument is set to a level which ensures appropriate event capture (Manual)
-# Level: • Level 2 - Worker Node
-# Remediation Script
+# Level: Level 2 - Worker Node
+# Remediation: This is a MANUAL remediation step
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="4.2.8_remediate.sh"
+echo "[INFO] Starting CIS Benchmark remediation: 4.2.8"
+echo "[INFO] This check requires MANUAL remediation"
 
-	a_output+=(" - Remediation: This is a manual check. Set eventRecordQPS in Kubelet config if required.")
-	return 0
-}
-
-remediate_rule
-exit $?
+echo ""
+echo "========================================================"
+echo "[INFO] CIS 4.2.8: Event Record QPS Configuration"
+echo "========================================================"
+echo ""
+echo "MANUAL REMEDIATION STEPS:"
+echo ""
+echo "1. Review current eventRecordQPS setting:"
+echo "   ps -ef | grep kubelet | grep -o -- '--event-record-qps=[^ ]*'"
+echo ""
+echo "2. Determine appropriate QPS value for your cluster:"
+echo "   - Development clusters: 5-10 QPS"
+echo "   - Production clusters (low traffic): 10-15 QPS"
+echo "   - Production clusters (medium traffic): 20-30 QPS"
+echo "   - Production clusters (high traffic): 50-100 QPS"
+echo ""
+echo "3. Edit the kubelet configuration file:"
+echo "   On the worker node, edit kubelet config:"
+echo "   /etc/kubernetes/kubelet.conf"
+echo "   or /var/lib/kubelet/config.yaml"
+echo ""
+echo "4. Set or update eventRecordQPS:"
+echo "   If using command-line flag:"
+echo "   --event-record-qps=25"
+echo ""
+echo "   If using config file (preferred):"
+echo "   eventRecordQPS: 25"
+echo ""
+echo "5. Restart the kubelet service:"
+echo "   systemctl restart kubelet"
+echo ""
+echo "6. Verify the configuration:"
+echo "   - Check if kubelet started successfully"
+echo "   - Monitor event logs to ensure events are captured"
+echo "   - Verify event QPS with: kubectl get events -A --sort-by='.lastTimestamp'"
+echo ""
+echo "7. Monitor system impact:"
+echo "   - Higher QPS = more API server load"
+echo "   - Lower QPS = fewer events logged"
+echo "   - Find balance for your environment"
+echo ""
+echo "[PASS] Manual remediation guidance provided"
+echo "[INFO] Please complete the manual steps above"
+exit 0

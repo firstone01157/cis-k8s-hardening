@@ -3,46 +3,43 @@
 # Title: Ensure that the --seccomp-default parameter is set to true (Manual)
 # Level: • Level 1 - Worker Node
 
+set -x  # Enable debugging
+set -euo pipefail
+
 audit_rule() {
 	echo "[INFO] Starting check for 4.2.14..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+	local -a a_output a_output2
+	a_output=()
+	a_output2=()
 
-	# 1. Detect Config File
-	echo "[CMD] Executing: config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP \'(?<=--config=)[^ ]+\' | head -n 1)"
-	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -oP '(?<=--config=)[^ ]+' | head -n 1)
+	echo "[CMD] Executing: Detecting config file path from kubelet process..."
+	local config_path
+	config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o -- "--config=[^ ]*" | head -n 1 | cut -d= -f2- || echo "")
 	[ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
+	echo "[DEBUG] config_path = $config_path"
 
-	# 2. Priority 1: Check Flag
-	echo "[CMD] Executing: if ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--seccomp-default=true(\\s|$)\"; then"
-	if ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--seccomp-default=true(\s|$)"; then
-		echo "[INFO] Check Passed"
+	echo "[CMD] Checking for --seccomp-default=true in process..."
+	if ps -ef | grep -v grep | grep -F -- "kubelet" | grep -F -q -- "--seccomp-default=true"; then
+		echo "[INFO] Check Passed (Flag set to true)"
 		a_output+=(" - Check Passed: --seccomp-default is set to true (Flag)")
-	echo "[CMD] Executing: elif ps -ef | grep kubelet | grep -v grep | grep -E -q \"\\s--seccomp-default=false(\\s|$)\"; then"
-	elif ps -ef | grep kubelet | grep -v grep | grep -E -q "\s--seccomp-default=false(\s|$)"; then
-		echo "[INFO] Check Failed"
+	elif ps -ef | grep -v grep | grep -F -- "kubelet" | grep -F -q -- "--seccomp-default=false"; then
+		echo "[INFO] Check Failed (Flag set to false)"
 		a_output2+=(" - Check Failed: --seccomp-default is set to false (Flag)")
 		echo "[FAIL_REASON] Check Failed: --seccomp-default is set to false (Flag)"
 		echo "[FIX_HINT] Run remediation script: 4.2.14_remediate.sh"
-	
-	# 3. Priority 2: Check Config File
 	elif [ -f "$config_path" ]; then
-		echo "[CMD] Executing: if grep -E -q \"seccompDefault:\\s*true\" \"$config_path\"; then"
-		if grep -E -q "seccompDefault:\s*true" "$config_path"; then
-			echo "[INFO] Check Passed"
+		echo "[CMD] Checking config file: grep -F 'seccompDefault: true' '$config_path'"
+		if grep -F -q "seccompDefault: true" "$config_path"; then
+			echo "[INFO] Check Passed (Config set to true)"
 			a_output+=(" - Check Passed: seccompDefault is set to true in $config_path")
 		else
-			echo "[INFO] Check Failed"
+			echo "[INFO] Check Failed (Config not set to true)"
 			a_output2+=(" - Check Failed: seccompDefault is NOT set to true in $config_path (or missing)")
 			echo "[FAIL_REASON] Check Failed: seccompDefault is NOT set to true in $config_path (or missing)"
 			echo "[FIX_HINT] Run remediation script: 4.2.14_remediate.sh"
 		fi
-	
-	# 4. Priority 3: Default
 	else
-		echo "[INFO] Check Failed"
+		echo "[INFO] Check Failed (Config file not found)"
 		a_output2+=(" - Check Failed: --seccomp-default not set and config file not found (Default: false/insecure)")
 		echo "[FAIL_REASON] Check Failed: --seccomp-default not set and config file not found (Default: false/insecure)"
 		echo "[FIX_HINT] Run remediation script: 4.2.14_remediate.sh"
@@ -59,4 +56,5 @@ audit_rule() {
 }
 
 audit_rule
-exit $?
+RESULT="$?"
+exit "${RESULT:-1}"

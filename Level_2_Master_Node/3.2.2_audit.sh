@@ -1,36 +1,75 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 3.2.2
-# Title: Ensure that the audit policy covers key security concerns (Manual)
-# Level: • Level 2 - Master Node
+# Title: Ensure that the audit policy covers key security concerns (AUTOMATED)
+# Level: Level 2 - Master Node
+# Description: Verify that the kube-apiserver manifest contains required audit flags
+# Strategy: Check static manifest file for audit configuration flags
 
-audit_rule() {
-	echo "[INFO] Starting check for 3.2.2..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="3.2.2_audit.sh"
+APISERVER_MANIFEST="/etc/kubernetes/manifests/kube-apiserver.yaml"
 
-	## Description from CSV:
-	## Review the audit policy provided for the cluster and ensure that it covers at least the following areas :- • Access to Secrets managed by the cluster. Care should be taken to only log Metadata for req
-	##
-	## Command hint: Review the audit policy provided for the cluster and ensure that it covers at least the following areas :- • Access to Secrets managed by the cluster. Care should be taken to only log Metadata for requests to Secrets, ConfigMaps, and TokenReviews, in order to avoid the risk of logging sensitive data. • Modification of pod and deployment objects. • Use of pods/exec, pods/portforward, pods/proxy and services/proxy. For most requests, minimally logging at the Metadata level is recommended (the most basic level of logging).
-	##
+echo "[INFO] Starting CIS Benchmark check: 3.2.2"
+echo "[INFO] Checking for audit configuration in kube-apiserver manifest..."
 
-	echo "[INFO] Check Passed"
-	a_output+=(" - Manual Check: Ensure audit policy covers key security concerns.")
-	echo "[INFO] Check Passed"
-	a_output+=(" - Command: Review audit policy file (referenced by --audit-policy-file in apiserver)")
-	return 0
+# Verify manifest file exists
+if [ ! -f "$APISERVER_MANIFEST" ]; then
+    echo "[FAIL] kube-apiserver manifest not found: $APISERVER_MANIFEST"
+    exit 1
+fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
-		return 0
-	else
-		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
-		return 1
-	fi
-}
+echo "[DEBUG] Manifest file: $APISERVER_MANIFEST"
 
-audit_rule
-exit $?
+# Check for required audit flags in the manifest
+echo "[INFO] Checking for required audit flags..."
+
+REQUIRED_FLAGS=(
+    "--audit-policy-file"
+    "--audit-log-path"
+    "--audit-log-maxage"
+)
+
+all_flags_present=true
+found_flags=()
+missing_flags=()
+
+for flag in "${REQUIRED_FLAGS[@]}"; do
+    if grep -F -q -- "$flag" "$APISERVER_MANIFEST"; then
+        echo "[INFO] Found: $flag"
+        found_flags+=("$flag")
+    else
+        echo "[FAIL] Missing: $flag"
+        missing_flags+=("$flag")
+        all_flags_present=false
+    fi
+done
+
+# Final report
+echo ""
+echo "========================================================"
+echo "[INFO] CIS 3.2.2 Audit Results:"
+echo "========================================================"
+
+if [ "$all_flags_present" = true ]; then
+    echo "[INFO] Found all required audit flags:"
+    for flag in "${found_flags[@]}"; do
+        echo "  ✓ $flag"
+    done
+    echo ""
+    echo "[INFO] Check Passed"
+    exit 0
+else
+    echo "[FAIL] Missing required audit flags:"
+    for flag in "${missing_flags[@]}"; do
+        echo "  ✗ $flag"
+    done
+    echo ""
+    echo "[INFO] Found flags:"
+    for flag in "${found_flags[@]}"; do
+        echo "  ✓ $flag"
+    done
+    echo ""
+    echo "[FAIL] CIS 3.2.2 check failed"
+    exit 1
+fi

@@ -3,37 +3,44 @@
 # Title: Ensure that the --make-iptables-util-chains argument is set to true
 # Level: • Level 1 - Worker Node
 
+set -x  # Enable debugging
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/kubelet_helpers.sh"
+
 audit_rule() {
-    l_output3=""
-    l_dl=""
-    unset a_output
-    unset a_output2
+    echo "[INFO] Starting check for 4.2.6..."
+    local -a a_output a_output2
+    a_output=()
+    a_output2=()
 
-    # 1. Detect Config File
-    config_path=$(ps -ef | grep kubelet | grep -v grep | grep -o " --config=[^ ]*" | awk -F= '{print $2}' | head -n 1)
-    [ -z "$config_path" ] && config_path="/var/lib/kubelet/config.yaml"
+    echo "[CMD] Executing: config_path=$(kubelet_config_path)"
+    local config_path
+    config_path=$(kubelet_config_path)
+    echo "[DEBUG] config_path = $config_path"
 
-    # --- PRIORITY 1: Check Process Flag ---
-    # ถ้าใน Process รันด้วย false -> FAIL
-    if ps -ef | grep kubelet | grep -v grep | grep -q "\--make-iptables-util-chains=false"; then
+    # Check 1: Look for explicit false flag using safe grep
+    echo "[CMD] Checking for --make-iptables-util-chains=false in process..."
+    if ps -ef | grep -v grep | grep -F -- "kubelet" | grep -F -q -- "--make-iptables-util-chains=false"; then
+        echo "[INFO] Check Failed - Flag set to false"
         a_output2+=(" - Check Failed: --make-iptables-util-chains is explicitly set to false in process flags")
-        
-    elif ps -ef | grep kubelet | grep -v grep | grep -q "\--make-iptables-util-chains=true"; then
+    # Check 2: Look for explicit true flag using safe grep
+    elif ps -ef | grep -v grep | grep -F -- "kubelet" | grep -F -q -- "--make-iptables-util-chains=true"; then
+        echo "[INFO] Check Passed - Flag set to true"
         a_output+=(" - Check Passed: --make-iptables-util-chains is explicitly set to true in process flags")
-
-    # --- PRIORITY 2: Check Config File ---
+    # Check 3: Check config file
     elif [ -f "$config_path" ]; then
-        # ถ้าในไฟล์ตั้งเป็น false -> FAIL
-        if grep -E -q "makeIPTablesUtilChains:\s*false" "$config_path"; then
+        echo "[CMD] Checking config file: grep -F 'makeIPTablesUtilChains: false' '$config_path'"
+        if grep -F -q "makeIPTablesUtilChains: false" "$config_path"; then
+            echo "[INFO] Check Failed - Config set to false"
             a_output2+=(" - Check Failed: makeIPTablesUtilChains is set to false in $config_path")
         else
-            # ถ้าตั้งเป็น true หรือ ไม่มีการตั้งค่าเลย (Default) -> PASS
+            echo "[INFO] Check Passed - Config is true or default"
             a_output+=(" - Check Passed: makeIPTablesUtilChains is true or using default in $config_path")
         fi
-    
-    # --- PRIORITY 3: Default ---
     else
-        # ไม่เจอ Flag และไม่เจอไฟล์ -> Default is true -> PASS
+        echo "[INFO] Check Passed - Using default (true)"
         a_output+=(" - Check Passed: No config found, using default (true)")
     fi
 
@@ -48,4 +55,5 @@ audit_rule() {
 }
 
 audit_rule
-exit $?
+RESULT="$?"
+exit "${RESULT:-1}"

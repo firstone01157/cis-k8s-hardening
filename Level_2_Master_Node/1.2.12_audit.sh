@@ -1,49 +1,60 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 1.2.12
 # Title: Ensure that the admission control plugin ServiceAccount is set (Automated)
-# Level: • Level 2 - Master Node
+# Level: Level 2 - Master Node
+# Description: Ensure that ServiceAccount is NOT in the --disable-admission-plugins list
 
-audit_rule() {
-	echo "[INFO] Starting check for 1.2.12..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="1.2.12_audit.sh"
+echo "[INFO] Starting CIS Benchmark check: 1.2.12"
 
-	## Description from CSV:
-	echo "[CMD] Executing: ## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --disable-admission-plugins argument is set to a value that does not includes ServiceAccount."
-	## Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --disable-admission-plugins argument is set to a value that does not includes ServiceAccount.
-	##
-	echo "[CMD] Executing: ## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --disable-admission-plugins argument is set to a value that does not includes ServiceAccount."
-	## Command hint: Run the following command on the Control Plane node: ps -ef | grep kube-apiserver Verify that the --disable-admission-plugins argument is set to a value that does not includes ServiceAccount.
-	##
+# Initialize variables
+audit_passed=true
+failure_reasons=()
 
-	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -q \"\\--disable-admission-plugins\"; then"
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -q "\--disable-admission-plugins"; then
-		echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep \"\\--disable-admission-plugins\" | grep -q \"ServiceAccount\"; then"
-		if ps -ef | grep kube-apiserver | grep -v grep | grep "\--disable-admission-plugins" | grep -q "ServiceAccount"; then
-			echo "[INFO] Check Failed"
-			a_output2+=(" - Check Failed: ServiceAccount is present in --disable-admission-plugins")
-			echo "[FAIL_REASON] Check Failed: ServiceAccount is present in --disable-admission-plugins"
-			echo "[FIX_HINT] Run remediation script: 1.2.12_remediate.sh"
-		else
-			echo "[INFO] Check Passed"
-			a_output+=(" - Check Passed: ServiceAccount is not in --disable-admission-plugins")
-		fi
-	else
-		echo "[INFO] Check Passed"
-		a_output+=(" - Check Passed: --disable-admission-plugins is not set")
-	fi
+# Verify kube-apiserver is running and get the full command line
+echo "[INFO] Checking kube-apiserver process..."
+if ! ps -ef | grep -v grep | grep -q "kube-apiserver"; then
+    echo "[FAIL] kube-apiserver process is not running"
+    exit 1
+fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
-		return 0
-	else
-		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
-		return 1
-	fi
-}
+echo "[INFO] Extracting kube-apiserver command line arguments..."
+apiserver_cmd=$(ps -ef | grep -v grep | grep "kube-apiserver" | tr ' ' '\n')
 
-audit_rule
-exit $?
+# Check if --disable-admission-plugins is set
+echo "[INFO] Checking if --disable-admission-plugins is set..."
+if echo "$apiserver_cmd" | grep -F -q -- "--disable-admission-plugins"; then
+    echo "[INFO] --disable-admission-plugins is set"
+    
+    # Extract the value of --disable-admission-plugins
+    disable_plugins=$(ps -ef | grep -v grep | grep "kube-apiserver" | tr '=' '\n' | grep -A1 "^--disable-admission-plugins$" | tail -1)
+    echo "[DEBUG] Extracted value: $disable_plugins"
+    
+    # Check if ServiceAccount is in the disabled plugins list
+    if echo "$disable_plugins" | grep -F -q "ServiceAccount"; then
+        echo "[FAIL] ServiceAccount is present in --disable-admission-plugins"
+        audit_passed=false
+        failure_reasons+=("ServiceAccount found in disabled admission plugins")
+    else
+        echo "[PASS] ServiceAccount is NOT in --disable-admission-plugins"
+    fi
+else
+    echo "[PASS] --disable-admission-plugins is not set (ServiceAccount is enabled by default)"
+fi
+
+# Report final result
+echo ""
+echo "==============================================="
+if [ "$audit_passed" = true ]; then
+    echo "[PASS] CIS 1.2.12: Admission plugin ServiceAccount is correctly configured"
+    exit 0
+else
+    echo "[FAIL] CIS 1.2.12: Admission plugin ServiceAccount is NOT correctly configured"
+    echo "Reasons:"
+    for reason in "${failure_reasons[@]}"; do
+        echo "  - $reason"
+    done
+    exit 1
+fi

@@ -1,36 +1,70 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 5.6.3
-# Title: Apply Security Context to Your Pods and Containers (Manual)
-# Level: • Level 2 - Master Node
+# Title: Apply Security Context to Pods and Containers (Manual)
+# Level: Level 2 - Master Node
+# Description: Verify that security contexts are applied to pods
 
-audit_rule() {
-	echo "[INFO] Starting check for 5.6.3..."
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="5.6.3_audit.sh"
+echo "[INFO] Starting CIS Benchmark check: 5.6.3"
+echo "[INFO] This is a MANUAL CHECK - requires human review"
 
-	## Description from CSV:
-	## Review the pod definitions in your cluster and verify that you have security contexts defined as appropriate.
-	##
-	## Command hint: Review the pod definitions in your cluster and verify that you have security contexts defined as appropriate.
-	##
+# Initialize variables
+audit_passed=true
+pods_without_context=()
 
-	echo "[INFO] Check Passed"
-	a_output+=(" - Manual Check: Apply Security Context to Your Pods and Containers.")
-	echo "[INFO] Check Passed"
-	a_output+=(" - Command: Review pod definitions for securityContext.")
-	return 0
+# Verify kubectl is available
+echo "[INFO] Checking if kubectl is available..."
+if ! command -v kubectl &> /dev/null; then
+    echo "[FAIL] kubectl command not found"
+    exit 1
+fi
 
-	if [ "${#a_output2[@]}" -le 0 ]; then
-		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
-		return 0
-	else
-		printf '%s\n' "" "- Audit Result:" "  [-] FAIL" " - Reason(s) for audit failure:" "${a_output2[@]}"
-		[ "${#a_output[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${a_output[@]}"
-		return 1
-	fi
-}
+echo "[INFO] Checking pods for security context..."
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    
+    namespace=$(echo "$line" | cut -d' ' -f1)
+    pod_name=$(echo "$line" | cut -d' ' -f2)
+    has_context=$(echo "$line" | cut -d' ' -f3)
+    
+    echo "[DEBUG] Checking: $namespace/$pod_name (has securityContext: $has_context)"
+    
+    if [ "$has_context" != "true" ]; then
+        echo "[WARN] Pod missing security context: $namespace/$pod_name"
+        pods_without_context+=("$namespace/$pod_name")
+        audit_passed=false
+    fi
+done < <(kubectl get pods -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,HAS_SECCTX:'.spec.securityContext' 2>/dev/null | grep -v '<none>' | tail -n +2)
 
-audit_rule
-exit $?
+# Final report
+echo ""
+echo "==============================================="
+if [ "$audit_passed" = true ]; then
+    echo "[PASS] CIS 5.6.3: All pods have security contexts defined"
+    echo "[INFO] Best practice: Review security context configurations"
+    exit 0
+else
+    echo "[FAIL] CIS 5.6.3: Some pods lack security context"
+    echo "Pods requiring security context:"
+    for pod in "${pods_without_context[@]}"; do
+        echo "  - $pod"
+    done
+    echo ""
+    echo "[INFO] Manual fix: Add security context to pod spec:"
+    echo "  spec:"
+    echo "    securityContext:"
+    echo "      runAsNonRoot: true"
+    echo "      runAsUser: 1000"
+    echo "      fsGroup: 1000"
+    echo "    containers:"
+    echo "    - name: app"
+    echo "      securityContext:"
+    echo "        allowPrivilegeEscalation: false"
+    echo "        readOnlyRootFilesystem: true"
+    echo "        capabilities:"
+    echo "          drop:"
+    echo "          - ALL"
+    exit 1
+fi

@@ -1,25 +1,58 @@
 #!/bin/bash
+set -xe
+
 # CIS Benchmark: 5.4.1
 # Title: Prefer using secrets as files over secrets as environment variables (Manual)
-# Level: • Level 2 - Master Node
-# Remediation Script
+# Level: Level 2 - Master Node
+# Remediation: This is a MANUAL remediation step
 
-remediate_rule() {
-	l_output3=""
-	l_dl=""
-	unset a_output
-	unset a_output2
+SCRIPT_NAME="5.4.1_remediate.sh"
+echo "[INFO] Starting CIS Benchmark remediation: 5.4.1"
+echo "[INFO] This check requires MANUAL remediation"
 
-	## Description from CSV:
-	## If possible, rewrite application code to read secrets from mounted secret files, rather than from environment variables.
-	##
-	## Command hint: If possible, rewrite application code to read secrets from mounted secret files, rather than from environment variables.
-	##
-	## Safety Check: Verify if remediation is needed before applying
-
-	a_output+=(" - Remediation: This is a manual check. Mount secrets as files instead of env vars.")
-	return 0
-}
-
-remediate_rule
-exit $?
+echo ""
+echo "========================================================"
+echo "[INFO] CIS 5.4.1: Use Secrets as Files, Not Env Vars"
+echo "========================================================"
+echo ""
+echo "MANUAL REMEDIATION STEPS:"
+echo ""
+echo "1. Identify resources using secretKeyRef (from audit script):"
+echo "   kubectl get all -A -o jsonpath='{range .items[?(@..secretKeyRef)]}{.kind}{" "}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}'"
+echo ""
+echo "2. For each resource found, convert environment variables to file mounts:"
+echo ""
+echo "   BEFORE (Using env vars - NOT RECOMMENDED):"
+echo "   spec:"
+echo "     containers:"
+echo "     - name: myapp"
+echo "       env:"
+echo "       - name: DB_PASSWORD"
+echo "         valueFrom:"
+echo "           secretKeyRef:"
+echo "             name: my-secret"
+echo "             key: password"
+echo ""
+echo "   AFTER (Using file mounts - RECOMMENDED):"
+echo "   spec:"
+echo "     containers:"
+echo "     - name: myapp"
+echo "       volumeMounts:"
+echo "       - name: secret-volume"
+echo "         mountPath: /etc/secrets"
+echo "         readOnly: true"
+echo "     volumes:"
+echo "     - name: secret-volume"
+echo "       secret:"
+echo "         secretName: my-secret"
+echo ""
+echo "3. Application code should read from file instead of environment:"
+echo "   - Old: password = os.environ.get('DB_PASSWORD')"
+echo "   - New: password = open('/etc/secrets/password').read()"
+echo ""
+echo "4. Apply the updated resource:"
+echo "   kubectl apply -f updated-deployment.yaml"
+echo ""
+echo "[PASS] Manual remediation guidance provided"
+echo "[INFO] Please complete the manual steps above"
+exit 0
