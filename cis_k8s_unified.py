@@ -1455,7 +1455,7 @@ class CISUnifiedRunner:
             f.write(html_content)
 
     def print_stats_summary(self):
-        """Display statistics in terminal / แสดงสถิติในเทอร์มินัล"""
+        """Display color-coded statistics summary / แสดงสรุปสถิติที่มีรหัสสี"""
         print(f"\n{Colors.CYAN}{'='*70}")
         print("STATISTICS SUMMARY")
         print(f"{'='*70}{Colors.ENDC}")
@@ -1466,13 +1466,25 @@ class CISUnifiedRunner:
                 continue
             
             success_rate = (s['pass'] * 100 // s['total']) if s['total'] > 0 else 0
+            
+            # Determine score color based on success rate
+            if success_rate > 80:
+                score_color = Colors.GREEN
+                score_status = "Excellent"
+            elif success_rate >= 50:
+                score_color = Colors.YELLOW
+                score_status = "Needs Improvement"
+            else:
+                score_color = Colors.RED
+                score_status = "Critical"
+            
             print(f"\n  {Colors.BOLD}{role.upper()}:{Colors.ENDC}")
-            print(f"    Pass:    {s['pass']}")
-            print(f"    Fail:    {s['fail']}")
-            print(f"    Manual:  {Colors.YELLOW}{s['manual']}{Colors.ENDC}")
-            print(f"    Skipped: {s['skipped']}")
-            print(f"    Total:   {s['total']}")
-            print(f"    Success: {success_rate}%")
+            print(f"    {Colors.GREEN}Pass{Colors.ENDC}:     {Colors.GREEN}{s['pass']}{Colors.ENDC}")
+            print(f"    {Colors.RED}Fail{Colors.ENDC}:     {Colors.RED}{s['fail']}{Colors.ENDC}")
+            print(f"    {Colors.YELLOW}Manual{Colors.ENDC}:   {Colors.YELLOW}{s['manual']}{Colors.ENDC}")
+            print(f"    {Colors.BLUE}Skipped{Colors.ENDC}:  {Colors.BLUE}{s['skipped']}{Colors.ENDC}")
+            print(f"    {Colors.BOLD}Total{Colors.ENDC}:    {Colors.BOLD}{s['total']}{Colors.ENDC}")
+            print(f"    {Colors.BOLD}Score{Colors.ENDC}:    {score_color}{success_rate}% ({score_status}){Colors.ENDC}")
         
         print(f"\n{Colors.CYAN}{'='*70}{Colors.ENDC}")
 
@@ -1535,21 +1547,29 @@ class CISUnifiedRunner:
             role = detected_role
         else:
             # Detection failed - show simplified menu (no 'Both' option)
-            print("  Kubernetes Role:")
+            print("  Select Target Role:")
             print("    1) Master")
             print("    2) Worker")
-            role = {"1": "master", "2": "worker"}.get(
-                input("\n  Select role [1-2]: ").strip(), "master"
-            )
+            # Validate role input - only accept 1 or 2
+            while True:
+                role_input = input("\n  Input [1-2]: ").strip()
+                if role_input in ["1", "2"]:
+                    role = {"1": "master", "2": "worker"}[role_input]
+                    break
+                print(f"  {Colors.RED}✗ Invalid choice. Please select 1 or 2.{Colors.ENDC}")
         
         # Level selection / การเลือกระดับ
         print(f"\n  CIS Level:")
         print("    1) Level 1")
         print("    2) Level 2")
         print("    3) All")
-        level = {"1": "1", "2": "2", "3": "all"}.get(
-            input("\n  Select level [3]: ").strip() or "3", "all"
-        )
+        # Validate level input - accept 1, 2, 3 or default to 3
+        while True:
+            level_input = input("\n  Select level [1-3] (default: 3): ").strip() or "3"
+            if level_input in ["1", "2", "3"]:
+                level = {"1": "1", "2": "2", "3": "all"}[level_input]
+                break
+            print(f"  {Colors.RED}✗ Invalid choice. Please select 1, 2, or 3.{Colors.ENDC}")
         
         return level, role, self.verbose, False, SCRIPT_TIMEOUT
 
@@ -1564,21 +1584,29 @@ class CISUnifiedRunner:
             role = detected_role
         else:
             # Detection failed - show simplified menu (no 'Both' option)
-            print("  Kubernetes Role:")
+            print("  Select Target Role:")
             print("    1) Master")
             print("    2) Worker")
-            role = {"1": "master", "2": "worker"}.get(
-                input("\n  Select role [1-2]: ").strip(), "master"
-            )
+            # Validate role input - only accept 1 or 2
+            while True:
+                role_input = input("\n  Input [1-2]: ").strip()
+                if role_input in ["1", "2"]:
+                    role = {"1": "master", "2": "worker"}[role_input]
+                    break
+                print(f"  {Colors.RED}✗ Invalid choice. Please select 1 or 2.{Colors.ENDC}")
         
         # Level selection / การเลือกระดับ
         print(f"\n  CIS Level:")
         print("    1) Level 1")
         print("    2) Level 2")
         print("    3) All")
-        level = {"1": "1", "2": "2", "3": "all"}.get(
-            input("\n  Select level [3]: ").strip() or "3", "all"
-        )
+        # Validate level input - accept 1, 2, 3 or default to 3
+        while True:
+            level_input = input("\n  Select level [1-3] (default: 3): ").strip() or "3"
+            if level_input in ["1", "2", "3"]:
+                level = {"1": "1", "2": "2", "3": "all"}[level_input]
+                break
+            print(f"  {Colors.RED}✗ Invalid choice. Please select 1, 2, or 3.{Colors.ENDC}")
         
         return level, role, SCRIPT_TIMEOUT
 
