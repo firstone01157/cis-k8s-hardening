@@ -29,8 +29,6 @@ ENV/
 
 # Sensitive data and configuration
 *.csv
-cis_config.json
-config/cis_config.json
 results/
 logs/
 

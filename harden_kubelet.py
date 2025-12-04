@@ -17,6 +17,7 @@ import json
 import subprocess
 import sys
 import os
+import time
 from pathlib import Path
 from datetime import datetime
 from shutil import copy2
@@ -64,11 +65,17 @@ def cast_value(key, value):
     }
     
     if key in integer_keys:
-        if isinstance(value, int):
-            return value
+        # CRITICAL: Check bool FIRST before int (bool is subclass of int in Python)
+        # If a boolean somehow gets passed to an integer field, convert it safely
         if isinstance(value, bool):
-            # bool is subclass of int in Python, so check first
-            return int(value)
+            # Convert boolean to integer: True→1, False→0
+            # This is necessary because bool is subclass of int
+            converted_value = int(value)
+            print(f"[WARN] Converted boolean {value} to integer {converted_value} for key {key}")
+            return converted_value
+        if isinstance(value, int):
+            # Now safe to check for int (bool already ruled out)
+            return value
         if isinstance(value, str):
             try:
                 return int(value)
@@ -928,12 +935,45 @@ class KubeletHardener:
             return False
     
     def restart_kubelet(self):
-        """Restart kubelet service.
+        """Restart kubelet service with Smart Rate Limiting to prevent systemd burst limit.
         
-        Non-Destructive Strategy: After writing the merged config,
-        restart kubelet. Since the config preserves all existing settings
-        plus CIS hardening, kubelet should start successfully.
+        Smart Rate Limiting Strategy:
+        - Tracks last restart time in /tmp/kubelet_last_restart.timestamp
+        - If restart was less than 60 seconds ago, SKIP restart (return True to continue)
+        - If restart was 60+ seconds ago (or no previous restart), execute restart normally
+        - This prevents systemd "Start Limit Burst" protection from triggering
+        
+        Use Case: When harden_kubelet.py is called 24 times in a loop:
+        - First restart: Executes normally
+        - Restarts 2-24: Skipped (with manual restart reminder printed)
+        - User runs manual restart ONCE after all checks complete
+        
+        Non-Destructive Strategy: Returns True on skipped restarts so the runner
+        continues without error. The hardened config is already written to disk.
         """
+        timestamp_file = Path("/tmp/kubelet_last_restart.timestamp")
+        
+        # Check if we've restarted recently
+        current_time = time.time()
+        restart_interval_seconds = 60  # Minimum time between restarts
+        
+        if timestamp_file.exists():
+            try:
+                with open(timestamp_file, 'r') as f:
+                    last_restart_time = float(f.read().strip())
+                
+                time_diff = current_time - last_restart_time
+                
+                if time_diff < restart_interval_seconds:
+                    # Too soon - skip restart to prevent systemd burst limit
+                    print(f"[INFO] Skipping restart to avoid systemd burst limit (Last restart was {time_diff:.0f}s ago)")
+                    print(f"[WARN] CONFIG UPDATED. PLEASE RUN 'systemctl restart kubelet' MANUALLY AT THE END")
+                    return True  # Pretend success so runner continues
+                
+            except (ValueError, OSError) as e:
+                print(f"[WARN] Could not read timestamp file: {e}, proceeding with restart")
+        
+        # Enough time has passed - execute restart normally
         try:
             print("[INFO] Running systemctl daemon-reload...")
             result = subprocess.run(
@@ -957,8 +997,15 @@ class KubeletHardener:
                 print(f"[ERROR] kubelet restart failed: {result.stderr}")
                 return False
             
+            # Restart successful - record the timestamp
+            try:
+                with open(timestamp_file, 'w') as f:
+                    f.write(str(current_time))
+                print(f"[INFO] Restart timestamp recorded at {timestamp_file}")
+            except OSError as e:
+                print(f"[WARN] Could not write timestamp file: {e}")
+            
             # Wait for kubelet to become active (up to 15 seconds)
-            import time
             max_attempts = 15
             for attempt in range(max_attempts):
                 time.sleep(1)

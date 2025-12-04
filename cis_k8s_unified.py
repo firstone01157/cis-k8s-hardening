@@ -188,11 +188,81 @@ class CISUnifiedRunner:
             sys.exit(1)
 
     def detect_node_role(self):
-        """Detect current node role by inspecting labels / ตรวจจับบทบาทโหนดจากป้ายกำกับ"""
-        hostname = socket.gethostname()
-        kubectl = self.get_kubectl_cmd()
+        """
+        Detect current node role using multi-method approach / ตรวจจับบทบาทโหนดโดยใช้หลายวิธี
+        PRIORITY 1: Check running processes (most reliable)
+        PRIORITY 2: Check config/manifest files
+        PRIORITY 3: Fallback to kubectl with node labels
+        """
+        # PRIORITY 1: Check running processes (most reliable)
+        try:
+            # Check if kube-apiserver is running → Master node
+            result = subprocess.run(
+                ["pgrep", "-l", "kube-apiserver"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                if self.verbose >= 2:
+                    print("[DEBUG] Node role detection: kube-apiserver process found → Master")
+                return "master"
+        except Exception:
+            pass
 
         try:
+            # Check if kubelet is running (without apiserver) → Worker node
+            result = subprocess.run(
+                ["pgrep", "-l", "kubelet"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                if self.verbose >= 2:
+                    print("[DEBUG] Node role detection: kubelet process found → Worker")
+                return "worker"
+        except Exception:
+            pass
+
+        # PRIORITY 2: Check config/manifest files
+        try:
+            # Check for kube-apiserver manifest → Master node
+            if os.path.exists("/etc/kubernetes/manifests/kube-apiserver.yaml"):
+                if self.verbose >= 2:
+                    print("[DEBUG] Node role detection: kube-apiserver.yaml manifest found → Master")
+                return "master"
+        except Exception:
+            pass
+
+        try:
+            # Check for kubelet config → Worker node
+            if os.path.exists("/var/lib/kubelet/config.yaml"):
+                if self.verbose >= 2:
+                    print("[DEBUG] Node role detection: kubelet config.yaml found → Worker")
+                return "worker"
+        except Exception:
+            pass
+
+        try:
+            # Additional check: /etc/kubernetes/kubelet.conf exists → likely Worker
+            if os.path.exists("/etc/kubernetes/kubelet.conf") and not os.path.exists("/etc/kubernetes/manifests/kube-apiserver.yaml"):
+                if self.verbose >= 2:
+                    print("[DEBUG] Node role detection: kubelet.conf found → Worker")
+                return "worker"
+        except Exception:
+            pass
+
+        # PRIORITY 3: Fallback to kubectl node labels (original method)
+        try:
+            hostname = socket.gethostname()
+            kubectl = self.get_kubectl_cmd()
+            
+            if not kubectl:
+                if self.verbose >= 2:
+                    print("[DEBUG] Node role detection: kubectl not available, cannot determine role")
+                return None
+
             result = subprocess.run(
                 kubectl + ["get", "node", hostname, "--no-headers", "-o", "jsonpath={.metadata.labels}"],
                 capture_output=True,
@@ -200,18 +270,23 @@ class CISUnifiedRunner:
                 timeout=10
             )
 
-            if result.returncode != 0:
-                return None
-
-            labels = result.stdout.lower()
-            if not labels:
-                return None
-
-            if "control-plane" in labels or "master" in labels:
-                return "master"
-            return "worker"
+            if result.returncode == 0:
+                labels = result.stdout.lower()
+                if labels:
+                    if "control-plane" in labels or "master" in labels:
+                        if self.verbose >= 2:
+                            print("[DEBUG] Node role detection: kubectl labels indicate → Master")
+                        return "master"
+                    if self.verbose >= 2:
+                        print("[DEBUG] Node role detection: kubectl labels indicate → Worker")
+                    return "worker"
         except Exception:
-            return None
+            pass
+
+        # All detection methods failed
+        if self.verbose >= 2:
+            print("[DEBUG] Node role detection: all methods failed, unable to determine role")
+        return None
 
     def get_kubectl_cmd(self):
         """
@@ -618,6 +693,19 @@ class CISUnifiedRunner:
                 result, script_id, mode, is_manual
             )
             
+            # Handle silent script output with context-aware messages / จัดการ output ที่เงียบ
+            # When script produces no output, inject status-specific message
+            combined_output = result.stdout.strip() + result.stderr.strip()
+            if not combined_output:
+                if status == "PASS":
+                    reason = "[INFO] Check completed successfully with no output"
+                elif status == "FIXED":
+                    reason = "[INFO] Remediation completed successfully with no output"
+                elif status == "FAIL":
+                    reason = "[ERROR] Script failed silently without output"
+                elif status == "MANUAL":
+                    reason = "[WARN] Manual check completed with no output"
+            
             return {
                 "id": script_id,
                 "role": script["role"],
@@ -672,13 +760,25 @@ class CISUnifiedRunner:
         """
         Parse structured output from script
         แยกวิเคราะห์ผลลัพธ์ที่มีโครงสร้างจากสคริปต์
+        
+        Algorithm / อัลกอริทึม:
+        - STEP 1: Initialize fields / เริ่มต้นฟิลด์
+        - STEP 2: Parse structured tags / แยกแท็ก
+        - STEP 3: STRICT MANUAL ENFORCEMENT - If is_manual=True, enforce status=MANUAL regardless of exit code
+        - STEP 4: PRIORITY 1 - Check exit code 3 for MANUAL / ตรวจสอบรหัสออก 3 สำหรับด้วยตนเอง
+        - STEP 5: PRIORITY 2 - Determine status based on return code / กำหนดสถานะตามรหัสคืน
+        - STEP 6: PRIORITY 3 - Fallback to text-based detection / ใช้ตัวตรวจจับตามข้อความ
+        - STEP 7: Return result / คืนผลลัพธ์
+        
+        CRITICAL: Manual checks must NEVER become PASS/FIXED to avoid inflating compliance scores.
+        Manual checks require human verification and should remain "MANUAL" until verified.
         """
         status = "FAIL"
         reason = ""
         fix_hint = ""
         cmds = []
         
-        # Parse structured tags / แยกแท็กที่มีโครงสร้าง
+        # Parse structured tags from stdout / แยกแท็กจาก stdout
         for line in result.stdout.split('\n'):
             if "[FAIL_REASON]" in line:
                 reason = line.split("[FAIL_REASON]", 1)[1].strip()
@@ -687,27 +787,71 @@ class CISUnifiedRunner:
             elif "[CMD]" in line:
                 cmds.append(line.split("[CMD]", 1)[1].strip())
         
-        # Determine status / กำหนดสถานะ
-        if mode == "remediate":
-            if result.returncode == 0:
-                # Check if it was actually a manual warning, not a real fix
-                if "Manual intervention required" in result.stdout or "Manual check" in result.stdout:
+        # Prepare combined output for keyword detection / เตรียม output รวมสำหรับการตรวจหาคำสำคัญ
+        combined_output = result.stdout + result.stderr
+        manual_keywords = {"manual remediation", "manual intervention", "requires manual", "check requires manual"}
+        is_manual_check = any(kw in combined_output.lower() for kw in manual_keywords)
+        
+        # ========== STEP 3: STRICT MANUAL ENFORCEMENT ==========
+        # If is_manual is True, enforce status as MANUAL regardless of exit code
+        # This prevents manual checks from being counted as "PASS" or "FIXED"
+        # and inflating the compliance score
+        # 
+        # Logic: Manual checks require human verification. Even if they execute successfully (exit 0),
+        # they should remain as "MANUAL" status until a human verifies the result.
+        # This ensures the compliance score reflects only automated/verified checks.
+        if is_manual:
+            status = "MANUAL"
+            if not reason:
+                # Provide context about script execution
+                if result.returncode == 0:
+                    reason = "[INFO] Manual check executed successfully. Human verification required before marking as resolved."
+                elif result.returncode == 3:
+                    reason = "[INFO] Script returned exit code 3 (Manual Intervention Required)"
+                else:
+                    reason = "[INFO] Manual check requires human verification."
+            
+            if self.verbose >= 2:
+                print(f"{Colors.BLUE}[DEBUG] MANUAL ENFORCEMENT: {script_id} forced to MANUAL status (is_manual=True, returncode={result.returncode}){Colors.ENDC}")
+            
+            return status, reason, fix_hint, cmds
+        
+        # ========== STEP 4: PRIORITY 1 - Check specific exit codes ==========
+        # Exit code 3 is standardized as "Manual Intervention Required"
+        # Only applied to NON-MANUAL checks (since manual checks already handled above)
+        # ตรวจสอบรหัสออกเฉพาะ - รหัส 3 ถูกกำหนดเป็น "ต้องการการแทรกแซงด้วยตนเอง"
+        if result.returncode == 3:
+            status = "MANUAL"
+            if not reason:
+                reason = "[INFO] Script returned exit code 3 (Manual Intervention Required)"
+            if self.verbose >= 2:
+                print(f"{Colors.BLUE}[DEBUG] Exit code 3 detected for {script_id} - Setting status to MANUAL{Colors.ENDC}")
+        
+        # ========== STEP 5: PRIORITY 2 - Check for success (0) or other failures ==========
+        elif result.returncode == 0:
+            # Success case / กรณีสำเร็จ
+            # This only applies to automated (non-manual) checks
+            if mode == "remediate":
+                status = "FIXED" if "fixed" in combined_output.lower() else "PASS"
+            else:  # mode == "audit"
+                status = "PASS"
+        
+        # ========== STEP 6: PRIORITY 3 - Fallback to text-based detection for non-zero exit codes ==========
+        # For audit mode, check if output contains manual intervention keywords
+        # สำหรับโหมดการตรวจสอบ ตรวจสอบว่า output มีคำสำคัญเกี่ยวกับการแทรกแซง
+        else:
+            # Return code is non-zero (failure)
+            if mode == "remediate":
+                status = "FAIL"
+            else:  # mode == "audit"
+                # Check if failure reason is manual intervention (fallback detection)
+                if is_manual_check:
                     status = "MANUAL"
                 else:
-                    status = "PASS"
-            else:
-                status = "FAIL"
-        else:
-            if is_manual:
-                status = "MANUAL"
-            elif result.returncode == 0:
-                status = "PASS"
-            else:
-                status = "FAIL"
-                if not reason:
-                    # Fallback to last line / ใช้บรรทัดสุดท้ายเป็นทางเลือก
-                    lines = result.stdout.split('\n')
-                    reason = next((l for l in lines if l.strip()), "Check failed")
+                    status = "FAIL"
+                    if not reason:
+                        lines = result.stdout.split('\n')
+                        reason = next((l for l in lines if l.strip()), "Check failed")
         
         # Generate default fix hint / สร้างคำแนะนำการแก้ไขเริ่มต้น
         if status == "FAIL" and not fix_hint:
@@ -734,18 +878,41 @@ class CISUnifiedRunner:
         }
 
     def update_stats(self, result):
-        """Update statistics based on result / อัปเดตสถิติตามผลลัพธ์"""
+        """
+        Update statistics based on result
+        อัปเดตสถิติตามผลลัพธ์
+        
+        Status Mapping / แมปสถานะ:
+        - PASS, FIXED -> pass counter
+        - FAIL, ERROR -> fail counter  
+        - MANUAL -> manual counter
+        - SKIPPED, IGNORED -> skipped counter
+        """
         if not result:
             return
         
         role = "master" if "master" in result["role"] else "worker"
-        status = result["status"].lower()
+        status = result["status"].upper()
         
-        if status not in self.stats[role]:
+        # Map various statuses to counter keys / แมปสถานะต่าง ๆ
+        if status in ("PASS", "FIXED"):
+            counter_key = "pass"
+        elif status in ("FAIL", "ERROR"):
+            counter_key = "fail"
+        elif status == "MANUAL":
+            counter_key = "manual"
+        elif status in ("SKIPPED", "IGNORED"):
+            counter_key = "skipped"
+        else:
+            if self.verbose >= 1:
+                print(f"{Colors.YELLOW}[WARN] Unknown status '{status}' in update_stats{Colors.ENDC}")
             return
         
-        self.stats[role][status] += 1
+        self.stats[role][counter_key] += 1
         self.stats[role]["total"] += 1
+        
+        if self.verbose >= 2:
+            print(f"{Colors.BLUE}[DEBUG] Updated stats: {result['id']} -> {status} ({counter_key}){Colors.ENDC}")
 
     def perform_backup(self):
         """
@@ -1361,18 +1528,18 @@ class CISUnifiedRunner:
         """Get user options for audit / ได้รับตัวเลือกของผู้ใช้สำหรับการตรวจสอบ"""
         print(f"\n{Colors.CYAN}AUDIT CONFIGURATION{Colors.ENDC}\n")
         
-        # Role selection / การเลือกบทบาท
+        # PRIORITY 1: Try to auto-detect node role
         detected_role = self.detect_node_role()
         if detected_role:
-            print(f"{Colors.GREEN}[+] Detected Role: {detected_role.capitalize()}{Colors.ENDC}")
+            print(f"{Colors.GREEN}[+] Auto-detected Node Role: {detected_role.upper()}{Colors.ENDC}")
             role = detected_role
         else:
+            # Detection failed - show simplified menu (no 'Both' option)
             print("  Kubernetes Role:")
-            print("    1) Master only")
-            print("    2) Worker only")
-            print("    3) Both")
-            role = {"1": "master", "2": "worker", "3": "all"}.get(
-                input("\n  Select role [3]: ").strip() or "3", "all"
+            print("    1) Master")
+            print("    2) Worker")
+            role = {"1": "master", "2": "worker"}.get(
+                input("\n  Select role [1-2]: ").strip(), "master"
             )
         
         # Level selection / การเลือกระดับ
@@ -1390,18 +1557,18 @@ class CISUnifiedRunner:
         """Get user options for remediation / ได้รับตัวเลือกของผู้ใช้สำหรับการแก้ไข"""
         print(f"\n{Colors.RED}[!] WARNING: REMEDIATION WILL MODIFY YOUR CLUSTER!{Colors.ENDC}\n")
         
-        # Role selection / การเลือกบทบาท
+        # PRIORITY 1: Try to auto-detect node role
         detected_role = self.detect_node_role()
         if detected_role:
-            print(f"{Colors.GREEN}[+] Detected Role: {detected_role.capitalize()}{Colors.ENDC}")
+            print(f"{Colors.GREEN}[+] Auto-detected Node Role: {detected_role.upper()}{Colors.ENDC}")
             role = detected_role
         else:
+            # Detection failed - show simplified menu (no 'Both' option)
             print("  Kubernetes Role:")
-            print("    1) Master only")
-            print("    2) Worker only")
-            print("    3) Both")
-            role = {"1": "master", "2": "worker", "3": "all"}.get(
-                input("\n  Select role [3]: ").strip() or "3", "all"
+            print("    1) Master")
+            print("    2) Worker")
+            role = {"1": "master", "2": "worker"}.get(
+                input("\n  Select role [1-2]: ").strip(), "master"
             )
         
         # Level selection / การเลือกระดับ

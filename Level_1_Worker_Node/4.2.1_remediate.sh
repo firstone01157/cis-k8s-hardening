@@ -36,19 +36,23 @@ if python3 "$HELPER_SCRIPT" \
     --config "$KUBELET_CONFIG" \
     --key "authentication.anonymous.enabled" \
     --value "$ANON_AUTH"; then
-    echo "[INFO] Restarting kubelet..."
-    if systemctl restart kubelet 2>&1; then
-        sleep 2
-        if systemctl is-active --quiet kubelet; then
-            echo "[PASS] 4.2.1 remediation complete"
-            exit 0
+    if [ "${CIS_NO_RESTART:-false}" = "true" ]; then
+        echo "[INFO] Restart skipped (Batch Mode)"
+    else
+        echo "[INFO] Restarting kubelet..."
+        if systemctl restart kubelet 2>&1; then
+            sleep 2
+            if systemctl is-active --quiet kubelet; then
+                echo "[PASS] 4.2.1 remediation complete"
+                exit 0
+            else
+                echo "[FAIL] kubelet not running after restart"
+                exit 1
+            fi
         else
-            echo "[FAIL] kubelet not running after restart"
+            echo "[FAIL] kubelet restart failed"
             exit 1
         fi
-    else
-        echo "[FAIL] kubelet restart failed"
-        exit 1
     fi
 else
     echo "[FAIL] Failed to update configuration"
