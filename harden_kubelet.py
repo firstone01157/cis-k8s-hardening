@@ -511,13 +511,12 @@ def _format_yaml_value(value):
 
 
 class KubeletHardener:
-    """Harden kubelet config with CIS-compliant settings."""
+    """Harden kubelet config with CIS-compliant settings (Non-Destructive Merge Strategy)."""
     
     def __init__(self, config_path="/var/lib/kubelet/config.yaml"):
         self.config_path = Path(config_path)
         self.backup_dir = Path("/var/backups/cis-kubelet")
         self.config = {}
-        self.preserved_values = {}
         
         # Load CIS settings from environment variables or use hardcoded defaults
         self.cis_settings = self._load_cis_settings()
@@ -616,21 +615,38 @@ class KubeletHardener:
         return settings
     
     def load_config(self):
-        """Load only critical values from existing config.
+        """Load ENTIRE existing kubelet config into self.config.
         
-        Strategy: Extract only clusterDNS, clusterDomain, cgroupDriver, address
-        and discard everything else. Fresh config will be constructed from defaults.
+        Non-Destructive Strategy:
+        - Load the FULL existing configuration from file
+        - Do NOT filter or discard any keys
+        - Preserve ALL existing settings (staticPodPath, evictionHard, featureGates, etc.)
+        - If file doesn't exist, start with minimal valid config
+        
+        This ensures CIS hardening is applied WITHOUT deleting cluster-specific config.
         """
-        self.preserved_values = {}
-        
         if not self.config_path.exists():
             print(f"[INFO] Config file not found at {self.config_path}")
-            print("[INFO] Will create new config from CIS defaults")
+            print("[INFO] Will create minimal config from CIS settings")
+            # Start with minimal valid config structure
+            self.config = {
+                "apiVersion": "kubelet.config.k8s.io/v1beta1",
+                "kind": "KubeletConfiguration"
+            }
             return True
         
         try:
             with open(self.config_path, 'r') as f:
                 content = f.read()
+            
+            if not content.strip():
+                print(f"[WARN] Config file is empty at {self.config_path}")
+                # Start with minimal valid config
+                self.config = {
+                    "apiVersion": "kubelet.config.k8s.io/v1beta1",
+                    "kind": "KubeletConfiguration"
+                }
+                return True
             
             loaded_config = None
             
@@ -656,57 +672,39 @@ class KubeletHardener:
                 print("[WARN] Could not parse as JSON/YAML, using smart parsing")
                 loaded_config = self._parse_broken_config(content)
             
-            # Extract ONLY critical cluster-specific values
+            # Store ENTIRE loaded config
             if isinstance(loaded_config, dict):
-                self._extract_critical_values(loaded_config)
-                print("[INFO] Extracted critical cluster values")
+                self.config = loaded_config
+                print(f"[INFO] Loaded {len(loaded_config)} top-level config keys")
+                # Log loaded keys for visibility
+                keys_str = ", ".join(list(loaded_config.keys())[:5])
+                if len(loaded_config) > 5:
+                    keys_str += f", ... ({len(loaded_config) - 5} more)"
+                print(f"[INFO] Config keys: {keys_str}")
+            else:
+                print("[WARN] Loaded config is not a dict, starting with minimal config")
+                self.config = {
+                    "apiVersion": "kubelet.config.k8s.io/v1beta1",
+                    "kind": "KubeletConfiguration"
+                }
             
             return True
         
         except Exception as e:
             print(f"[WARN] Failed to load config: {e}")
-            print("[INFO] Will create new config from CIS defaults")
+            print("[INFO] Starting with minimal config")
+            self.config = {
+                "apiVersion": "kubelet.config.k8s.io/v1beta1",
+                "kind": "KubeletConfiguration"
+            }
             return True
     
-    def _extract_critical_values(self, loaded_config):
-        """Extract ONLY critical cluster-specific values from loaded config.
-        
-        Extracts:
-        - clusterDNS: DNS servers for pods
-        - clusterDomain: DNS domain for cluster
-        - cgroupDriver: systemd or cgroupfs
-        - address: bind address for kubelet API
-        - protectKernelDefaults: preserve existing setting (only extract, don't force)
-        """
-        # clusterDNS
-        if isinstance(loaded_config.get("clusterDNS"), list):
-            self.preserved_values["clusterDNS"] = loaded_config["clusterDNS"]
-            print(f"  ✓ clusterDNS: {loaded_config['clusterDNS']}")
-        
-        # clusterDomain
-        if isinstance(loaded_config.get("clusterDomain"), str):
-            self.preserved_values["clusterDomain"] = loaded_config["clusterDomain"]
-            print(f"  ✓ clusterDomain: {loaded_config['clusterDomain']}")
-        
-        # cgroupDriver
-        if isinstance(loaded_config.get("cgroupDriver"), str):
-            self.preserved_values["cgroupDriver"] = loaded_config["cgroupDriver"]
-            print(f"  ✓ cgroupDriver: {loaded_config['cgroupDriver']}")
-        
-        # address (bind address for kubelet API)
-        if isinstance(loaded_config.get("address"), str):
-            self.preserved_values["address"] = loaded_config["address"]
-            print(f"  ✓ address: {loaded_config['address']}")
-        
-        # protectKernelDefaults (preserve if explicitly set to True, otherwise let config default apply)
-        if isinstance(loaded_config.get("protectKernelDefaults"), bool):
-            if loaded_config["protectKernelDefaults"] is True:
-                # Only preserve if it's True - false is the safe default
-                self.preserved_values["protectKernelDefaults"] = True
-                print(f"  ✓ protectKernelDefaults: True (preserved from existing config)")
-    
     def _parse_broken_config(self, content):
-        """Parse broken config using simple key=value extraction."""
+        """Parse broken config using simple key=value extraction.
+        
+        Fallback parser for configs that can't be parsed as JSON or YAML.
+        Best-effort attempt to extract all settings.
+        """
         config = {}
         lines = content.split('\n')
         
@@ -756,102 +754,121 @@ class KubeletHardener:
             return backup_file
         except Exception as e:
             print(f"[ERROR] Failed to create backup: {e}")
-            return None
+            return False
     
     def harden_config(self):
-        """Apply CIS hardening by constructing fresh config from defaults.
+        """Apply CIS hardening via Non-Destructive Deep Merge.
         
-        Strategy: 
-        1. Start with fresh SAFE_DEFAULTS copy
-        2. Inject preserved cluster-specific values
-        3. Apply STRICT TYPE CASTING to ALL values recursively
-        4. This ensures config is clean, CIS-compliant, AND type-safe
+        Strategy:
+        1. self.config already contains ENTIRE existing config (from load_config)
+        2. Apply CIS settings by deep-merging (not replacing) specific keys
+        3. For nested dicts (authentication, authorization), merge carefully
+        4. Preserve ALL existing keys that aren't explicitly being hardened
+        5. Apply type-casting to final merged config
+        
+        Result: CIS hardening is applied WITHOUT deleting environment-specific config
+        like staticPodPath, evictionHard, featureGates, volumePluginDir, etc.
         """
-        print("[INFO] Constructing fresh config from CIS-compliant defaults...")
+        print("[INFO] Applying CIS hardening via non-destructive merge...")
         
-        # Start with clean defaults (already loaded from env vars in __init__)
-        self.config = self._get_safe_defaults()
+        # Ensure config is a dict
+        if not isinstance(self.config, dict):
+            print("[ERROR] Config is not a dictionary, cannot merge")
+            return False
         
-        # Inject preserved values
-        if self.preserved_values:
-            print("[INFO] Injecting preserved cluster values...")
-            
-            if "clusterDNS" in self.preserved_values:
-                self.config["clusterDNS"] = self.preserved_values["clusterDNS"]
-                print(f"  ✓ clusterDNS: {self.preserved_values['clusterDNS']}")
-            
-            if "clusterDomain" in self.preserved_values:
-                self.config["clusterDomain"] = self.preserved_values["clusterDomain"]
-                print(f"  ✓ clusterDomain: {self.preserved_values['clusterDomain']}")
-            
-            if "cgroupDriver" in self.preserved_values:
-                self.config["cgroupDriver"] = self.preserved_values["cgroupDriver"]
-                print(f"  ✓ cgroupDriver: {self.preserved_values['cgroupDriver']}")
-            
-            if "address" in self.preserved_values:
-                self.config["address"] = self.preserved_values["address"]
-                print(f"  ✓ address: {self.preserved_values['address']}")
-            
-            if "protectKernelDefaults" in self.preserved_values:
-                self.config["protectKernelDefaults"] = self.preserved_values["protectKernelDefaults"]
-                print(f"  ✓ protectKernelDefaults: {self.preserved_values['protectKernelDefaults']} (preserved from existing config)")
+        # Set or update metadata fields
+        if "apiVersion" not in self.config:
+            self.config["apiVersion"] = "kubelet.config.k8s.io/v1beta1"
+        if "kind" not in self.config:
+            self.config["kind"] = "KubeletConfiguration"
         
-        # === CRITICAL: Apply STRICT type casting to entire config ===
+        print("[INFO] Applying CIS authentication settings...")
+        # Initialize authentication structure if missing
+        if "authentication" not in self.config:
+            self.config["authentication"] = {}
+        
+        # Deep merge: Set anonymous auth, but preserve other auth settings
+        if "anonymous" not in self.config["authentication"]:
+            self.config["authentication"]["anonymous"] = {}
+        self.config["authentication"]["anonymous"]["enabled"] = self.cis_settings["anonymous_auth"]
+        
+        # Set webhook auth, but preserve other webhook settings
+        if "webhook" not in self.config["authentication"]:
+            self.config["authentication"]["webhook"] = {}
+        self.config["authentication"]["webhook"]["enabled"] = self.cis_settings["webhook_auth"]
+        if "cacheTTL" not in self.config["authentication"]["webhook"]:
+            self.config["authentication"]["webhook"]["cacheTTL"] = "2m0s"
+        
+        # Set x509 client CA file
+        if "x509" not in self.config["authentication"]:
+            self.config["authentication"]["x509"] = {}
+        self.config["authentication"]["x509"]["clientCAFile"] = self.cis_settings["client_ca_file"]
+        
+        print("[INFO] Applying CIS authorization settings...")
+        # Initialize authorization structure if missing
+        if "authorization" not in self.config:
+            self.config["authorization"] = {}
+        
+        # Set authorization mode
+        self.config["authorization"]["mode"] = self.cis_settings["authorization_mode"]
+        
+        # Set webhook config, but preserve other authorization settings
+        if "webhook" not in self.config["authorization"]:
+            self.config["authorization"]["webhook"] = {}
+        if "cacheAuthorizedTTL" not in self.config["authorization"]["webhook"]:
+            self.config["authorization"]["webhook"]["cacheAuthorizedTTL"] = "5m0s"
+        if "cacheUnauthorizedTTL" not in self.config["authorization"]["webhook"]:
+            self.config["authorization"]["webhook"]["cacheUnauthorizedTTL"] = "30s"
+        
+        print("[INFO] Applying CIS security settings...")
+        # Apply top-level security settings (only if not already set or explicitly configured)
+        self.config["readOnlyPort"] = self.cis_settings["read_only_port"]
+        self.config["streamingConnectionIdleTimeout"] = self.cis_settings["streaming_timeout"]
+        self.config["makeIPTablesUtilChains"] = self.cis_settings["make_iptables_util_chains"]
+        self.config["rotateCertificates"] = self.cis_settings["rotate_certificates"]
+        self.config["serverTLSBootstrap"] = True
+        self.config["rotateServerCertificates"] = self.cis_settings["rotate_server_certificates"]
+        self.config["tlsCipherSuites"] = self.cis_settings["tls_cipher_suites"]
+        self.config["podPidsLimit"] = self.cis_settings["pod_pids_limit"]
+        self.config["seccompDefault"] = self.cis_settings["seccomp_default"]
+        self.config["protectKernelDefaults"] = self.cis_settings["protect_kernel_defaults"]
+        
+        # Set cgroup driver if not already present
+        if "cgroupDriver" not in self.config:
+            self.config["cgroupDriver"] = "systemd"
+        
+        # Set cluster DNS if not already present
+        if "clusterDNS" not in self.config:
+            self.config["clusterDNS"] = ["10.96.0.10"]
+        
+        # Set cluster domain if not already present
+        if "clusterDomain" not in self.config:
+            self.config["clusterDomain"] = "cluster.local"
+        
         print("[INFO] Applying strict type casting to all config values...")
+        # === CRITICAL: Apply STRICT type casting to entire config ===
+        # This ensures every value has correct Python type BEFORE YAML output
         self.config = cast_config_recursively(self.config)
         print("[PASS] All config values type-cast (int/bool/list/str)")
         
-        print("[PASS] Fresh config constructed with CIS defaults + preserved values + type safety")
+        print("[PASS] CIS hardening applied via non-destructive merge")
         return True
     
-    def _get_safe_defaults(self):
-        """Return a fresh copy of CIS-compliant safe defaults using loaded settings."""
-        return {
-            "apiVersion": "kubelet.config.k8s.io/v1beta1",
-            "kind": "KubeletConfiguration",
-            "authentication": {
-                "anonymous": {
-                    "enabled": self.cis_settings["anonymous_auth"]
-                },
-                "webhook": {
-                    "enabled": self.cis_settings["webhook_auth"],
-                    "cacheTTL": "2m0s"
-                },
-                "x509": {
-                    "clientCAFile": self.cis_settings["client_ca_file"]
-                }
-            },
-            "authorization": {
-                "mode": self.cis_settings["authorization_mode"],
-                "webhook": {
-                    "cacheAuthorizedTTL": "5m0s",
-                    "cacheUnauthorizedTTL": "30s"
-                }
-            },
-            "readOnlyPort": self.cis_settings["read_only_port"],
-            "streamingConnectionIdleTimeout": self.cis_settings["streaming_timeout"],
-            "makeIPTablesUtilChains": self.cis_settings["make_iptables_util_chains"],
-            "rotateCertificates": self.cis_settings["rotate_certificates"],
-            "serverTLSBootstrap": True,
-            "rotateServerCertificates": self.cis_settings["rotate_server_certificates"],
-            "tlsCipherSuites": self.cis_settings["tls_cipher_suites"],
-            "podPidsLimit": self.cis_settings["pod_pids_limit"],
-            "seccompDefault": self.cis_settings["seccomp_default"],
-            "protectKernelDefaults": self.cis_settings["protect_kernel_defaults"],
-            "cgroupDriver": "systemd",
-            "clusterDNS": ["10.96.0.10"],
-            "clusterDomain": "cluster.local"
-        }
-    
     def write_config(self):
-        """Write hardened config back to file in clean YAML format."""
+        """Write hardened config back to file in clean YAML format.
+        
+        Non-Destructive Strategy: Writes the merged config (which contains all
+        original keys + CIS hardened settings) to YAML format.
+        
+        This preserves all environment-specific configuration while applying CIS hardening.
+        """
         try:
             # Ensure config is a dict
             if not isinstance(self.config, dict):
                 print("[ERROR] Config is not a dictionary")
                 return False
             
-            print(f"[INFO] Writing config to {self.config_path}")
+            print(f"[INFO] Writing merged config to {self.config_path}")
             
             # Write as clean YAML format (not JSON)
             # This ensures grep-friendly format for audit scripts
@@ -866,7 +883,7 @@ class KubeletHardener:
                 print("[ERROR] Config file write failed or empty")
                 return False
             
-            print("[PASS] Config written successfully")
+            print("[PASS] Config written successfully (all existing settings preserved)")
             return True
         
         except Exception as e:
@@ -874,7 +891,11 @@ class KubeletHardener:
             return False
     
     def verify_config(self):
-        """Verify config is valid YAML/can be parsed."""
+        """Verify config is valid YAML/can be parsed.
+        
+        Checks that the merged config contains expected CIS hardening settings
+        AND original cluster-specific settings.
+        """
         try:
             with open(self.config_path, 'r') as f:
                 content = f.read()
@@ -892,9 +913,13 @@ class KubeletHardener:
                     return False
                 print("[PASS] Config structure verified (manual check)")
             
-            # Verify key settings are present
+            # Verify key CIS settings are present
             if "enabled: false" not in content and "enabled: true" not in content:
                 print("[WARN] Could not verify boolean settings in output")
+            
+            # Verify non-destructive merge (check for preserved keys if they were in original)
+            if "clusterDNS" in self.config and "clusterDNS" not in content:
+                print("[WARN] clusterDNS may not have been preserved correctly")
             
             return True
         
@@ -903,7 +928,12 @@ class KubeletHardener:
             return False
     
     def restart_kubelet(self):
-        """Restart kubelet service."""
+        """Restart kubelet service.
+        
+        Non-Destructive Strategy: After writing the merged config,
+        restart kubelet. Since the config preserves all existing settings
+        plus CIS hardening, kubelet should start successfully.
+        """
         try:
             print("[INFO] Running systemctl daemon-reload...")
             result = subprocess.run(
@@ -966,15 +996,28 @@ class KubeletHardener:
             return False
     
     def harden(self):
-        """Execute full hardening procedure."""
+        """Execute full hardening procedure using non-destructive merge strategy.
+        
+        Steps:
+        1. Load ENTIRE existing config (all keys, not filtered)
+        2. Create timestamped backup
+        3. Deep-merge CIS hardening into existing config
+        4. Apply type-casting to ensure correct Python types
+        5. Write merged config back to file
+        6. Verify config structure
+        7. Restart kubelet
+        
+        Result: CIS hardening applied WITHOUT deleting environment-specific settings
+        """
         print("=" * 80)
-        print("KUBELET CONFIGURATION HARDENER (Type-Safe)")
+        print("KUBELET CONFIGURATION HARDENER (Non-Destructive Merge)")
         print("=" * 80)
         print(f"[INFO] Target: {self.config_path}")
+        print(f"[INFO] Strategy: Load ENTIRE config → Deep Merge CIS settings → Preserve all other keys")
         print()
         
         # Step 1: Load config
-        print("[STEP 1] Loading kubelet configuration...")
+        print("[STEP 1] Loading ENTIRE kubelet configuration...")
         if not self.load_config():
             print("[FAIL] Failed to load config")
             return False
@@ -982,18 +1025,20 @@ class KubeletHardener:
         
         # Step 2: Backup
         print("[STEP 2] Creating backup...")
-        self.create_backup()
+        backup = self.create_backup()
+        if backup:
+            print(f"[INFO] Backup available for rollback")
         print()
         
         # Step 3: Harden
-        print("[STEP 3] Applying CIS hardening settings...")
+        print("[STEP 3] Applying CIS hardening via non-destructive merge...")
         if not self.harden_config():
             print("[FAIL] Failed to harden config")
             return False
         print()
         
         # Step 4: Write
-        print("[STEP 4] Writing hardened config...")
+        print("[STEP 4] Writing merged config (CIS hardening + all existing settings)...")
         if not self.write_config():
             print("[FAIL] Failed to write config")
             return False
@@ -1014,7 +1059,8 @@ class KubeletHardener:
         print()
         
         print("=" * 80)
-        print("[PASS] Kubelet hardening complete!")
+        print("[PASS] Kubelet hardening complete (non-destructive merge)!")
+        print("[INFO] All existing settings preserved + CIS hardening applied")
         print("=" * 80)
         return True
 

@@ -1,11 +1,49 @@
-# .gitignore
+# .gitignore - CIS Kubernetes Hardening Project
+
+# Python cache and compiled files
 __pycache__/
 *.pyc
-.DS_Store
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE and Editor
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Virtual environments
 venv/
 env/
+ENV/
+.venv
+
+# Logs and temporary files
 *.log
-# ถ้าไม่อยากเอาไฟล์ CSV ขึ้น (เพราะอาจมีข้อมูล Sensitive) ให้ใส่บรรทัดล่างด้วย
-# แต่ถ้าจะให้ Jules อ่าน ต้องเอาขึ้นนะครับ
-# *.csv
+*.tmp
+*.lock
+
+# Sensitive data and configuration
+*.csv
+cis_config.json
+config/cis_config.json
+results/
+logs/
+
+# Node/npm (if used in future)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Temporary test files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS specific
+.DS_Store
+Thumbs.db
