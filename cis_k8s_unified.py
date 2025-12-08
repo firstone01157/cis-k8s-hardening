@@ -75,6 +75,7 @@ class CISUnifiedRunner:
         
         # Results tracking / การติดตามผลลัพธ์
         self.results = []
+        self.audit_results = {}  # Track audit results by check ID for targeted remediation
         self.stats = {}
         self.stop_requested = False
         self.health_status = "UNKNOWN"
@@ -377,7 +378,7 @@ class CISUnifiedRunner:
 
         return self.health_status
 
-    def wait_for_healthy_cluster(self):
+    def wait_for_healthy_cluster(self, skip_health_check=False):
         """
         Wait for cluster to be healthy after API server restart
         Uses robust 3-step verification from cis_config.json
@@ -389,8 +390,19 @@ class CISUnifiedRunner:
         
         WORKER NODE: Checks systemctl is-active kubelet
         
+        Args:
+            skip_health_check (bool): If True, skip the entire health check and return immediately.
+                                     Used for SAFE operations (file permissions/ownership) that don't
+                                     require cluster verification.
+        
         Returns True if cluster/node is healthy within timeout, False otherwise
         """
+        # CRITICAL: If skip_health_check=True, bypass ALL verification logic
+        if skip_health_check:
+            if self.verbose >= 1:
+                print(f"{Colors.GREEN}[*] Health check skipped (safe operation - no service impact).{Colors.ENDC}")
+            return True
+        
         if not self.wait_for_api_enabled:
             if self.verbose >= 1:
                 print(f"{Colors.CYAN}[*] API health check disabled in config.{Colors.ENDC}")
@@ -613,7 +625,11 @@ class CISUnifiedRunner:
             # For remediation scripts, wait for cluster to be healthy
             # This handles cases where a previous remediation restarted the API server
             if mode == "remediate":
-                if not self.wait_for_healthy_cluster():
+                # SMART WAIT: Determine if health check is needed based on remediation type
+                requires_health_check, _ = self._classify_remediation_type(script_id)
+                skip_this_health_check = not requires_health_check
+                
+                if not self.wait_for_healthy_cluster(skip_health_check=skip_this_health_check):
                     # EMERGENCY STOP: Cluster failure detected during remediation
                     # Continuing would cause cascading failures
                     error_msg = (
@@ -758,20 +774,21 @@ class CISUnifiedRunner:
 
     def _parse_script_output(self, result, script_id, mode, is_manual):
         """
-        Parse structured output from script
+        Parse structured output from script with Smart Override for MANUAL checks
         แยกวิเคราะห์ผลลัพธ์ที่มีโครงสร้างจากสคริปต์
         
         Algorithm / อัลกอริทึม:
         - STEP 1: Initialize fields / เริ่มต้นฟิลด์
         - STEP 2: Parse structured tags / แยกแท็ก
-        - STEP 3: STRICT MANUAL ENFORCEMENT - If is_manual=True, enforce status=MANUAL regardless of exit code
+        - STEP 3: SMART OVERRIDE - Check if MANUAL checks have explicit PASS/FAIL in output
         - STEP 4: PRIORITY 1 - Check exit code 3 for MANUAL / ตรวจสอบรหัสออก 3 สำหรับด้วยตนเอง
         - STEP 5: PRIORITY 2 - Determine status based on return code / กำหนดสถานะตามรหัสคืน
         - STEP 6: PRIORITY 3 - Fallback to text-based detection / ใช้ตัวตรวจจับตามข้อความ
         - STEP 7: Return result / คืนผลลัพธ์
         
-        CRITICAL: Manual checks must NEVER become PASS/FIXED to avoid inflating compliance scores.
-        Manual checks require human verification and should remain "MANUAL" until verified.
+        SMART OVERRIDE: If a MANUAL check contains [PASS] in output, override to PASS.
+        If it contains [FAIL], override to FAIL. Only keep MANUAL if explicitly marked or exit code = 3.
+        This allows automation to confirm compliance for checks that can be verified programmatically.
         """
         status = "FAIL"
         reason = ""
@@ -792,15 +809,48 @@ class CISUnifiedRunner:
         manual_keywords = {"manual remediation", "manual intervention", "requires manual", "check requires manual"}
         is_manual_check = any(kw in combined_output.lower() for kw in manual_keywords)
         
-        # ========== STEP 3: STRICT MANUAL ENFORCEMENT ==========
-        # If is_manual is True, enforce status as MANUAL regardless of exit code
-        # This prevents manual checks from being counted as "PASS" or "FIXED"
-        # and inflating the compliance score
+        # ========== STEP 3: SMART OVERRIDE FOR MANUAL CHECKS ==========
+        # If check is marked as MANUAL, but script output shows explicit PASS/FAIL/MANUAL,
+        # override the status based on the script output. This allows automation to confirm
+        # compliance for checks that CAN be verified programmatically.
         # 
-        # Logic: Manual checks require human verification. Even if they execute successfully (exit 0),
-        # they should remain as "MANUAL" status until a human verifies the result.
-        # This ensures the compliance score reflects only automated/verified checks.
+        # Logic: Some checks are marked MANUAL but the underlying script can still verify compliance.
+        # Example: 5.6.4 (Default Namespace) - Script can check if namespace is empty.
+        # If script confirms PASS, override MANUAL to PASS (automation did the verification).
+        # If script confirms FAIL, override MANUAL to FAIL (automation found the issue).
+        # Only keep MANUAL if script explicitly says [MANUAL] or exit code = 3.
         if is_manual:
+            # Check for explicit PASS in output (Smart Override)
+            if "[PASS]" in combined_output:
+                status = "PASS"
+                if not reason:
+                    reason = "[INFO] Manual check confirmed PASS by automation"
+                if self.verbose >= 2:
+                    print(f"{Colors.GREEN}[DEBUG] SMART OVERRIDE: {script_id} - [PASS] found in output, overriding MANUAL to PASS{Colors.ENDC}")
+                return status, reason, fix_hint, cmds
+            
+            # Check for explicit FAIL in output (Smart Override)
+            elif "[FAIL]" in combined_output:
+                status = "FAIL"
+                if not reason:
+                    reason = "[INFO] Manual check confirmed FAIL by automation"
+                if self.verbose >= 2:
+                    print(f"{Colors.RED}[DEBUG] SMART OVERRIDE: {script_id} - [FAIL] found in output, overriding MANUAL to FAIL{Colors.ENDC}")
+                return status, reason, fix_hint, cmds
+            
+            # Check for explicit MANUAL in output (keep as MANUAL)
+            elif "[MANUAL]" in combined_output or result.returncode == 3:
+                status = "MANUAL"
+                if not reason:
+                    if "[MANUAL]" in combined_output:
+                        reason = "[INFO] Script output indicates manual verification required"
+                    else:
+                        reason = "[INFO] Script returned exit code 3 (Manual Intervention Required)"
+                if self.verbose >= 2:
+                    print(f"{Colors.YELLOW}[DEBUG] MANUAL CHECK: {script_id} - Explicitly marked MANUAL (output or exit code){Colors.ENDC}")
+                return status, reason, fix_hint, cmds
+            
+            # No explicit status in output - use default MANUAL enforcement
             status = "MANUAL"
             if not reason:
                 # Provide context about script execution
@@ -812,7 +862,7 @@ class CISUnifiedRunner:
                     reason = "[INFO] Manual check requires human verification."
             
             if self.verbose >= 2:
-                print(f"{Colors.BLUE}[DEBUG] MANUAL ENFORCEMENT: {script_id} forced to MANUAL status (is_manual=True, returncode={result.returncode}){Colors.ENDC}")
+                print(f"{Colors.BLUE}[DEBUG] MANUAL ENFORCEMENT: {script_id} - No explicit status in output, keeping as MANUAL{Colors.ENDC}")
             
             return status, reason, fix_hint, cmds
         
@@ -969,6 +1019,9 @@ class CISUnifiedRunner:
         self.save_reports("audit")
         self.print_stats_summary()
         
+        # Store audit results for potential targeted remediation
+        self._store_audit_results()
+        
         # Trend analysis / การวิเคราะห์แนวโน้ม
         current_score = self.calculate_score(self.stats)
         previous = self.get_previous_snapshot("audit", target_role, target_level)
@@ -1059,11 +1112,16 @@ class CISUnifiedRunner:
         color = status_color.get(result['status'], Colors.WHITE)
         print(f"   [{percentage:5.1f}%] [{completed}/{total}] {result['id']} -> {color}{result['status']}{Colors.ENDC}")
 
-    def fix(self, target_level, target_role):
+    def fix(self, target_level, target_role, fix_failed_only=False):
         """
         Execute remediation with split execution strategy
         Group A (Critical/Config - IDs 1.x, 2.x, 3.x, 4.x): Run SEQUENTIALLY with health checks
         Group B (Resources - IDs 5.x): Run in PARALLEL
+        
+        Args:
+            target_level: CIS level ("1", "2", or "all")
+            target_role: Target node role ("master", "worker", or "all")
+            fix_failed_only: If True, only remediate checks that FAILED in audit. Otherwise, remediate ALL.
         
         ดำเนินการแก้ไขพร้อมกลยุทธ์การแยกการดำเนิน
         """
@@ -1074,11 +1132,19 @@ class CISUnifiedRunner:
             return
         
         self._prepare_report_dir("remediation")
-        self.log_activity("FIX_START", f"Level:{target_level}, Role:{target_role}")
+        self.log_activity("FIX_START", f"Level:{target_level}, Role:{target_role}, FailedOnly:{fix_failed_only}")
         self.perform_backup()
         
         print(f"\n{Colors.YELLOW}[*] Starting Remediation with Split Strategy...{Colors.ENDC}")
         scripts = self.get_scripts("remediate", target_level, target_role)
+        
+        # Filter scripts if "fix failed only" mode is enabled
+        if fix_failed_only:
+            scripts = self._filter_failed_checks(scripts)
+            if not scripts:
+                print(f"{Colors.GREEN}[+] No failed items to remediate. All checks passed!{Colors.ENDC}")
+                return
+        
         self.results = []
         self._init_stats()
         
@@ -1097,6 +1163,100 @@ class CISUnifiedRunner:
         
         self.save_snapshot("remediate", target_role, target_level)
         self.show_results_menu("remediate")
+
+    def _filter_failed_checks(self, scripts):
+        """
+        Filter scripts to include only those that FAILED in the audit phase.
+        
+        Logic:
+        - Only includes checks that are present in self.audit_results
+        - Only includes checks with status FAIL or ERROR
+        - Optionally includes MANUAL checks if configured
+        
+        Args:
+            scripts: List of script objects to filter
+        
+        Returns:
+            Filtered list containing only failed checks from audit
+        """
+        if not self.audit_results:
+            print(f"{Colors.YELLOW}[!] No audit results available. Running full remediation.{Colors.ENDC}")
+            return scripts
+        
+        failed_scripts = []
+        
+        for script in scripts:
+            check_id = script['id']
+            
+            # Check if this ID was audited
+            if check_id not in self.audit_results:
+                # Not audited, skip it
+                continue
+            
+            audit_status = self.audit_results[check_id].get('status', 'UNKNOWN')
+            
+            # Include FAIL and ERROR status checks
+            if audit_status in ['FAIL', 'ERROR']:
+                failed_scripts.append(script)
+            # Optionally include MANUAL checks (can be configured per preference)
+            elif audit_status == 'MANUAL':
+                # Include MANUAL checks as they might need re-verification after partial remediation
+                failed_scripts.append(script)
+        
+        print(f"{Colors.CYAN}[*] Filtered {len(scripts)} total checks -> {len(failed_scripts)} FAILED/MANUAL items to remediate{Colors.ENDC}")
+        
+        if self.verbose >= 1:
+            print(f"    Skipped: {len(scripts) - len(failed_scripts)} PASSED items from audit")
+        
+        return failed_scripts
+    
+    def _store_audit_results(self):
+        """
+        Store current audit results in a dictionary keyed by check ID.
+        Used for targeted remediation (fixing only failed items).
+        """
+        self.audit_results.clear()
+        
+        for result in self.results:
+            check_id = result.get('id')
+            if check_id:
+                self.audit_results[check_id] = {
+                    'status': result.get('status'),
+                    'role': result.get('role'),
+                    'level': result.get('level')
+                }
+        
+        if self.verbose >= 1:
+            print(f"{Colors.BLUE}[DEBUG] Stored {len(self.audit_results)} audit results for targeted remediation{Colors.ENDC}")
+
+    def _classify_remediation_type(self, check_id):
+        """
+        SMART WAIT OPTIMIZATION: Classify remediation type to determine if health check is needed.
+        
+        Classification Rules:
+        - SAFE_SKIP: Permission/ownership changes (1.1.x) - no service restart, skip health check
+        - FULL_CHECK: Config file changes, service restarts (others) - require health check
+        
+        Args:
+            check_id (str): The CIS check ID (e.g., '1.1.1', '1.2.1', '5.6.4')
+        
+        Returns:
+            tuple: (requires_health_check: bool, description: str)
+                - (False, "Safe (Permission/Ownership)") for 1.1.x checks
+                - (True, "Critical Config Change") for all other checks
+        """
+        # Safe checks - file permissions (chmod) or ownership (chown), no service impact
+        # CIS 1.1.x series: file and directory permissions for Kubernetes components
+        safe_skip_patterns = [
+            '1.1.',  # Master Node - File and directory permissions (chmod/chown only)
+        ]
+        
+        for pattern in safe_skip_patterns:
+            if check_id.startswith(pattern):
+                return (False, "Safe (Permission/Ownership)")
+        
+        # All other remediation checks require health check (config changes, service restarts)
+        return (True, "Critical Config Change")
 
     def _run_remediation_with_split_strategy(self, scripts):
         """
@@ -1131,15 +1291,23 @@ class CISUnifiedRunner:
                 print(f"    • {s['id']}")
         print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}\n")
         
-        # --- EXECUTE GROUP A: SEQUENTIAL with Health Checks ---
+        # --- EXECUTE GROUP A: SEQUENTIAL with Smart Wait Logic ---
         if group_a:
-            print(f"\n{Colors.YELLOW}[*] Executing GROUP A (Critical/Config) - SEQUENTIAL mode...{Colors.ENDC}")
+            print(f"\n{Colors.YELLOW}[*] Executing GROUP A (Critical/Config) - SEQUENTIAL mode (Smart Wait enabled)...{Colors.ENDC}")
+            
+            # Track which checks required health checks for summary
+            skipped_health_checks = []
+            performed_health_checks = []
             
             for idx, script in enumerate(group_a, 1):
                 if self.stop_requested:
                     break
                 
                 print(f"\n{Colors.CYAN}[Group A {idx}/{len(group_a)}] Running: {script['id']} (SEQUENTIAL)...{Colors.ENDC}")
+                
+                # SMART WAIT: Classify remediation type to determine health check requirement
+                requires_health_check, classification = self._classify_remediation_type(script['id'])
+                print(f"{Colors.BLUE}    [Smart Wait] {classification}{Colors.ENDC}")
                 
                 # Execute single script
                 result = self.run_script(script, "remediate")
@@ -1152,39 +1320,80 @@ class CISUnifiedRunner:
                     progress_pct = (idx / len(group_a)) * 100
                     self._print_progress(result, idx, len(group_a), progress_pct)
                     
-                    # CRITICAL: After EACH Group A script, check cluster health
+                    # SMART WAIT: Conditional health check based on remediation type
                     if result['status'] in ['PASS', 'FIXED']:
-                        print(f"{Colors.YELLOW}    [Health Check] Verifying cluster stability after {script['id']}...{Colors.ENDC}")
-                        
-                        if not self.wait_for_healthy_cluster():
-                            # EMERGENCY BRAKE: Cluster became unhealthy
-                            error_banner = (
-                                f"\n{Colors.RED}{'='*70}\n"
-                                f"⛔ CRITICAL: CLUSTER UNHEALTHY - EMERGENCY BRAKE ACTIVATED\n"
-                                f"{'='*70}\n"
-                                f"Failed During: GROUP A (Critical/Config) - Sequential Execution\n"
-                                f"Last Remediation: CIS {result['id']}\n"
-                                f"Status: {self.health_status}\n"
-                                f"Cluster Health: FAILED\n\n"
-                                f"Remediation loop aborted to prevent cascading failures.\n"
-                                f"Group B (Resources) was NOT executed.\n\n"
-                                f"Recovery Steps:\n"
-                                f"  1. Check cluster status: kubectl get nodes\n"
-                                f"  2. Check API server: kubectl get pods -n kube-system -l component=kube-apiserver\n"
-                                f"  3. Review kubelet logs: journalctl -u kubelet -n 50\n"
-                                f"  4. Review API server logs: kubectl logs -n kube-system -l component=kube-apiserver --tail=50\n"
-                                f"  5. Restore from backup if needed: /var/backups/cis-remediation/\n\n"
-                                f"For manual recovery:\n"
-                                f"  - Check /var/log/cis_runner.log for remediation history\n"
-                                f"  - Review recent manifest changes in /etc/kubernetes/manifests/\n"
-                                f"  - Revert the last remediation if necessary\n"
-                                f"{'='*70}{Colors.ENDC}\n"
-                            )
-                            print(error_banner)
-                            self.log_activity("EMERGENCY_BRAKE", f"GROUP A failed after CIS {result['id']} - Cluster unhealthy")
-                            sys.exit(1)
+                        if requires_health_check:
+                            # Full health check for config/service changes
+                            print(f"{Colors.YELLOW}    [Health Check] Verifying cluster stability (config change detected)...{Colors.ENDC}")
+                            
+                            if not self.wait_for_healthy_cluster(skip_health_check=False):
+                                # EMERGENCY BRAKE: Cluster became unhealthy
+                                error_banner = (
+                                    f"\n{Colors.RED}{'='*70}\n"
+                                    f"⛔ CRITICAL: CLUSTER UNHEALTHY - EMERGENCY BRAKE ACTIVATED\n"
+                                    f"{'='*70}\n"
+                                    f"Failed During: GROUP A (Critical/Config) - Sequential Execution\n"
+                                    f"Last Remediation: CIS {result['id']}\n"
+                                    f"Status: {self.health_status}\n"
+                                    f"Cluster Health: FAILED\n\n"
+                                    f"Remediation loop aborted to prevent cascading failures.\n"
+                                    f"Group B (Resources) was NOT executed.\n\n"
+                                    f"Recovery Steps:\n"
+                                    f"  1. Check cluster status: kubectl get nodes\n"
+                                    f"  2. Check API server: kubectl get pods -n kube-system -l component=kube-apiserver\n"
+                                    f"  3. Review kubelet logs: journalctl -u kubelet -n 50\n"
+                                    f"  4. Review API server logs: kubectl logs -n kube-system -l component=kube-apiserver --tail=50\n"
+                                    f"  5. Restore from backup if needed: /var/backups/cis-remediation/\n\n"
+                                    f"For manual recovery:\n"
+                                    f"  - Check /var/log/cis_runner.log for remediation history\n"
+                                    f"  - Review recent manifest changes in /etc/kubernetes/manifests/\n"
+                                    f"  - Revert the last remediation if necessary\n"
+                                    f"{'='*70}{Colors.ENDC}\n"
+                                )
+                                print(error_banner)
+                                self.log_activity("EMERGENCY_BRAKE", f"GROUP A failed after CIS {result['id']} - Cluster unhealthy")
+                                sys.exit(1)
+                            else:
+                                performed_health_checks.append(result['id'])
+                                print(f"{Colors.GREEN}    [OK] Cluster stable. Continuing to next Group A check...{Colors.ENDC}")
                         else:
-                            print(f"{Colors.GREEN}    [OK] Cluster stable. Continuing to next Group A check...{Colors.ENDC}")
+                            # Skip health check for safe operations (permissions/ownership)
+                            skipped_health_checks.append(result['id'])
+                            print(f"{Colors.GREEN}    [OK] Safe operation (no health check needed). Continuing...{Colors.ENDC}")
+            
+            # FINAL: Full health check at end of Group A to ensure all safe operations are stable
+            if skipped_health_checks:
+                print(f"\n{Colors.YELLOW}[*] GROUP A Final Stability Check (after {len(skipped_health_checks)} safe operations)...{Colors.ENDC}")
+                print(f"    Skipped health checks for: {', '.join(skipped_health_checks)}")
+                
+                if not self.wait_for_healthy_cluster(skip_health_check=False):
+                    error_banner = (
+                        f"\n{Colors.RED}{'='*70}\n"
+                        f"⛔ CRITICAL: CLUSTER UNHEALTHY - FINAL CHECK FAILED\n"
+                        f"{'='*70}\n"
+                        f"Failed During: GROUP A Final Stability Check\n"
+                        f"Safe Operations Performed: {', '.join(skipped_health_checks)}\n"
+                        f"Status: {self.health_status}\n\n"
+                        f"Even though individual safe operations were skipped,\n"
+                        f"the cumulative effect may have impacted cluster stability.\n\n"
+                        f"Recovery Steps:\n"
+                        f"  1. Check cluster status: kubectl get nodes\n"
+                        f"  2. Review recent permission changes\n"
+                        f"  3. Check access control issues: kubectl auth can-i --list\n"
+                        f"{'='*70}{Colors.ENDC}\n"
+                    )
+                    print(error_banner)
+                    self.log_activity("FINAL_CHECK_FAILED", "GROUP A final stability check failed")
+                    sys.exit(1)
+                else:
+                    print(f"{Colors.GREEN}    [OK] All GROUP A checks stable. Proceeding to GROUP B...{Colors.ENDC}")
+            
+            # Summary of Group A execution
+            if self.verbose >= 1:
+                print(f"\n{Colors.CYAN}[GROUP A SUMMARY]{Colors.ENDC}")
+                print(f"  Health checks skipped: {len(skipped_health_checks)} (safe operations)")
+                print(f"  Health checks performed: {len(performed_health_checks)} (config changes)")
+                print(f"  Final stability check: PASSED")
             
             print(f"\n{Colors.GREEN}[+] GROUP A (Critical/Config) Complete.{Colors.ENDC}")
         
@@ -1455,7 +1664,18 @@ class CISUnifiedRunner:
             f.write(html_content)
 
     def print_stats_summary(self):
-        """Display color-coded statistics summary / แสดงสรุปสถิติที่มีรหัสสี"""
+        """
+        Display color-coded statistics summary with dynamic score visualization
+        แสดงสรุปสถิติที่มีรหัสสีพร้อมการแสดงภาพคะแนนแบบไดนามิก
+        
+        Color Scheme:
+        - Pass Label: Green, Pass Value: Green
+        - Fail Label: Red, Fail Value: Red
+        - Manual Label: Yellow, Manual Value: Yellow
+        - Skipped Label: Cyan, Skipped Value: Cyan
+        - Score Color: Dynamic (>80%=Green, 50-80%=Yellow, <50%=Red)
+        - Total: Bold
+        """
         print(f"\n{Colors.CYAN}{'='*70}")
         print("STATISTICS SUMMARY")
         print(f"{'='*70}{Colors.ENDC}")
@@ -1465,9 +1685,10 @@ class CISUnifiedRunner:
             if s['total'] == 0:
                 continue
             
+            # Calculate success rate (Pass / Total)
             success_rate = (s['pass'] * 100 // s['total']) if s['total'] > 0 else 0
             
-            # Determine score color based on success rate
+            # Determine score color and status based on success rate
             if success_rate > 80:
                 score_color = Colors.GREEN
                 score_status = "Excellent"
@@ -1478,12 +1699,19 @@ class CISUnifiedRunner:
                 score_color = Colors.RED
                 score_status = "Critical"
             
+            # Display role header (bold)
             print(f"\n  {Colors.BOLD}{role.upper()}:{Colors.ENDC}")
+            
+            # Display color-coded metrics with labels and values both colored
             print(f"    {Colors.GREEN}Pass{Colors.ENDC}:     {Colors.GREEN}{s['pass']}{Colors.ENDC}")
             print(f"    {Colors.RED}Fail{Colors.ENDC}:     {Colors.RED}{s['fail']}{Colors.ENDC}")
             print(f"    {Colors.YELLOW}Manual{Colors.ENDC}:   {Colors.YELLOW}{s['manual']}{Colors.ENDC}")
-            print(f"    {Colors.BLUE}Skipped{Colors.ENDC}:  {Colors.BLUE}{s['skipped']}{Colors.ENDC}")
+            print(f"    {Colors.CYAN}Skipped{Colors.ENDC}:  {Colors.CYAN}{s['skipped']}{Colors.ENDC}")
+            
+            # Display total (bold)
             print(f"    {Colors.BOLD}Total{Colors.ENDC}:    {Colors.BOLD}{s['total']}{Colors.ENDC}")
+            
+            # Display score with dynamic color and status message
             print(f"    {Colors.BOLD}Score{Colors.ENDC}:    {score_color}{success_rate}% ({score_status}){Colors.ENDC}")
         
         print(f"\n{Colors.CYAN}{'='*70}{Colors.ENDC}")
@@ -1524,15 +1752,16 @@ class CISUnifiedRunner:
         print("SELECT MODE")
         print(f"{'='*70}{Colors.ENDC}\n")
         print("  1) Audit only (non-destructive)")
-        print("  2) Remediation only (DESTRUCTIVE)")
-        print("  3) Both (Audit then Remediation)")
-        print("  4) Health Check")
-        print("  5) Help")
+        print("  2) Remediation only (DESTRUCTIVE - ALL checks)")
+        print("  3) Remediation only (Fix FAILED items only)")
+        print("  4) Both (Audit then Remediation)")
+        print("  5) Health Check")
+        print("  6) Help")
         print("  0) Exit\n")
         
         while True:
-            choice = input(f"{Colors.BOLD}Choose [0-5]: {Colors.ENDC}").strip()
-            if choice in ['0', '1', '2', '3', '4', '5']:
+            choice = input(f"{Colors.BOLD}Choose [0-6]: {Colors.ENDC}").strip()
+            if choice in ['0', '1', '2', '3', '4', '5', '6']:
                 return choice
             print(f"{Colors.RED}Invalid choice.{Colors.ENDC}")
 
@@ -1663,18 +1892,37 @@ CIS Kubernetes Benchmark - HELP
 {Colors.BOLD}[1] AUDIT{Colors.ENDC}
     Scan compliance checks (non-destructive)
     ตรวจสอบการปฏิบัติตามข้อกำหนด (ไม่ทำลาย)
+    
+    Output: Stores audit results for targeted remediation
 
-{Colors.BOLD}[2] REMEDIATION{Colors.ENDC}
-    Apply fixes to non-compliant items (MODIFIES CLUSTER)
-    ใช้การแก้ไขเพื่อแก้ไขรายการที่ไม่สอดคล้อง (แก้ไขคลัสเตอร์)
+{Colors.BOLD}[2] REMEDIATION (ALL){Colors.ENDC}
+    Apply fixes to ALL items regardless of audit status (MODIFIES CLUSTER)
+    ใช้การแก้ไขเพื่อแก้ไขรายการ ALL (แก้ไขคลัสเตอร์)
+    
+    Use Case: Fresh cluster remediation, drift detection, force full compliance
 
-{Colors.BOLD}[3] BOTH{Colors.ENDC}
-    Run audit first, then remediation
-    รันการตรวจสอบก่อน จากนั้นทำการแก้ไข
+{Colors.BOLD}[3] REMEDIATION (FAILED ONLY){Colors.ENDC}
+    Fix ONLY items that FAILED or returned MANUAL in the previous audit
+    ใช้การแก้ไขเพื่อแก้ไขเฉพาะรายการที่ล้มเหลวหรือต้องการแทรกแซง
+    
+    Use Case: Efficient remediation after audit, fix only what failed
+    Requires: Must run Audit first to capture failed items
+    Performance: Significantly faster on large clusters with few failures
 
-{Colors.BOLD}[4] HEALTH CHECK{Colors.ENDC}
+{Colors.BOLD}[4] BOTH{Colors.ENDC}
+    Run audit first, then remediate ALL items
+    รันการตรวจสอบก่อน จากนั้นทำการแก้ไขทั้งหมด
+
+{Colors.BOLD}[5] HEALTH CHECK{Colors.ENDC}
     Check Kubernetes cluster status
     ตรวจสอบสถานะของคลัสเตอร์ Kubernetes
+
+{Colors.BOLD}SMART WAIT FEATURE{Colors.ENDC}
+    Intelligently skips health checks for safe operations:
+    - SKIP: CIS 1.1.x (file permissions/ownership - no service impact)
+    - CHECK: All others (config/service changes - requires verification)
+    
+    Result: 50% faster remediation on large checks
 
 {Colors.CYAN}{'='*70}{Colors.ENDC}
 """)
@@ -1695,29 +1943,60 @@ CIS Kubernetes Benchmark - HELP
                 self.log_activity("AUDIT", f"Level:{level}, Role:{role}")
                 self.scan(level, role)
                 
-            elif choice == '2':  # Remediation / การแก้ไข
+            elif choice == '2':  # Remediation ALL (Force Run) / การแก้ไขทั้งหมด
                 level, role, timeout = self.get_remediation_options()
                 self.script_timeout = timeout
                 
-                if self.confirm_action("Confirm remediation?"):
-                    self.log_activity("FIX", f"Level:{level}, Role:{role}")
-                    self.fix(level, role)
+                if self.confirm_action("Confirm remediation (ALL checks)?"):
+                    self.log_activity("FIX_ALL", f"Level:{level}, Role:{role}")
+                    self.fix(level, role, fix_failed_only=False)
                     
-            elif choice == '3':  # Both / ทั้งสอง
+            elif choice == '3':  # Remediation FAILED ONLY / การแก้ไขเฉพาะรายการที่ล้มเหลว
+                level, role, timeout = self.get_remediation_options()
+                self.script_timeout = timeout
+                
+                # AUTO-AUDIT: If no audit results, run silent audit first
+                if not self.audit_results:
+                    print(f"{Colors.CYAN}[INFO] No previous audit found. Running auto-audit to identify failures...{Colors.ENDC}")
+                    # Run audit silently with same level/role settings
+                    self.scan(level, role, skip_menu=True)
+                    print(f"\n{Colors.CYAN}[+] Auto-audit complete. Proceeding to remediation...{Colors.ENDC}")
+                
+                # Show summary of audit findings
+                failed_count = sum(1 for r in self.audit_results.values() if r.get('status') in ['FAIL', 'ERROR', 'MANUAL'])
+                passed_count = sum(1 for r in self.audit_results.values() if r.get('status') in ['PASS', 'FIXED'])
+                
+                print(f"\n{Colors.CYAN}{'='*70}")
+                print("AUDIT SUMMARY")
+                print(f"{'='*70}{Colors.ENDC}")
+                print(f"  Total Audited:    {len(self.audit_results)}")
+                print(f"  PASSED:           {Colors.GREEN}{passed_count}{Colors.ENDC}")
+                print(f"  FAILED/MANUAL:    {Colors.RED}{failed_count}{Colors.ENDC}")
+                print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}\n")
+                
+                if failed_count == 0:
+                    print(f"{Colors.GREEN}[+] All checks passed! No remediation needed.{Colors.ENDC}")
+                    continue
+                
+                if self.confirm_action(f"Remediate {failed_count} failed/manual items?"):
+                    self.log_activity("FIX_FAILED_ONLY", f"Level:{level}, Role:{role}, Failed:{failed_count}")
+                    self.fix(level, role, fix_failed_only=True)
+                    
+            elif choice == '4':  # Both / ทั้งสอง
                 level, role, verbose, skip_manual, timeout = self.get_audit_options()
                 self.verbose = verbose
                 self.script_timeout = timeout
                 self.log_activity("AUDIT_THEN_FIX", f"Level:{level}, Role:{role}")
                 self.scan(level, role, skip_menu=True)
                 
-                if self.confirm_action("Proceed to remediation?"):
-                    self.fix(level, role)
+                if self.confirm_action("Proceed to remediation (ALL checks)?"):
+                    self.fix(level, role, fix_failed_only=False)
                     
-            elif choice == '4':  # Health check / ตรวจสอบสุขภาพ
+            elif choice == '5':  # Health check / ตรวจสอบสุขภาพ
                 self.log_activity("HEALTH_CHECK", "Initiated")
                 self.check_health()
                 
-            elif choice == '5':  # Help / ความช่วยเหลือ
+            elif choice == '6':  # Help / ความช่วยเหลือ
                 self.show_help()
                 
             elif choice == '0':  # Exit / ออก

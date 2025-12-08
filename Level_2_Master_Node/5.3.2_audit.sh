@@ -1,63 +1,80 @@
 #!/bin/bash
-set -xe
+set -e
 
 # CIS Benchmark: 5.3.2
-# Title: Ensure that all Namespaces have Network Policies defined (Manual)
+# Title: Ensure that all Namespaces have Network Policies defined (AUTOMATED)
 # Level: Level 2 - Master Node
 # Description: Verify that all non-system namespaces have NetworkPolicies
 
 SCRIPT_NAME="5.3.2_audit.sh"
-echo "[INFO] Starting CIS Benchmark check: 5.3.2"
+echo "[INFO] Starting CIS Benchmark audit: 5.3.2"
 
 # Initialize variables
 audit_passed=true
-failure_reasons=()
 namespaces_without_policy=()
+namespaces_with_policy=()
 
-# Verify kubectl is available
-echo "[INFO] Checking if kubectl is available..."
+# Verify kubectl is available and in PATH
 if ! command -v kubectl &> /dev/null; then
-    echo "[FAIL] kubectl command not found"
+    echo "[FAIL] kubectl command not found in PATH"
     exit 1
 fi
 
-echo "[INFO] Fetching all non-system namespaces..."
+echo "[INFO] Fetching all namespaces..."
+
 # Get all namespaces except system ones
-namespaces=$(kubectl get ns -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | grep -v -E '^(kube-system|kube-public|kube-node-lease|default)$')
+# System namespaces to exclude: kube-system, kube-public, kube-node-lease, local-path-storage
+namespaces=$(kubectl get ns -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep -v -E '^(kube-system|kube-public|kube-node-lease|local-path-storage|default)$')
 
 if [ -z "$namespaces" ]; then
     echo "[PASS] No custom namespaces found (only system namespaces exist)"
     exit 0
 fi
 
-echo "[INFO] Checking each namespace for NetworkPolicies..."
+echo ""
+echo "=========================================="
+echo "Checking NetworkPolicies in namespaces..."
+echo "=========================================="
+echo ""
+
+# Check each namespace for NetworkPolicies
 while IFS= read -r namespace; do
+    # Skip empty lines
     [ -z "$namespace" ] && continue
     
-    echo "[DEBUG] Checking namespace: $namespace"
+    # Get NetworkPolicy count in this namespace
     policy_count=$(kubectl get networkpolicies -n "$namespace" --no-headers 2>/dev/null | wc -l)
-    echo "[DEBUG] Found $policy_count NetworkPolicies in $namespace"
     
     if [ "$policy_count" -eq 0 ]; then
-        echo "[WARN] Namespace has no NetworkPolicies: $namespace"
+        echo "[FAIL] Namespace $namespace has no NetworkPolicy"
         namespaces_without_policy+=("$namespace")
         audit_passed=false
     else
-        echo "[INFO] Namespace has NetworkPolicies: $namespace"
+        echo "[PASS] Namespace $namespace has NetworkPolicy"
+        namespaces_with_policy+=("$namespace")
     fi
 done <<< "$namespaces"
 
-# Final report
+# Final summary
 echo ""
-echo "==============================================="
+echo "=========================================="
+echo "CIS 5.3.2 Audit Summary"
+echo "=========================================="
+echo "[INFO] Namespaces with NetworkPolicy: ${#namespaces_with_policy[@]}"
+echo "[INFO] Namespaces without NetworkPolicy: ${#namespaces_without_policy[@]}"
+echo ""
+
 if [ "$audit_passed" = true ]; then
-    echo "[PASS] CIS 5.3.2: All non-system namespaces have NetworkPolicies"
+    echo "[PASS] CIS 5.3.2: All non-system namespaces have NetworkPolicies defined"
+    echo ""
     exit 0
 else
-    echo "[FAIL] CIS 5.3.2: Some namespaces lack NetworkPolicies"
-    echo "Namespaces requiring NetworkPolicy:"
+    echo "[FAIL] CIS 5.3.2: Some namespaces are missing NetworkPolicies"
+    echo ""
+    echo "Namespaces requiring NetworkPolicy remediation:"
     for ns in "${namespaces_without_policy[@]}"; do
         echo "  - $ns"
     done
+    echo ""
     exit 1
 fi

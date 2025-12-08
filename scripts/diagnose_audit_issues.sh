@@ -50,7 +50,10 @@ collect_system_info() {
     fi
     
     if command -v kubectl &> /dev/null; then
-        log_output "kubectl Version: $(kubectl version --client --short 2>/dev/null || kubectl version --client 2>/dev/null | head -1)"
+        # Handle both old kubectl versions (with --short flag) and new ones (v1.34+)
+        local kubectl_version
+        kubectl_version=$(kubectl version --client 2>/dev/null | grep -oP '(?<=Client Version: v)\d+\.\d+\.\d+' || kubectl version --client --short 2>/dev/null || echo 'unknown')
+        log_output "kubectl Version: $kubectl_version"
     fi
 }
 

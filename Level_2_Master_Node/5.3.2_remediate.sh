@@ -23,7 +23,10 @@ if ! command -v kubectl &> /dev/null; then
     exit 1
 fi
 
-echo "[DEBUG] kubectl version: $(kubectl version --client --short 2>/dev/null || echo 'unknown')"
+# Get kubectl version (handle both old and new kubectl versions)
+# Kubernetes v1.34+ removed the --short flag
+KUBECTL_VERSION=$(kubectl version --client 2>/dev/null | grep -oP '(?<=Client Version: v)\d+\.\d+\.\d+' || kubectl version --client --short 2>/dev/null || echo 'unknown')
+echo "[DEBUG] kubectl version: $KUBECTL_VERSION"
 
 echo ""
 echo "========================================================"
