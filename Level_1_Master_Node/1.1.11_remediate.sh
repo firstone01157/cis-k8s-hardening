@@ -10,6 +10,10 @@ ETCD_DATA_DIR=$(ps -ef | grep etcd | grep -- --data-dir | sed 's/.*--data-dir[= 
 if [ -z "$ETCD_DATA_DIR" ]; then
     ETCD_DATA_DIR="/var/lib/etcd"
 fi
+
+# Sanitize ETCD_DATA_DIR to remove any leading/trailing quotes
+ETCD_DATA_DIR=$(echo "$ETCD_DATA_DIR" | sed 's/^["\x27]//;s/["\x27]$//')
+
 MAX_PERM=700
 
 echo "[INFO] Remediating permissions for $ETCD_DATA_DIR..."

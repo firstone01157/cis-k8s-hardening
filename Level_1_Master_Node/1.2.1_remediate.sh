@@ -1,42 +1,48 @@
 #!/bin/bash
-set -e
+# CIS Benchmark 1.2.1
+# Ensure that the --anonymous-auth argument is set to false
+# Level: 1 - Master Node
 
-# CIS Benchmark: 1.2.1
-# Title: Ensure that the --anonymous-auth argument is set to false
-# Level: Level 1 - Master Node
-# Remediation Script
+set -euo pipefail
 
-# Configuration
-CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
-KEY="--anonymous-auth"
-VALUE="false"
-FULL_PARAM="${KEY}=${VALUE}"
-BINARY_NAME="kube-apiserver"
+# 1. Resolve Python Script Absolute Path
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$CURRENT_DIR")"
+HARDENER_SCRIPT="$PROJECT_ROOT/harden_manifests.py"
 
-echo "[INFO] Remediating ${KEY}..."
+# Verification with fallbacks
+if [ ! -f "$HARDENER_SCRIPT" ]; then
+    if [ -f "$CURRENT_DIR/../harden_manifests.py" ]; then
+        HARDENER_SCRIPT="$CURRENT_DIR/../harden_manifests.py"
+    elif [ -f "/home/master/cis-k8s-hardening/harden_manifests.py" ]; then
+        HARDENER_SCRIPT="/home/master/cis-k8s-hardening/harden_manifests.py"
+    else
+        echo "[ERROR] harden_manifests.py not found. Cannot proceed."
+        exit 1
+    fi
+fi
 
-# 1. Pre-check using 'grep -F --' to handle dashes safely
-if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
-    echo "[FIXED] ${FULL_PARAM} is already set."
+# 2. Set Variables (Allow overrides)
+VALUE=$(echo "${CONFIG_REQUIRED_VALUE:-false}" | tr -d '"')
+MANIFEST_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+
+echo "[INFO] Running Hardener: $HARDENER_SCRIPT"
+echo "[INFO] Task: Setting --anonymous-auth to $VALUE in $MANIFEST_FILE"
+
+# 3. Execute Python Hardener (Using = to prevent parsing errors)
+python3 "$HARDENER_SCRIPT" \
+    --manifest="$MANIFEST_FILE" \
+    --flag="--anonymous-auth" \
+    --value="$VALUE" \
+    --ensure=present
+
+# 4. Check Result & Force Reload
+if [ $? -eq 0 ]; then
+    echo "[FIXED] CIS 1.2.1: Successfully updated --anonymous-auth"
+    # Touch manifest to force kubelet reload of static pod
+    touch "$MANIFEST_FILE"
     exit 0
-fi
-
-# 2. Backup
-cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
-
-# 3. Apply Fix using sed
-if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
-    # Case A: Key exists, update it (using | delimiter)
-    sed -i "s|${KEY}=.*|${FULL_PARAM}|g" "${CONFIG_FILE}"
 else
-    # Case B: Key missing, append inside 'command:' block with 4-space indent
-    sed -i "/- ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
-fi
-
-# 4. Verify
-if grep -Fq -- "${FULL_PARAM}" "${CONFIG_FILE}"; then
-    echo "[FIXED] Successfully applied ${FULL_PARAM}"
-else
-    echo "[ERROR] Failed to apply ${FULL_PARAM}"
+    echo "[ERROR] Failed to update --anonymous-auth"
     exit 1
 fi

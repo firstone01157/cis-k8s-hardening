@@ -1,67 +1,34 @@
 #!/bin/bash
-# CIS Benchmark: 4.2.7
-# Title: Ensure that the --hostname-override argument is not set
-# Level: Level 1 - Worker Node
-# Remediation Script
-
 set -euo pipefail
 
-kubelet_config_path() {
-	local config
-	config=$(ps -eo args | grep -m1 '[k]ubelet' | sed -n 's/.*--config[= ]\([^ ]*\).*/\1/p')
-	if [ -n "$config" ]; then
-		printf '%s' "$config"
-	else
-		printf '%s' "/var/lib/kubelet/config.yaml"
-	fi
-}
+# CIS Benchmark: 4.2.7
+# Title: Ensure that the --event-record-qps argument is set as appropriate
+# Level: Level 1 - Worker Node
+# Remediation Script (Environment Variable Delegation)
 
-config_file=$(kubelet_config_path)
-if [ ! -f "$config_file" ]; then
-	echo "[WARN] kubelet config not found at $config_file; skipping 4.2.7."
-	exit 0
+echo "[INFO] Remediating CIS 4.2.7: event-record-qps=0"
+
+# 1. Export CIS setting as environment variable for harden_kubelet.py
+export CONFIG_EVENT_RECORD_QPS="0"
+
+# 2. Locate harden_kubelet.py
+if [ -f "./harden_kubelet.py" ]; then
+	HARDENER="./harden_kubelet.py"
+elif [ -f "../harden_kubelet.py" ]; then
+	HARDENER="../harden_kubelet.py"
+elif [ -f "../../harden_kubelet.py" ]; then
+	HARDENER="../../harden_kubelet.py"
+else
+	echo "[ERROR] harden_kubelet.py not found in expected locations"
+	exit 1
 fi
 
-backup_file="$config_file.bak.$(date +%s)"
-cp -p "$config_file" "$backup_file"
-
-status=$(python3 - "$config_file" <<'PY'
-from pathlib import Path
-import sys
-
-try:
-	import yaml
-except ImportError:
-	sys.exit('yaml module unavailable')
-
-path = Path(sys.argv[1])
-original_text = path.read_text()
-data = yaml.safe_load(original_text) or {}
-if not isinstance(data, dict):
-	data = {}
-
-if 'hostnameOverride' not in data:
-	print('UNCHANGED')
-	sys.exit(0)
-
-data.pop('hostnameOverride', None)
-new_text = yaml.safe_dump(data, sort_keys=False, default_flow_style=False, width=4096)
-if not new_text.endswith('\n'):
-	new_text += '\n'
-if new_text != original_text:
-	path.write_text(new_text)
-	print('UPDATED')
-else:
-	print('UNCHANGED')
-PY
-)
-
-if [ "$status" = "UPDATED" ]; then
-	echo "[FIXED] hostnameOverride removed from $config_file"
-	echo "[INFO] Reload kubelet: systemctl daemon-reload && systemctl restart kubelet"
-elif [ "$status" = "UNCHANGED" ]; then
-	echo "[INFO] hostnameOverride not present in $config_file"
+# 3. Delegate to Python hardener
+echo "[INFO] Delegating to Python hardener: $HARDENER"
+if python3 "$HARDENER"; then
+	echo "[FIXED] CIS 4.2.7: Applied event-record-qps=0 via harden_kubelet.py"
+	exit 0
 else
-	echo "[ERROR] Unexpected status from YAML updater: $status"
+	echo "[ERROR] harden_kubelet.py failed"
 	exit 1
 fi

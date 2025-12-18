@@ -8,6 +8,9 @@
 CNI_DIR="/etc/cni/net.d"
 MAX_PERM=600
 
+# Sanitize CNI_DIR to remove any leading/trailing quotes
+CNI_DIR=$(echo "$CNI_DIR" | sed 's/^["\x27]//;s/["\x27]$//')
+
 echo "[INFO] Remediating permissions for files in $CNI_DIR..."
 
 # 2. Pre-Check & 3. Apply Fix (Iterative)

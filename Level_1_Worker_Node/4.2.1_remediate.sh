@@ -2,60 +2,36 @@
 # CIS Benchmark: 4.2.1
 # Title: Ensure that the --anonymous-auth argument is set to false
 # Level: Level 1 - Worker Node
-# Remediation Script (Config-Driven)
+# Remediation Script (Wrapper for harden_kubelet.py)
 
 set -euo pipefail
 
-KUBELET_CONFIG=${CONFIG_FILE:-/var/lib/kubelet/config.yaml}
-ANON_AUTH=${CONFIG_ANONYMOUS_AUTH:-false}
-
-# Determine project root and helper script location
+# 1. Determine the absolute path to the python script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-HELPER_SCRIPT="$PROJECT_ROOT/kubelet_config_manager.py"
+HARDENER_SCRIPT=""
 
-# Fallback if running from root
-if [ ! -f "$HELPER_SCRIPT" ]; then
-    HELPER_SCRIPT="./kubelet_config_manager.py"
-fi
-
-if [ ! -f "$KUBELET_CONFIG" ]; then
-    echo "[FAIL] Config file not found: $KUBELET_CONFIG"
-    exit 1
-fi
-
-if [ ! -f "$HELPER_SCRIPT" ]; then
-    echo "[FAIL] Python helper not found at $HELPER_SCRIPT"
-    exit 1
-fi
-
-echo "[INFO] Setting authentication.anonymous.enabled to $ANON_AUTH"
-
-# Call Python helper
-if python3 "$HELPER_SCRIPT" \
-    --config "$KUBELET_CONFIG" \
-    --key "authentication.anonymous.enabled" \
-    --value "$ANON_AUTH"; then
-    if [ "${CIS_NO_RESTART:-false}" = "true" ]; then
-        echo "[INFO] Restart skipped (Batch Mode)"
-    else
-        echo "[INFO] Restarting kubelet..."
-        if systemctl restart kubelet 2>&1; then
-            sleep 2
-            if systemctl is-active --quiet kubelet; then
-                echo "[PASS] 4.2.1 remediation complete"
-                exit 0
-            else
-                echo "[FAIL] kubelet not running after restart"
-                exit 1
-            fi
-        else
-            echo "[FAIL] kubelet restart failed"
-            exit 1
-        fi
-    fi
+if [ -f "$SCRIPT_DIR/../../harden_kubelet.py" ]; then
+    HARDENER_SCRIPT="$SCRIPT_DIR/../../harden_kubelet.py"
+elif [ -f "$SCRIPT_DIR/../harden_kubelet.py" ]; then
+    HARDENER_SCRIPT="$SCRIPT_DIR/../harden_kubelet.py"
+elif [ -f "/root/cis-k8s-hardening/harden_kubelet.py" ]; then
+    HARDENER_SCRIPT="/root/cis-k8s-hardening/harden_kubelet.py"
 else
-    echo "[FAIL] Failed to update configuration"
+    echo "[ERROR] harden_kubelet.py not found!"
     exit 1
 fi
+
+echo "[INFO] Remediating 4.2.1: Delegating to $HARDENER_SCRIPT"
+
+# 2. Export the specific variable for THIS check
+if [ ! -z "${CONFIG_REQUIRED_VALUE:-}" ]; then
+    SAFE_VAL=$(echo "$CONFIG_REQUIRED_VALUE" | tr -d '"')
+    export CONFIG_ANONYMOUS_AUTH="$SAFE_VAL"
+else
+    export CONFIG_ANONYMOUS_AUTH="false"
+fi
+
+# 3. Execute the python hardener
+python3 "$HARDENER_SCRIPT"
+exit $?
 

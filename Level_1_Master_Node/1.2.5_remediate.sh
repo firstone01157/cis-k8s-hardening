@@ -25,7 +25,7 @@ set -euo pipefail
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON_HELPER="$SCRIPT_DIR/yaml_safe_modifier.py"
+PYTHON_HELPER="$SCRIPT_DIR/scripts/yaml_safe_modifier.py"
 
 # Color codes
 RED='\033[0;31m'

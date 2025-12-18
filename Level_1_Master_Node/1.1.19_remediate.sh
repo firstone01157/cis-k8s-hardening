@@ -8,6 +8,9 @@
 PKI_DIR="/etc/kubernetes/pki"
 OWNER="root:root"
 
+# Sanitize PKI_DIR to remove any leading/trailing quotes
+PKI_DIR=$(echo "$PKI_DIR" | sed 's/^["\x27]//;s/["\x27]$//')
+
 echo "[INFO] Remediating ownership for files in $PKI_DIR..."
 
 # 2. Pre-Check & 3. Apply Fix (Recursive)

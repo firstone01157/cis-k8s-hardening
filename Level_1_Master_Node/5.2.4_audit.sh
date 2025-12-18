@@ -29,17 +29,25 @@ audit_rule() {
 		return 2
 	fi
 
-	# Check for namespaces missing the label
+	# Check for namespaces missing PSS labels (enforce, warn, or audit)
 	echo "[CMD] Executing: kubectl get ns -o json"
 	ns_json=$(kubectl get ns -o json 2>/dev/null)
 	
-	echo "[CMD] Executing: jq filter for namespaces without enforce label"
-	missing_labels=$(echo "$ns_json" | jq -r '.items[] | select(.metadata.name != "kube-system" and .metadata.name != "kube-public") | select(.metadata.labels["pod-security.kubernetes.io/enforce"] == null) | .metadata.name')
+	echo "[CMD] Executing: jq filter for namespaces without valid PSS labels"
+	
+	# Step 1: Find namespaces with no PSS labels at all
+	missing_all_labels=$(echo "$ns_json" | jq -r '.items[] | select(.metadata.name != "kube-system" and .metadata.name != "kube-public" and .metadata.name != "kube-node-lease") | select((.metadata.labels["pod-security.kubernetes.io/enforce"] == null) and (.metadata.labels["pod-security.kubernetes.io/warn"] == null) and (.metadata.labels["pod-security.kubernetes.io/audit"] == null)) | .metadata.name')
+	
+	# Step 2: Find namespaces with PSS labels but incorrect values (not "restricted" or "baseline")
+	invalid_values=$(echo "$ns_json" | jq -r '.items[] | select(.metadata.name != "kube-system" and .metadata.name != "kube-public" and .metadata.name != "kube-node-lease") | select(((.metadata.labels["pod-security.kubernetes.io/enforce"] != null and .metadata.labels["pod-security.kubernetes.io/enforce"] != "restricted" and .metadata.labels["pod-security.kubernetes.io/enforce"] != "baseline")) or ((.metadata.labels["pod-security.kubernetes.io/warn"] != null and .metadata.labels["pod-security.kubernetes.io/warn"] != "restricted" and .metadata.labels["pod-security.kubernetes.io/warn"] != "baseline")) or ((.metadata.labels["pod-security.kubernetes.io/audit"] != null and .metadata.labels["pod-security.kubernetes.io/audit"] != "restricted" and .metadata.labels["pod-security.kubernetes.io/audit"] != "baseline"))) | .metadata.name')
+	
+	# Combine both lists
+	missing_labels=$(echo -e "$missing_all_labels\n$invalid_values" | sort | uniq | grep -v '^$')
 
 	if [ -n "$missing_labels" ]; then
 		echo "[INFO] Check Failed"
-		a_output2+=(" - Check Failed: The following namespaces are missing 'pod-security.kubernetes.io/enforce' label:")
-		echo "[FAIL_REASON] Check Failed: Namespaces missing PSS enforcement label"
+		a_output2+=(" - Check Failed: The following namespaces are missing or have incorrect PSS labels:")
+		echo "[FAIL_REASON] Check Failed: Namespaces missing or have incorrect PSS labels (enforce/warn/audit)"
 		echo "[FIX_HINT] Run remediation script: 5.2.4_remediate.sh"
 		for ns in $missing_labels; do
 			 a_output2+=(" - $ns")
@@ -48,7 +56,7 @@ audit_rule() {
 		return 1
 	else
 		echo "[INFO] Check Passed"
-		a_output+=(" - Check Passed: All non-system namespaces have 'pod-security.kubernetes.io/enforce' label")
+		a_output+=(" - Check Passed: All non-system namespaces have valid PSS labels (enforce/warn/audit with value 'restricted' or 'baseline')")
 		printf '%s\n' "" "- Audit Result:" "  [+] PASS" "${a_output[@]}"
 		return 0
 	fi

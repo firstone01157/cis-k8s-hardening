@@ -8,6 +8,9 @@
 PKI_DIR="/etc/kubernetes/pki"
 MAX_PERM=644
 
+# Sanitize PKI_DIR to remove any leading/trailing quotes
+PKI_DIR=$(echo "$PKI_DIR" | sed 's/^["\x27]//;s/["\x27]$//')
+
 echo "[INFO] Remediating permissions for *.crt files in $PKI_DIR..."
 
 # 2. Pre-Check & 3. Apply Fix (Iterative)

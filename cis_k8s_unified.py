@@ -19,11 +19,31 @@ import json
 import csv
 import time
 import argparse
+import tempfile
+import logging
+import requests
+import difflib
+import re
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import List, Optional, Tuple, Dict, Any
 import glob
 import socket
+import urllib3
+
+try:
+    import yaml
+except ImportError:
+    # Fallback will be handled in classes
+    pass
+
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 # --- Constants / ค่าคงที่ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -53,16 +73,274 @@ class Colors:
     UNDERLINE = '\033[4m'
 
 
+class YAMLSafeModifier:
+    """
+    Safely modify Kubernetes manifest YAML files.
+    จัดการแก้ไขไฟล์ YAML ของ Kubernetes Manifest อย่างปลอดภัย
+    """
+    
+    def __init__(self, file_path: str, dry_run: bool = False):
+        """
+        Initialize YAML modifier / เริ่มต้นตัวแก้ไข YAML
+        :param file_path: Path to the YAML file / เส้นทางไปยังไฟล์ YAML
+        :param dry_run: If True, don't save changes / หากเป็น True จะไม่บันทึกการเปลี่ยนแปลง
+        """
+        self.file_path = Path(file_path)
+        self.dry_run = dry_run
+        self.data = None
+        self.original_content = None
+        self._load_yaml()
+    
+    def _load_yaml(self) -> None:
+        """Load YAML content from file / โหลดเนื้อหา YAML จากไฟล์"""
+        if not self.file_path.exists():
+            return
+        try:
+            with open(self.file_path, 'r') as f:
+                self.original_content = f.read()
+                self.data = yaml.safe_load(self.original_content)
+                if self.data is None:
+                    self.data = {}
+        except Exception:
+            # Fallback to empty dict if parsing fails / ใช้ dict ว่างหากการแยกวิเคราะห์ล้มเหลว
+            self.data = {}
+    
+    def apply_modifications(self, modifications: Dict[str, Any], mod_type: str = "string") -> str:
+        """
+        Apply modifications to YAML data and return as string.
+        ใช้การแก้ไขกับข้อมูล YAML และส่งกลับเป็นสตริง
+        """
+        if not self.data:
+            return self.original_content or ""
+            
+        if 'flags' in modifications:
+            self._update_command_flags(modifications['flags'], mod_type)
+            
+        return yaml.dump(
+            self.data,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+            width=float("inf")
+        )
+
+    def _update_command_flags(self, flags: list, mod_type: str = "string") -> None:
+        """
+        Update command-line flags in the container spec.
+        อัปเดต flag คำสั่งในส่วนของ container spec
+        """
+        try:
+            spec = self.data.get('spec', {})
+            containers = spec.get('containers', [])
+            if containers:
+                command = containers[0].get('command', [])
+                for flag_entry in flags:
+                    if '=' in flag_entry:
+                        flag_key, flag_value = flag_entry.split('=', 1)
+                        self._update_flag_in_list(command, flag_key, flag_value, mod_type)
+                    else:
+                        self._update_flag_in_list(command, flag_entry, None, mod_type)
+                containers[0]['command'] = command
+        except Exception:
+            pass
+
+    def _update_flag_in_list(self, command_list: list, flag: str, value: Optional[str], mod_type: str = "string") -> None:
+        """
+        Update or append a flag in a list of command arguments.
+        อัปเดตหรือเพิ่ม flag ในรายการอาร์กิวเมนต์คำสั่ง
+        """
+        # List of flags that should be treated as CSV lists / รายการ flag ที่ควรจัดการเป็นรายการ CSV
+        CSV_FLAGS = [
+            "--authorization-mode", 
+            "--enable-admission-plugins", 
+            "--disable-admission-plugins", 
+            "--tls-cipher-suites"
+        ]
+        
+        flag_index = -1
+        for i, item in enumerate(command_list):
+            if isinstance(item, str) and (item.startswith(flag + '=') or item == flag):
+                flag_index = i
+                break
+        
+        if flag_index >= 0:
+            if value is not None:
+                if mod_type == "csv" or flag in CSV_FLAGS:
+                    # Smart Append: Don't overwrite, append to CSV list if not present
+                    # การเพิ่มแบบอัจฉริยะ: ไม่เขียนทับ แต่เพิ่มลงในรายการ CSV หากยังไม่มี
+                    current_item = command_list[flag_index]
+                    if '=' in current_item:
+                        current_value = current_item.split('=', 1)[1]
+                        # Split by comma and strip whitespace / แยกด้วยเครื่องหมายจุลภาคและตัดช่องว่าง
+                        existing_values = [v.strip() for v in current_value.split(',') if v.strip()]
+                        
+                        if value not in existing_values:
+                            existing_values.append(value)
+                            command_list[flag_index] = f"{flag}={','.join(existing_values)}"
+                    else:
+                        # Flag exists but has no value, just set it / มี flag อยู่แต่ไม่มีค่า ให้ตั้งค่าเลย
+                        command_list[flag_index] = f"{flag}={value}"
+                else:
+                    # Normal overwrite for non-CSV flags / การเขียนทับปกติสำหรับ flag ที่ไม่ใช่ CSV
+                    command_list[flag_index] = f"{flag}={value}"
+        else:
+            if value is not None:
+                command_list.append(f"{flag}={value}")
+            else:
+                command_list.append(flag)
+
+
+class AtomicRemediationManager:
+    """
+    Manages atomic file writes and automatic rollback.
+    จัดการการเขียนไฟล์แบบ atomic และการย้อนกลับอัตโนมัติ
+    """
+    
+    def __init__(self, backup_dir: str = "/var/backups/cis-remediation"):
+        """
+        Initialize remediation manager / เริ่มต้นตัวจัดการการแก้ไข
+        :param backup_dir: Directory for backups / ไดเรกทอรีสำหรับสำรองข้อมูล
+        """
+        self.backup_dir = Path(backup_dir)
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.health_check_url = "https://127.0.0.1:6443/healthz"
+        self.health_check_timeout = 300  # Increased to 5 minutes for slow hardware / เพิ่มเป็น 5 นาทีสำหรับฮาร์ดแวร์ที่ช้า
+        self.health_check_interval = 5  # Check every 5 seconds / ตรวจสอบทุก 5 วินาที
+        self.api_settle_time = 15
+        
+        # Smart SSL Verification / การตรวจสอบ SSL อัจฉริยะ
+        self.ca_cert = "/etc/kubernetes/pki/ca.crt"
+        if os.path.exists(self.ca_cert):
+            self.ssl_verify = self.ca_cert
+        else:
+            self.ssl_verify = False
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    def create_backup(self, filepath: str) -> Tuple[bool, str]:
+        """
+        Create a backup of the specified file / สร้างการสำรองข้อมูลของไฟล์ที่ระบุ
+        """
+        try:
+            filepath = Path(filepath)
+            if not filepath.exists():
+                return False, ""
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = self.backup_dir / f"{filepath.name}.bak_{timestamp}"
+            shutil.copy2(filepath, backup_path)
+            return True, str(backup_path)
+        except Exception:
+            return False, ""
+    
+    def update_manifest_safely(self, filepath: str, modifications: Dict[str, Any], mod_type: str = "string") -> Tuple[bool, str]:
+        """
+        Update a manifest file atomically with backup / อัปเดตไฟล์ manifest แบบ atomic พร้อมการสำรองข้อมูล
+        """
+        filepath = Path(filepath)
+        try:
+            with open(filepath, 'r') as f:
+                original_content = f.read()
+            
+            backup_success, backup_path = self.create_backup(str(filepath))
+            if not backup_success:
+                return False, "Failed to create backup"
+            
+            modifier = YAMLSafeModifier(str(filepath))
+            modified_content = modifier.apply_modifications(modifications, mod_type)
+            
+            if modified_content == original_content:
+                return True, "No changes needed"
+            
+            # Use temporary file for atomic write / ใช้ไฟล์ชั่วคราวสำหรับการเขียนแบบ atomic
+            temp_fd, temp_path = tempfile.mkstemp(dir=filepath.parent, prefix=filepath.stem + '_', suffix='.tmp')
+            try:
+                with os.fdopen(temp_fd, 'w') as f:
+                    f.write(modified_content)
+                    f.flush()
+                    os.fsync(f.fileno())
+                # Atomic replacement / การแทนที่แบบ atomic
+                os.replace(temp_path, filepath)
+                return True, f"Updated successfully. Backup: {backup_path}"
+            except Exception as e:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise e
+        except Exception as e:
+            return False, str(e)
+    
+    def wait_for_cluster_healthy(self) -> Tuple[bool, str]:
+        """
+        Wait for the Kubernetes API to become healthy / รอให้ Kubernetes API กลับมาใช้งานได้ปกติ
+        Robust check for local remediation to prevent false-positive rollbacks on slow hardware.
+        """
+        print(f"{Colors.CYAN}[*] Waiting for API Server recovery (Timeout: {self.health_check_timeout}s)...{Colors.ENDC}")
+        
+        # Suppress insecure request warnings for this local check
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        start_time = time.time()
+        while (time.time() - start_time) < self.health_check_timeout:
+            elapsed = int(time.time() - start_time)
+            try:
+                # FORCE DISABLE VERIFY for localhost to avoid SSLError (hostname mismatch)
+                # Accept 200 (OK) or 401 (Unauthorized) as success
+                response = requests.get(
+                    self.health_check_url, 
+                    verify=False, 
+                    timeout=5
+                )
+                
+                if response.status_code in (200, 401):
+                    print(f"{Colors.GREEN}    [✓] API Server is ALIVE (Status: {response.status_code}) after {elapsed}s. Settling...{Colors.ENDC}")
+                    if self.api_settle_time > 0:
+                        time.sleep(self.api_settle_time)
+                    return True, f"Cluster is healthy (Status: {response.status_code})"
+                elif response.status_code in (500, 503):
+                    print(f"{Colors.YELLOW}    [*] API initializing... (Status: {response.status_code}, {elapsed}s/{self.health_check_timeout}s){Colors.ENDC}")
+                else:
+                    print(f"{Colors.YELLOW}    [*] API responding with status {response.status_code}... ({elapsed}s/{self.health_check_timeout}s){Colors.ENDC}")
+                
+            except requests.exceptions.ConnectionError:
+                print(f"{Colors.YELLOW}    [*] API restarting... (Connection Refused, {elapsed}s/{self.health_check_timeout}s){Colors.ENDC}")
+            except Exception as e:
+                print(f"{Colors.YELLOW}    [*] Waiting for API... ({str(e)[:50]}, {elapsed}s/{self.health_check_timeout}s){Colors.ENDC}")
+            
+            time.sleep(self.health_check_interval)
+            
+        return False, f"Cluster health check timed out after {self.health_check_timeout}s"
+    
+    def rollback(self, filepath: str, backup_path: str) -> bool:
+        """
+        Restore file from backup / กู้คืนไฟล์จากการสำรองข้อมูล
+        """
+        try:
+            shutil.copy2(backup_path, filepath)
+            return True
+        except Exception:
+            return False
+
+    def verify_remediation(self, check_id: str, audit_script_path: str) -> Tuple[bool, str]:
+        """
+        Verify remediation by running the audit script / ตรวจสอบการแก้ไขโดยการรันสคริปต์ตรวจสอบ
+        """
+        try:
+            result = subprocess.run(["bash", audit_script_path], capture_output=True, text=True, timeout=30)
+            if result.returncode == 0 and "PASS" in result.stdout:
+                return True, "Audit passed"
+            return False, f"Audit failed: {result.stdout}"
+        except Exception as e:
+            return False, str(e)
+
+
 class CISUnifiedRunner:
     """
     Main CIS Kubernetes Benchmark Runner
     ตัวรันหลักของ CIS Kubernetes Benchmark
     """
     
-    def __init__(self, verbose=0):
+    def __init__(self, verbose=0, config_path=None):
         """Initialize runner with configuration / เริ่มต้นตัวรันพร้อมการตั้งค่า"""
         self.base_dir = BASE_DIR
-        self.config_file = CONFIG_FILE
+        self.config_file = config_path if config_path else CONFIG_FILE
         self.log_file = LOG_FILE
         self.report_dir = REPORT_DIR
         self.backup_dir = BACKUP_DIR
@@ -79,6 +357,7 @@ class CISUnifiedRunner:
         self.stats = {}
         self.stop_requested = False
         self.health_status = "UNKNOWN"
+        self.manual_pending_items = []  # Separate list for manual checks (NOT failures)
         
         # Timestamp and directories / แสตมป์เวลาและไดเรกทอรี
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -89,8 +368,24 @@ class CISUnifiedRunner:
         for directory in [self.report_dir, self.backup_dir, self.history_dir, self.date_dir]:
             os.makedirs(directory, exist_ok=True)
         
+        # Initialize Atomic Remediation Manager
+        self.atomic_manager = AtomicRemediationManager(backup_dir=self.backup_dir)
+        
+        # Smart SSL Verification for Runner / การตรวจสอบ SSL อัจฉริยะสำหรับ Runner
+        self.ca_cert = "/etc/kubernetes/pki/ca.crt"
+        self.health_check_url = "https://127.0.0.1:6443/healthz"
+        
+        if os.path.exists(self.ca_cert):
+            self.ssl_verify = self.ca_cert
+        else:
+            self.ssl_verify = False
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
         self.load_config()
-        self.check_dependencies()
+        # Run pre-flight checks before proceeding
+        self.run_preflight_checks()
+        # Ensure audit log directory exists / ตรวจสอบให้แน่ใจว่ามีไดเรกทอรีบันทึกการตรวจสอบ
+        self.ensure_audit_log_dir()
 
     def show_banner(self):
         """Display application banner / แสดงแบนเนอร์แอปพลิเคชัน"""
@@ -105,18 +400,22 @@ class CISUnifiedRunner:
         print(banner)
 
     def load_config(self):
-        """Load configuration from JSON file / โหลดการตั้งค่าจากไฟล์ JSON"""
+        """
+        Load configuration from JSON file.
+        โหลดการตั้งค่าจากไฟล์ JSON
+        """
         self.excluded_rules = {}
         self.component_mapping = {}
         self.remediation_config = {}
         self.remediation_global_config = {}
         self.remediation_checks_config = {}
         self.remediation_env_vars = {}
+        self.variables = {}  # Store variables section for reference resolution / เก็บส่วนตัวแปรสำหรับการแก้ไขการอ้างอิง
         
-        # Initialize API timeout settings with defaults
-        self.api_check_interval = 5  # seconds
-        self.api_max_retries = 60    # 60 * 5 = 300 seconds total (5 minutes)
-        self.api_settle_time = 15    # settle time after API becomes ready (seconds)
+        # Initialize API timeout settings with defaults / เริ่มต้นการตั้งค่า API timeout ด้วยค่าเริ่มต้น
+        self.api_check_interval = 5  # seconds / วินาที
+        self.api_max_retries = 60    # 60 * 5 = 300 seconds total (5 minutes) / รวม 5 นาที
+        self.api_settle_time = 15    # settle time after API becomes ready (seconds) / เวลารอให้ API นิ่งหลังจากพร้อมใช้งาน
         self.wait_for_api_enabled = True
         
         if not os.path.exists(self.config_file):
@@ -128,6 +427,7 @@ class CISUnifiedRunner:
                 config = json.load(f)
                 self.excluded_rules = config.get("excluded_rules", {})
                 self.component_mapping = config.get("component_mapping", {})
+                self.variables = config.get("variables", {})  # Load variables for reference resolution / โหลดตัวแปรสำหรับการแก้ไขการอ้างอิง
                 
                 # Load remediation configuration / โหลดการตั้งค่าการแก้ไข
                 self.remediation_config = config.get("remediation_config", {})
@@ -135,19 +435,109 @@ class CISUnifiedRunner:
                 self.remediation_checks_config = self.remediation_config.get("checks", {})
                 self.remediation_env_vars = self.remediation_config.get("environment_overrides", {})
                 
-                # Load API timeout settings from global config
+                # Load API timeout settings from global config / โหลดการตั้งค่า API timeout จากการตั้งค่าส่วนกลาง
                 self.wait_for_api_enabled = self.remediation_global_config.get("wait_for_api", True)
                 self.api_check_interval = self.remediation_global_config.get("api_check_interval", 5)
                 self.api_max_retries = self.remediation_global_config.get("api_max_retries", 60)
                 self.api_settle_time = self.remediation_global_config.get("api_settle_time", 15)
                 
+                # Resolve all variable references in checks / แก้ไขการอ้างอิงตัวแปรทั้งหมดในการตรวจสอบ
+                self._resolve_references()
+                
                 if self.verbose >= 1:
                     print(f"{Colors.BLUE}[DEBUG] Loaded remediation config for {len(self.remediation_checks_config)} checks{Colors.ENDC}")
                     print(f"{Colors.BLUE}[DEBUG] API timeout settings: interval={self.api_check_interval}s, max_retries={self.api_max_retries}, settle_time={self.api_settle_time}s{Colors.ENDC}")
+                    print(f"{Colors.BLUE}[DEBUG] Resolved variable references in checks{Colors.ENDC}")
         except json.JSONDecodeError as e:
             print(f"{Colors.RED}[!] Config parse error: {e}{Colors.ENDC}")
         except Exception as e:
             print(f"{Colors.RED}[!] Config load error: {e}{Colors.ENDC}")
+
+    def _resolve_references(self):
+        """
+        Resolve all variable references in remediation checks.
+        แก้ไขการอ้างอิงตัวแปรทั้งหมดในการตั้งค่าการแก้ไข
+        
+        Algorithm / อัลกอริทึม:
+        1. Iterate through each check in remediation_checks_config / วนลูปผ่านการตรวจสอบแต่ละรายการ
+        2. Identify all keys ending with '_ref' / ระบุคีย์ทั้งหมดที่ลงท้ายด้วย '_ref'
+        3. Parse the dotted path from the reference value / แยกวิเคราะห์ dotted path จากค่าอ้างอิง
+        4. Fetch the actual value from self.variables / ดึงค่าจริงจาก self.variables
+        5. Inject/Overwrite the target key with the fetched value / ใส่หรือเขียนทับคีย์เป้าหมายด้วยค่าที่ดึงมา
+        """
+        reference_count = 0
+        invalid_refs = []
+        
+        for check_id, check_config in self.remediation_checks_config.items():
+            if not isinstance(check_config, dict):
+                continue
+            
+            # Find all keys ending with '_ref' / ค้นหาคีย์ทั้งหมดที่ลงท้ายด้วย '_ref'
+            ref_keys = [key for key in check_config.keys() if key.endswith('_ref')]
+            
+            for ref_key in ref_keys:
+                ref_path = check_config[ref_key]
+                # Resolve target key by removing '_ref' and stripping leading underscore
+                # e.g., '_required_value_ref' -> 'required_value'
+                target_key = ref_key.replace('_ref', '').lstrip('_')
+                
+                # Fetch the value from variables using dotted path / ดึงค่าจากตัวแปรโดยใช้ dotted path
+                if ref_path.startswith("variables."):
+                    var_path = ref_path[len("variables."):]  # Remove "variables." prefix
+                    resolved_value = self._get_nested_value(self.variables, var_path)
+                else:
+                    resolved_value = None
+                
+                if resolved_value is None:
+                    invalid_refs.append({
+                        'check_id': check_id,
+                        'ref_key': ref_key,
+                        'ref_path': ref_path
+                    })
+                    if self.verbose >= 1:
+                        print(f"{Colors.YELLOW}[!] Invalid reference in check {check_id}: {ref_path} not found{Colors.ENDC}")
+                else:
+                    # Type conversion: Convert JSON boolean to string if appropriate / การแปลงประเภท: แปลง JSON boolean เป็น string
+                    if isinstance(resolved_value, bool):
+                        resolved_value = str(resolved_value).lower()  # true -> "true", false -> "false"
+                    
+                    # Inject the resolved value into the check config / ใส่ค่าที่แก้ไขแล้วลงในการตั้งค่าการตรวจสอบ
+                    check_config[target_key] = resolved_value
+                    reference_count += 1
+                    
+                    if self.verbose >= 2:
+                        print(f"{Colors.BLUE}[DEBUG] Resolved {check_id}.{target_key} = {resolved_value}{Colors.ENDC}")
+        
+        if self.verbose >= 1 and reference_count > 0:
+            print(f"{Colors.GREEN}[+] Resolved {reference_count} variable references{Colors.ENDC}")
+        
+        if invalid_refs and self.verbose >= 1:
+            print(f"{Colors.YELLOW}[!] Found {len(invalid_refs)} invalid references{Colors.ENDC}")
+            for invalid in invalid_refs:
+                print(f"    - {invalid['check_id']}: {invalid['ref_path']}")
+
+    def _get_nested_value(self, data, dotted_path):
+        """
+        Retrieve a value from nested dictionary using dotted path notation.
+        ดึงค่าจากพจนานุกรมที่ซ้อนกันโดยใช้รูปแบบ dotted path
+        
+        Example / ตัวอย่าง:
+            dotted_path = "api_server_flags.secure_port"
+            Returns data['api_server_flags']['secure_port']
+        """
+        try:
+            keys = dotted_path.split('.')
+            current = data
+            
+            for key in keys:
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                else:
+                    return None
+            
+            return current
+        except Exception:
+            return None
 
     def is_rule_excluded(self, rule_id):
         """Check if rule is excluded / ตรวจสอบว่ากฎถูกยกเว้นหรือไม่"""
@@ -180,6 +570,158 @@ class CISUnifiedRunner:
             if self.verbose >= 2:
                 print(f"{Colors.RED}[DEBUG] Logging error: {e}{Colors.ENDC}")
 
+    def run_preflight_checks(self):
+        """
+        Run comprehensive pre-flight checks before application starts.
+        รันการตรวจสอบความพร้อมก่อนเริ่มโปรแกรม
+        """
+        print(f"\n{Colors.CYAN}[*] Running pre-flight checks...{Colors.ENDC}")
+        
+        checks_passed = True
+        
+        # Check 1: Required Tools (kubectl, jq) / ตรวจสอบเครื่องมือที่จำเป็น
+        if not self._check_required_tools():
+            checks_passed = False
+        
+        # Check 2: Root Permissions / ตรวจสอบสิทธิ์ Root
+        if not self._check_root_permissions():
+            checks_passed = False
+        
+        # Check 3: Config File Validity / ตรวจสอบความถูกต้องของไฟล์ตั้งค่า
+        if not self._check_config_validity():
+            checks_passed = False
+        
+        # Check 4: Optional Dependencies (openpyxl) / ตรวจสอบโมดูลเสริม
+        self._check_optional_dependencies()
+        
+        if not checks_passed:
+            print(f"\n{Colors.RED}{'='*70}")
+            print(f"[ERROR] Pre-flight checks FAILED. Cannot proceed.")
+            print(f"{'='*70}{Colors.ENDC}\n")
+            sys.exit(1)
+        
+        print(f"{Colors.GREEN}[✓] All pre-flight checks passed!{Colors.ENDC}\n")
+
+    def _check_required_tools(self):
+        """Check if kubectl and jq are installed and executable / ตรวจสอบว่า kubectl และ jq ถูกติดตั้งหรือไม่"""
+        tools_to_check = ["kubectl", "jq"]
+        missing_tools = []
+        
+        for tool in tools_to_check:
+            tool_path = shutil.which(tool)
+            if tool_path is None:
+                missing_tools.append(tool)
+                print(f"{Colors.RED}[ERROR] Required tool not found: {tool}{Colors.ENDC}")
+            else:
+                print(f"{Colors.GREEN}[✓] Tool found:{Colors.ENDC} {tool} ({tool_path})")
+        
+        if missing_tools:
+            print(f"{Colors.RED}[ERROR] Missing critical tools: {', '.join(missing_tools)}{Colors.ENDC}")
+            return False
+        
+        return True
+
+    def _check_root_permissions(self):
+        """Check if running as root (UID 0) / ตรวจสอบว่ารันด้วยสิทธิ์ root หรือไม่"""
+        current_uid = os.getuid()
+        
+        if current_uid != 0:
+            print(f"{Colors.RED}[ERROR] This application must run as root (UID 0){Colors.ENDC}")
+            print(f"{Colors.RED}[ERROR] Current UID: {current_uid}{Colors.ENDC}")
+            print(f"{Colors.YELLOW}[*] Please run with: sudo python3 {sys.argv[0]}{Colors.ENDC}")
+            return False
+        
+        print(f"{Colors.GREEN}[✓] Running as root{Colors.ENDC} (UID: 0)")
+        return True
+
+    def _check_config_validity(self):
+        """Check if cis_config.json is valid JSON and readable"""
+        if not os.path.exists(self.config_file):
+            print(f"{Colors.YELLOW}[!] Config file not found (optional): {self.config_file}{Colors.ENDC}")
+            return True  # Optional - don't fail if missing, defaults will be used
+        
+        if not os.path.isfile(self.config_file):
+            print(f"{Colors.RED}[ERROR] Config path is not a file: {self.config_file}{Colors.ENDC}")
+            return False
+        
+        try:
+            with open(self.config_file, 'r') as f:
+                json.load(f)
+            print(f"{Colors.GREEN}[✓] Config file is valid JSON:{Colors.ENDC} {self.config_file}")
+            return True
+        except json.JSONDecodeError as e:
+            print(f"{Colors.RED}[ERROR] Config file is not valid JSON:{Colors.ENDC}")
+            print(f"{Colors.RED}[ERROR] {self.config_file}{Colors.ENDC}")
+            print(f"{Colors.RED}[ERROR] Details: {str(e)}{Colors.ENDC}")
+            return False
+        except PermissionError:
+            print(f"{Colors.RED}[ERROR] Permission denied reading config file:{Colors.ENDC} {self.config_file}")
+            return False
+        except Exception as e:
+            print(f"{Colors.RED}[ERROR] Failed to read config file:{Colors.ENDC} {str(e)}")
+            return False
+
+    def _check_optional_dependencies(self):
+        """Check for optional dependencies like openpyxl"""
+        if OPENPYXL_AVAILABLE:
+            print(f"{Colors.GREEN}[✓] openpyxl is installed (Excel reporting enabled){Colors.ENDC}")
+        else:
+            print(f"{Colors.YELLOW}[!] openpyxl is not installed (Excel reporting disabled){Colors.ENDC}")
+            print(f"{Colors.YELLOW}[!] Install with: pip install openpyxl{Colors.ENDC}")
+
+    def ensure_audit_log_dir(self):
+        """
+        Ensure the audit log directory and file exist with correct permissions.
+        ตรวจสอบให้แน่ใจว่าไดเรกทอรีและไฟล์บันทึกการตรวจสอบมีอยู่พร้อมสิทธิ์ที่ถูกต้อง
+        """
+        audit_dir = "/var/log/kubernetes/audit"
+        audit_file = os.path.join(audit_dir, "audit.log")
+        
+        # Only attempt if running as root / ดำเนินการเฉพาะเมื่อรันด้วยสิทธิ์ root
+        if os.getuid() != 0:
+            if self.verbose >= 1:
+                print(f"{Colors.YELLOW}[WARN] Not running as root. Skipping audit log directory creation.{Colors.ENDC}")
+            return False
+
+        try:
+            # 1. Create directory if not exists (recursive) / สร้างไดเรกทอรีหากไม่มีอยู่ (แบบ recursive)
+            if not os.path.exists(audit_dir):
+                print(f"{Colors.CYAN}[*] Creating audit log directory: {audit_dir}{Colors.ENDC}")
+                os.makedirs(audit_dir, mode=0o700, exist_ok=True)
+            
+            # Ensure directory permissions are 700 / ตรวจสอบให้แน่ใจว่าสิทธิ์ไดเรกทอรีคือ 700
+            os.chmod(audit_dir, 0o700)
+            
+            # 2. Create audit.log if not exists / สร้าง audit.log หากไม่มีอยู่
+            if not os.path.exists(audit_file):
+                print(f"{Colors.CYAN}[*] Creating audit log file: {audit_file}{Colors.ENDC}")
+                with open(audit_file, 'a'):
+                    os.utime(audit_file, None)
+            
+            # 3. Set file permissions to 600 / ตั้งค่าสิทธิ์ไฟล์เป็น 600
+            os.chmod(audit_file, 0o600)
+            
+            # 4. Set ownership to root:root (uid 0, gid 0) / ตั้งค่าความเป็นเจ้าของเป็น root:root
+            try:
+                # Use uid/gid 0 directly for maximum reliability / ใช้ uid/gid 0 โดยตรงเพื่อความน่าเชื่อถือสูงสุด
+                os.chown(audit_dir, 0, 0)
+                os.chown(audit_file, 0, 0)
+                if self.verbose >= 2:
+                    print(f"{Colors.BLUE}[DEBUG] Set ownership of {audit_dir} to root:root{Colors.ENDC}")
+            except Exception as e:
+                if self.verbose >= 1:
+                    print(f"{Colors.YELLOW}[WARN] Failed to set ownership: {str(e)}{Colors.ENDC}")
+            
+            return True
+        except Exception as e:
+            print(f"{Colors.RED}[!] Error ensuring audit log directory: {str(e)}{Colors.ENDC}")
+            return False
+            
+            return True
+        except Exception as e:
+            print(f"{Colors.RED}[!] Failed to ensure audit log directory: {str(e)}{Colors.ENDC}")
+            return False
+
     def check_dependencies(self):
         """Verify required tools are installed / ตรวจสอบว่าเครื่องมือที่จำเป็นได้ถูกติดตั้ง"""
         missing = [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
@@ -190,14 +732,16 @@ class CISUnifiedRunner:
 
     def detect_node_role(self):
         """
-        Detect current node role using multi-method approach / ตรวจจับบทบาทโหนดโดยใช้หลายวิธี
-        PRIORITY 1: Check running processes (most reliable)
-        PRIORITY 2: Check config/manifest files
-        PRIORITY 3: Fallback to kubectl with node labels
+        Detect current node role using multi-method approach.
+        ตรวจจับบทบาทโหนดปัจจุบันโดยใช้หลายวิธี
+        
+        PRIORITY 1: Check running processes (most reliable) / ตรวจสอบโปรเซสที่กำลังรัน (น่าเชื่อถือที่สุด)
+        PRIORITY 2: Check config/manifest files / ตรวจสอบไฟล์ตั้งค่าหรือ manifest
+        PRIORITY 3: Fallback to kubectl with node labels / ใช้ kubectl ตรวจสอบ label ของโหนด
         """
-        # PRIORITY 1: Check running processes (most reliable)
+        # PRIORITY 1: Check running processes (most reliable) / ตรวจสอบโปรเซสที่กำลังรัน
         try:
-            # Check if kube-apiserver is running → Master node
+            # Check if kube-apiserver is running → Master node / ตรวจสอบว่า kube-apiserver รันอยู่หรือไม่
             result = subprocess.run(
                 ["pgrep", "-l", "kube-apiserver"],
                 capture_output=True,
@@ -212,7 +756,7 @@ class CISUnifiedRunner:
             pass
 
         try:
-            # Check if kubelet is running (without apiserver) → Worker node
+            # Check if kubelet is running (without apiserver) → Worker node / ตรวจสอบว่า kubelet รันอยู่หรือไม่
             result = subprocess.run(
                 ["pgrep", "-l", "kubelet"],
                 capture_output=True,
@@ -226,9 +770,9 @@ class CISUnifiedRunner:
         except Exception:
             pass
 
-        # PRIORITY 2: Check config/manifest files
+        # PRIORITY 2: Check config/manifest files / ตรวจสอบไฟล์ตั้งค่าหรือ manifest
         try:
-            # Check for kube-apiserver manifest → Master node
+            # Check for kube-apiserver manifest → Master node / ตรวจสอบไฟล์ manifest ของ kube-apiserver
             if os.path.exists("/etc/kubernetes/manifests/kube-apiserver.yaml"):
                 if self.verbose >= 2:
                     print("[DEBUG] Node role detection: kube-apiserver.yaml manifest found → Master")
@@ -237,7 +781,7 @@ class CISUnifiedRunner:
             pass
 
         try:
-            # Check for kubelet config → Worker node
+            # Check for kubelet config → Worker node / ตรวจสอบไฟล์ตั้งค่าของ kubelet
             if os.path.exists("/var/lib/kubelet/config.yaml"):
                 if self.verbose >= 2:
                     print("[DEBUG] Node role detection: kubelet config.yaml found → Worker")
@@ -246,7 +790,7 @@ class CISUnifiedRunner:
             pass
 
         try:
-            # Additional check: /etc/kubernetes/kubelet.conf exists → likely Worker
+            # Additional check: /etc/kubernetes/kubelet.conf exists → likely Worker / ตรวจสอบไฟล์ kubelet.conf
             if os.path.exists("/etc/kubernetes/kubelet.conf") and not os.path.exists("/etc/kubernetes/manifests/kube-apiserver.yaml"):
                 if self.verbose >= 2:
                     print("[DEBUG] Node role detection: kubelet.conf found → Worker")
@@ -254,7 +798,7 @@ class CISUnifiedRunner:
         except Exception:
             pass
 
-        # PRIORITY 3: Fallback to kubectl node labels (original method)
+        # PRIORITY 3: Fallback to kubectl node labels (original method) / ใช้ kubectl ตรวจสอบ label
         try:
             hostname = socket.gethostname()
             kubectl = self.get_kubectl_cmd()
@@ -284,14 +828,14 @@ class CISUnifiedRunner:
         except Exception:
             pass
 
-        # All detection methods failed
+        # All detection methods failed / วิธีการตรวจจับทั้งหมดล้มเหลว
         if self.verbose >= 2:
             print("[DEBUG] Node role detection: all methods failed, unable to determine role")
         return None
 
     def get_kubectl_cmd(self):
         """
-        Detect kubeconfig and return kubectl command
+        Detect kubeconfig and return kubectl command.
         ตรวจจับ kubeconfig และส่งกลับคำสั่ง kubectl
         """
         kubeconfig_paths = [
@@ -311,10 +855,30 @@ class CISUnifiedRunner:
 
     def check_health(self):
         """
-        Check Kubernetes cluster health
-        ตรวจสอบสุขภาพของคลัสเตอร์ Kubernetes
+        Check Kubernetes cluster health using secure API endpoint.
+        ตรวจสอบสุขภาพของคลัสเตอร์ Kubernetes โดยใช้ endpoint API ที่ปลอดภัย
         """
         print(f"{Colors.CYAN}[*] Checking Cluster Health...{Colors.ENDC}")
+        
+        # 1. Try Secure API Health Check / ตรวจสอบสุขภาพ API แบบปลอดภัย
+        health_url = "https://127.0.0.1:6443/healthz"
+        try:
+            # Suppress insecure request warnings for this local check
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            # FORCE DISABLE VERIFY for localhost to avoid SSLError (hostname mismatch)
+            # Accept 200 (OK) or 401 (Unauthorized) as success
+            response = requests.get(health_url, verify=False, timeout=5)
+            
+            if response.status_code in (200, 401):
+                self.health_status = f"OK (Healthy - Status {response.status_code})"
+                print(f"{Colors.GREEN}    -> {self.health_status}{Colors.ENDC}")
+                return self.health_status
+        except Exception as e:
+            if self.verbose >= 1:
+                print(f"{Colors.YELLOW}[WARN] API Healthz check failed: {str(e)}{Colors.ENDC}")
+
+        # 2. Fallback to kubectl if API check fails or for more detail
         admin_conf = "/etc/kubernetes/admin.conf"
 
         if os.path.exists(admin_conf):
@@ -358,6 +922,7 @@ class CISUnifiedRunner:
                 self.health_status = f"ERROR ({str(e)})"
                 print(f"{Colors.RED}    -> {self.health_status}{Colors.ENDC}")
         else:
+            # Worker node health check / ตรวจสอบสุขภาพของ Worker node
             try:
                 kubelet = subprocess.run(
                     ["systemctl", "is-active", "kubelet"],
@@ -380,24 +945,17 @@ class CISUnifiedRunner:
 
     def wait_for_healthy_cluster(self, skip_health_check=False):
         """
-        Wait for cluster to be healthy after API server restart
-        Uses robust 3-step verification from cis_config.json
+        Wait for cluster to be healthy after API server restart.
+        รอให้คลัสเตอร์กลับมาใช้งานได้ปกติหลังจากรีสตาร์ท API server
         
         MASTER NODE (3-Step Verification):
-        - Step 1 (TCP): Verify API server port is open
-        - Step 2 (Application Ready): Verify API responds to requests (kubectl get --raw='/readyz')
-        - Step 3 (Settle Time): Force sleep to allow etcd/scheduler/controller-manager to sync
+        - Step 1 (TCP): Verify API server port is open / ตรวจสอบพอร์ต TCP 6443
+        - Step 2 (Application Ready): Verify API responds to requests / ตรวจสอบว่า API ตอบสนอง
+        - Step 3 (Settle Time): Force sleep to allow components to sync / รอให้ส่วนประกอบต่างๆ ซิงค์ข้อมูล
         
-        WORKER NODE: Checks systemctl is-active kubelet
-        
-        Args:
-            skip_health_check (bool): If True, skip the entire health check and return immediately.
-                                     Used for SAFE operations (file permissions/ownership) that don't
-                                     require cluster verification.
-        
-        Returns True if cluster/node is healthy within timeout, False otherwise
+        WORKER NODE: Checks systemctl is-active kubelet / ตรวจสอบสถานะ kubelet
         """
-        # CRITICAL: If skip_health_check=True, bypass ALL verification logic
+        # CRITICAL: If skip_health_check=True, bypass ALL verification logic / ข้ามการตรวจสอบทั้งหมดหากระบุ
         if skip_health_check:
             if self.verbose >= 1:
                 print(f"{Colors.GREEN}[*] Health check skipped (safe operation - no service impact).{Colors.ENDC}")
@@ -412,7 +970,6 @@ class CISUnifiedRunner:
         total_timeout = self.api_check_interval * self.api_max_retries
         
         # --- WORKER NODE LOGIC ---
-        # If admin.conf doesn't exist, this is a Worker Node
         if not os.path.exists(admin_conf):
             print(f"{Colors.YELLOW}[*] Worker Node detected. Checking kubelet health...{Colors.ENDC}")
             
@@ -426,13 +983,11 @@ class CISUnifiedRunner:
                 
                 kubelet_status = kubelet_result.stdout.strip()
                 
-                # If kubelet is active, Worker Node is healthy
                 if kubelet_result.returncode == 0 and kubelet_status == "active":
                     self.health_status = "OK (Worker Kubelet Running)"
                     print(f"{Colors.GREEN}    [OK] Worker kubelet is active.{Colors.ENDC}")
                     return True
                 else:
-                    # kubelet is inactive or failed
                     self.health_status = "CRITICAL (Kubelet Not Active)"
                     print(f"{Colors.RED}    [FAIL] Worker kubelet is {kubelet_status or 'not responding'}.{Colors.ENDC}")
                     return False
@@ -456,7 +1011,7 @@ class CISUnifiedRunner:
         while count < self.api_max_retries:
             elapsed = count * self.api_check_interval
             
-            # --- STEP 1: TCP Check (Port Open) ---
+            # --- STEP 1: TCP Check (Port Open) / ตรวจสอบพอร์ต TCP ---
             if not step1_passed:
                 try:
                     result = subprocess.run(
@@ -481,33 +1036,59 @@ class CISUnifiedRunner:
                     count += 1
                     continue
             
-            # --- STEP 2: Application Ready (kubectl readyz) ---
+            # --- STEP 2: Application Ready (API healthz/readyz) / ตรวจสอบความพร้อมของ API ---
             if step1_passed:
                 try:
-                    readyz_result = subprocess.run(
-                        kubectl + ["get", "--raw=/readyz"],
-                        capture_output=True,
-                        text=True,
-                        timeout=10
-                    )
+                    # Suppress insecure request warnings for this local check
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                     
-                    if readyz_result.returncode == 0:
-                        print(f"{Colors.GREEN}    [Step 2/3 OK] API server is ready (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                    # FORCE DISABLE VERIFY for localhost to avoid SSLError (hostname mismatch)
+                    # Accept 200 (OK) or 401 (Unauthorized) as success
+                    response = requests.get(self.health_check_url, verify=False, timeout=5)
+                    
+                    if response.status_code in (200, 401):
+                        print(f"{Colors.GREEN}    [Step 2/3 OK] API server is ready (Status {response.status_code}) (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
                         
-                        # --- STEP 3: Settle Time (Allow components to sync) ---
+                        # --- STEP 3: Settle Time (Allow components to sync) / เวลารอให้ระบบนิ่ง ---
                         print(f"{Colors.CYAN}    [Step 3/3] Settling ({self.api_settle_time}s for etcd/scheduler/controller-manager sync)...{Colors.ENDC}")
                         time.sleep(self.api_settle_time)
                         
-                        self.health_status = "OK (Healthy - 3-Step Verified)"
+                        self.health_status = f"OK (Healthy - Status {response.status_code})"
                         print(f"{Colors.GREEN}    [OK] Cluster is online and stable.{Colors.ENDC}")
                         return True
+                    elif response.status_code in (500, 503):
+                        print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API initializing... (Status {response.status_code}) (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
                     else:
-                        print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API not responding... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                        print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API returned {response.status_code}... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
                 
-                except subprocess.TimeoutExpired:
-                    print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API check timeout... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
-                except Exception:
-                    print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API check error... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                except requests.exceptions.ConnectionError:
+                    print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API restarting... (Connection Refused) (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                except Exception as e:
+                    # Fallback to kubectl if requests fails for other reasons
+                    if self.verbose >= 2:
+                        print(f"{Colors.BLUE}[DEBUG] Step 2 requests failed: {str(e)}{Colors.ENDC}")
+                        
+                    try:
+                        readyz_result = subprocess.run(
+                            kubectl + ["get", "--raw=/readyz"],
+                            capture_output=True,
+                            text=True,
+                            timeout=10
+                        )
+                        
+                        if readyz_result.returncode == 0:
+                            print(f"{Colors.GREEN}    [Step 2/3 OK] API server is ready via kubectl (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                            
+                            # --- STEP 3: Settle Time ---
+                            print(f"{Colors.CYAN}    [Step 3/3] Settling ({self.api_settle_time}s)...{Colors.ENDC}")
+                            time.sleep(self.api_settle_time)
+                            
+                            self.health_status = "OK (Healthy - 3-Step Verified via kubectl)"
+                            return True
+                        else:
+                            print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API not responding... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
+                    except Exception:
+                        print(f"{Colors.YELLOW}    [Step 2/3 WAIT] API check error... (Attempt {count+1}/{self.api_max_retries}, {elapsed}s){Colors.ENDC}")
                 
                 time.sleep(self.api_check_interval)
                 count += 1
@@ -518,7 +1099,7 @@ class CISUnifiedRunner:
 
     def extract_metadata_from_script(self, script_path):
         """
-        Extract title from script file header
+        Extract title from script file header.
         แยกชื่อเรื่องจากส่วนหัวไฟล์สคริปต์
         """
         if not script_path or not os.path.exists(script_path):
@@ -551,7 +1132,7 @@ class CISUnifiedRunner:
 
     def get_scripts(self, mode, target_level, target_role):
         """
-        Get list of audit/remediation scripts
+        Get list of audit/remediation scripts.
         ได้รับรายชื่อสคริปต์ตรวจสอบ/การแก้ไข
         """
         suffix = "_remediate.sh" if mode == "remediate" else "_audit.sh"
@@ -582,9 +1163,334 @@ class CISUnifiedRunner:
         
         return scripts
 
+    def _prepare_remediation_env(self, script_id, remediation_cfg):
+        """Prepare environment variables for remediation scripts."""
+        env = os.environ.copy()
+        
+        # Explicitly add KUBECONFIG
+        kubeconfig_paths = [
+            os.environ.get('KUBECONFIG'),
+            "/etc/kubernetes/admin.conf",
+            os.path.expanduser("~/.kube/config"),
+            f"/home/{os.environ.get('SUDO_USER', '')}/.kube/config"
+        ]
+        for config_path in kubeconfig_paths:
+            if config_path and os.path.exists(config_path):
+                env["KUBECONFIG"] = config_path
+                break
+        
+        # Add global remediation config
+        env.update({
+            "BACKUP_ENABLED": str(self.remediation_global_config.get("backup_enabled", True)).lower(),
+            "BACKUP_DIR": self.remediation_global_config.get("backup_dir", "/var/backups/cis-remediation"),
+            "DRY_RUN": str(self.remediation_global_config.get("dry_run", False)).lower(),
+            "WAIT_FOR_API": str(self.wait_for_api_enabled).lower(),
+            "API_CHECK_INTERVAL": str(self.api_check_interval),
+            "API_MAX_RETRIES": str(self.api_max_retries)
+        })
+        
+        # Add check-specific remediation config
+        if remediation_cfg:
+            for key, value in remediation_cfg.items():
+                if key.startswith('_') or key in ['skip', 'enabled', 'id', 'path', 'role', 'level', 'requires_health_check']:
+                    continue
+                
+                env_key = key.upper()
+                if isinstance(value, bool):
+                    env[env_key] = "true" if value else "false"
+                elif isinstance(value, (list, dict)):
+                    env[env_key] = json.dumps(value)
+                elif isinstance(value, (int, float)):
+                    env[env_key] = str(value)
+                elif value is None:
+                    env[env_key] = ""
+                else:
+                    str_value = str(value)
+                    if str_value.startswith('"') and str_value.endswith('"'):
+                        str_value = str_value[1:-1]
+                    env[env_key] = str_value
+        
+        # Add global environment overrides
+        env.update(self.remediation_env_vars)
+        return env
+
+    def fix_item_internal(self, script, remediation_cfg):
+        """
+        Main remediation router for internal Python-based fixes.
+        ตัวเลือกหลักสำหรับการแก้ไขโดยใช้ Python ภายใน
+        
+        Handles YAML config checks internally and falls back to bash for system checks.
+        จัดการการตรวจสอบการตั้งค่า YAML ภายใน และใช้ bash สำหรับการตรวจสอบระบบ
+        """
+        script_id = script["id"]
+        script_path = script["path"]
+        
+        # 1. Detect check type / ตรวจสอบประเภทของการตรวจสอบ
+        check_type, manifest_path = self._classify_remediation_type(script_id)
+        
+        if check_type == "YAML_CONFIG" and manifest_path and os.path.exists(manifest_path):
+            print(f"{Colors.CYAN}[*] Internal YAML Fix: {script_id} -> {manifest_path}{Colors.ENDC}")
+            
+            # Identify CSV Checks / ระบุการตรวจสอบที่เป็น CSV
+            CSV_CHECKS = ["1.2.8", "1.2.11", "1.2.14", "1.2.29"]
+            mod_type = "csv" if script_id in CSV_CHECKS else "string"
+            
+            # Prepare modifications from config / เตรียมการแก้ไขจากการตั้งค่า
+            modifications = {'flags': []}
+            
+            # Handle single flag / จัดการแฟล็กเดียว
+            flag_name = remediation_cfg.get('flag_name')
+            expected_value = remediation_cfg.get('expected_value')
+            
+            if flag_name:
+                if not flag_name.startswith('--'):
+                    flag_name = '--' + flag_name
+                modifications['flags'].append(f"{flag_name}={expected_value}")
+            
+            # Handle multiple flags (multi_flag_check) / จัดการหลายแฟล็ก
+            flags_dict = remediation_cfg.get('flags', {})
+            if flags_dict:
+                for f_name, f_val in flags_dict.items():
+                    if not f_name.startswith('--'):
+                        f_name = '--' + f_name
+                    modifications['flags'].append(f"{f_name}={f_val}")
+            
+            # 2. Execute Atomic Remediation Flow / ดำเนินการขั้นตอนการแก้ไขแบบ Atomic
+            # Phase 1: Backup & Apply / ขั้นตอนที่ 1: สำรองข้อมูลและนำไปใช้
+            success, msg = self.atomic_manager.update_manifest_safely(manifest_path, modifications, mod_type)
+            if not success:
+                return "FAIL", f"Atomic write failed: {msg}", None, None
+            
+            if msg == "No changes needed":
+                # DEEP RUNTIME VERIFICATION (Case B: File OK but Process might be STALE)
+                # การตรวจสอบรันไทม์เชิงลึก (กรณี B: ไฟล์ถูกต้องแต่โปรเซสอาจจะยังไม่อัปเดต)
+                process_name = self._get_process_name_for_check(script_id)
+                if process_name and modifications['flags']:
+                    # Check the first flag as a representative for runtime verification
+                    first_flag = modifications['flags'][0]
+                    if '=' in first_flag:
+                        f_key, f_val = first_flag.split('=', 1)
+                        
+                        if self.verify_runtime_flag(process_name, f_key, f_val):
+                            return "PASS", "No changes needed (File & Runtime compliant)", None, None
+                        else:
+                            print(f"{Colors.YELLOW}[STALE CONFIG] File is compliant but Runtime is STALE for {process_name}. Forcing reload...{Colors.ENDC}")
+                            self.log_activity("STALE_CONFIG_DETECTED", f"{script_id}: {process_name}")
+                            
+                            # Trigger reload logic / เรียกใช้ตรรกะการโหลดใหม่
+                            if process_name == "kubelet":
+                                self._restart_kubelet()
+                            else:
+                                self._force_pod_reload(process_name)
+                            
+                            # Re-verify after reload / ตรวจสอบอีกครั้งหลังโหลดใหม่
+                            print(f"{Colors.CYAN}[*] Re-verifying runtime after reload...{Colors.ENDC}")
+                            time.sleep(10) # Wait for process to stabilize
+                            
+                            if self.verify_runtime_flag(process_name, f_key, f_val):
+                                return "PASS", "Fixed (Stale config reloaded successfully)", None, None
+                            else:
+                                return "FAIL", f"Stale config reload failed to apply changes for {process_name}", None, None
+                
+                return "PASS", "No changes needed (already compliant)", None, None
+
+            # Phase 2: Health Check (Wait for API) / ขั้นตอนที่ 2: ตรวจสอบสุขภาพ (รอ API)
+            print(f"{Colors.YELLOW}[*] Waiting for cluster health...{Colors.ENDC}")
+            is_healthy, health_msg = self.atomic_manager.wait_for_cluster_healthy()
+            
+            # Extract backup path for potential rollback
+            backup_path = None
+            match = re.search(r"Backup: (.*)", msg)
+            if match:
+                backup_path = match.group(1)
+
+            if not is_healthy:
+                print(f"{Colors.RED}[!] Cluster unhealthy after fix. Rolling back...{Colors.ENDC}")
+                if backup_path:
+                    print(f"{Colors.YELLOW}[ROLLBACK] Restoring original config due to health failure...{Colors.ENDC}")
+                    self.atomic_manager.rollback(manifest_path, backup_path)
+                    print(f"{Colors.CYAN}[*] Waiting 15s for API server to recover from rollback...{Colors.ENDC}")
+                    time.sleep(15)
+                
+                return "FAIL", f"Health check failed: {health_msg}. Rolled back.", None, None
+            
+            # Phase 3: Deep Runtime Verification / ขั้นตอนที่ 3: การตรวจสอบรันไทม์เชิงลึก
+            process_name = self._get_process_name_for_check(script_id)
+            if process_name and modifications['flags']:
+                # Check the first flag as a representative for runtime verification
+                first_flag = modifications['flags'][0]
+                if '=' in first_flag:
+                    f_key, f_val = first_flag.split('=', 1)
+                    
+                    # Initial verification / การตรวจสอบเบื้องต้น
+                    if not self.verify_runtime_flag(process_name, f_key, f_val):
+                        print(f"{Colors.YELLOW}[STALE CONFIG] Manifest updated but runtime state is stale for {process_name}. Attempting recovery...{Colors.ENDC}")
+                        self.log_activity("STALE_CONFIG_AFTER_FIX", f"{script_id}: {process_name}")
+                        
+                        # Try Pod reload first for static pods / ลองโหลด Pod ใหม่ก่อนสำหรับ static pods
+                        if process_name != "kubelet" and process_name != "etcd":
+                            self._force_pod_reload(process_name)
+                            time.sleep(10)
+                        
+                        # If still stale, restart Kubelet / หากยังคงค้างอยู่ ให้รีสตาร์ท Kubelet
+                        if not self.verify_runtime_flag(process_name, f_key, f_val):
+                            self._restart_kubelet()
+                            
+                            # Final verification / การตรวจสอบขั้นสุดท้าย
+                            if not self.verify_runtime_flag(process_name, f_key, f_val):
+                                print(f"{Colors.RED}[!] Configuration still not reflected in runtime for {process_name}. Rolling back...{Colors.ENDC}")
+                                if backup_path:
+                                    self.atomic_manager.rollback(manifest_path, backup_path)
+                                return "FAIL", f"Runtime verification failed for {f_key} after recovery attempts.", None, None
+                            else:
+                                print(f"{Colors.GREEN}[✓] Configuration successfully reflected in runtime after Kubelet restart.{Colors.ENDC}")
+
+            # Phase 4: Audit Verification / ขั้นตอนที่ 4: ตรวจสอบการตรวจสอบ
+            print(f"{Colors.YELLOW}[*] Verifying fix with audit script...{Colors.ENDC}")
+            audit_script_path = script_path.replace("_remediate.sh", "_audit.sh")
+            if os.path.exists(audit_script_path):
+                audit_passed, audit_msg = self.atomic_manager.verify_remediation(script_id, audit_script_path)
+                
+                if not audit_passed:
+                    print(f"{Colors.RED}[ERROR] Verification failed after remediation. Config is invalid.{Colors.ENDC}")
+                    if backup_path:
+                        print(f"{Colors.YELLOW}[ROLLBACK] Restored original config to ensure cluster stability.{Colors.ENDC}")
+                        self.atomic_manager.rollback(manifest_path, backup_path)
+                        self.log_activity("REMEDIATION_ROLLBACK", f"{script_id}: Audit failed, rolled back to {backup_path}")
+                    return "FAIL", f"Audit failed: {audit_msg}", None, None
+            
+            return "PASS", "Remediation applied and verified successfully", None, None
+            
+        else:
+            # System Check (chmod/chown/etc) or manifest not found - Fallback to Bash / การตรวจสอบระบบหรือหา manifest ไม่พบ - ใช้ Bash แทน
+            if check_type == "YAML_CONFIG" and not os.path.exists(manifest_path):
+                print(f"{Colors.YELLOW}[!] Manifest {manifest_path} not found. Falling back to bash script.{Colors.ENDC}")
+            
+            env = self._prepare_remediation_env(script_id, remediation_cfg)
+            result = subprocess.run(["bash", script_path], capture_output=True, text=True, timeout=self.script_timeout, env=env)
+            status, reason, fix_hint, cmds = self._parse_script_output(result, script_id, "remediate", False)
+            return status, reason, fix_hint, cmds
+
+    def _get_process_name_for_check(self, check_id):
+        """Map check ID to process name / แมป ID การตรวจสอบกับชื่อโปรเซส"""
+        if check_id.startswith('1.2.'): return "kube-apiserver"
+        if check_id.startswith('1.3.'): return "kube-controller-manager"
+        if check_id.startswith('1.4.'): return "kube-scheduler"
+        if check_id.startswith('2.'): return "etcd"
+        if check_id.startswith('4.'): return "kubelet"
+        return None
+
+    def verify_process_runtime(self, process_name, flag, expected_value):
+        """
+        Verify if the running process has the expected flag and value.
+        ตรวจสอบว่าโปรเซสที่กำลังรันมี flag และค่าที่คาดหวังหรือไม่
+        
+        Returns: (status, message)
+        """
+        try:
+            # Use pgrep -a to get full command line / ใช้ pgrep -a เพื่อรับบรรทัดคำสั่งแบบเต็ม
+            cmd = ["pgrep", "-a", process_name]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0 or not result.stdout:
+                # Fallback to ps -ef for some systems / ใช้ ps -ef เป็นทางเลือกสำหรับบางระบบ
+                ps_cmd = f"ps -ef | grep {process_name} | grep -v grep"
+                ps_result = subprocess.run(ps_cmd, shell=True, capture_output=True, text=True)
+                if not ps_result.stdout:
+                    return "CRASHED", "Process not running"
+                process_cmdline = ps_result.stdout
+            else:
+                process_cmdline = result.stdout
+            
+            # Normalize flag (ensure it starts with --)
+            if not flag.startswith('--'):
+                flag = '--' + flag
+
+            # Pattern matches --flag=value or --flag value
+            # Also handles boolean flags where --flag=true might be just --flag
+            pattern = rf"{re.escape(flag)}([=\s]+{re.escape(str(expected_value))})?(\s|$)"
+            
+            # Special case for boolean 'true' / กรณีพิเศษสำหรับค่าบูลีน 'true'
+            if str(expected_value).lower() == 'true':
+                # Match --flag=true OR just --flag
+                pattern = rf"{re.escape(flag)}([=\s]+true)?(\s|$)"
+            elif str(expected_value).lower() == 'false':
+                # Match --flag=false OR absence of flag (though absence is harder to verify here)
+                pattern = rf"{re.escape(flag)}[=\s]+false(\s|$)"
+
+            if re.search(pattern, process_cmdline):
+                return "VERIFIED", f"Running with {flag}={expected_value}"
+            
+            # Check if flag exists but value is wrong
+            if flag in process_cmdline:
+                return "NOT_APPLIED", f"Flag found but value mismatch (Expected: {expected_value})"
+            else:
+                return "NOT_APPLIED", f"Flag {flag} not found in runtime"
+                
+        except Exception as e:
+            return "ERROR", f"Verification error: {str(e)}"
+            return "ERROR", f"Verification error: {str(e)}"
+
+    def verify_runtime_flag(self, process_name, flag, value):
+        """
+        Deep Runtime Verification: Check if the running process has the specific flag=value.
+        การตรวจสอบรันไทม์เชิงลึก: ตรวจสอบว่าโปรเซสที่กำลังรันมี flag=value ที่ระบุหรือไม่
+        """
+        return self.verify_runtime_config(process_name, flag, value)
+
+    def verify_runtime_config(self, process_name, flag_key, expected_value):
+        """
+        Verify if the running process has the expected flag and value.
+        Returns: True (Applied) / False (Not Applied)
+        """
+        status, _ = self.verify_process_runtime(process_name, flag_key, expected_value)
+        return status == "VERIFIED"
+
+    def _force_pod_reload(self, component):
+        """Force a pod reload by deleting it / บังคับให้โหลด pod ใหม่โดยการลบ"""
+        try:
+            # Map process name to component label / แมปชื่อโปรเซสกับเลเบลคอมโพเนนต์
+            label_map = {
+                "kube-apiserver": "kube-apiserver",
+                "kube-controller-manager": "kube-controller-manager",
+                "kube-scheduler": "kube-scheduler",
+                "etcd": "etcd"
+            }
+            comp_label = label_map.get(component)
+            if not comp_label:
+                return False
+            
+            print(f"{Colors.YELLOW}[WARN] Configuration updated on disk but process is stale. Forcing Pod deletion...{Colors.ENDC}")
+            
+            # Get pod name / รับชื่อ pod
+            get_cmd = f"kubectl get pods -n kube-system -l component={comp_label} -o jsonpath='{{.items[0].metadata.name}}'"
+            pod_name = subprocess.check_output(get_cmd, shell=True, text=True).strip()
+            
+            if pod_name:
+                del_cmd = f"kubectl delete pod {pod_name} -n kube-system --force --grace-period=0"
+                subprocess.run(del_cmd, shell=True, check=True)
+                print(f"{Colors.GREEN}[✓] Pod {pod_name} deleted. Waiting for Kubelet to recreate it...{Colors.ENDC}")
+                time.sleep(5) # Wait for recreation
+                return True
+        except Exception as e:
+            print(f"{Colors.RED}[!] Failed to force pod reload: {str(e)}{Colors.ENDC}")
+        return False
+
+    def _restart_kubelet(self):
+        """Restart the Kubelet service / รีสตาร์ทบริการ Kubelet"""
+        try:
+            print(f"{Colors.YELLOW}[WARN] Kubelet failed to sync configuration. Restarting Kubelet service...{Colors.ENDC}")
+            subprocess.run(["systemctl", "restart", "kubelet"], check=True)
+            print(f"{Colors.CYAN}[*] Waiting 20 seconds for Kubelet to stabilize...{Colors.ENDC}")
+            time.sleep(20)
+            return True
+        except Exception as e:
+            print(f"{Colors.RED}[!] Failed to restart Kubelet: {str(e)}{Colors.ENDC}")
+            return False
+
     def run_script(self, script, mode):
         """
-        Execute audit/remediation script with error handling
+        Execute audit/remediation script with error handling.
         ดำเนินการสคริปต์ตรวจสอบ/การแก้ไขพร้อมการจัดการข้อผิดพลาด
         """
         if self.stop_requested:
@@ -602,96 +1508,48 @@ class CISUnifiedRunner:
             )
         
         try:
-            # Check remediation config for skipping / ตรวจสอบการตั้งค่าการแก้ไขเพื่อข้ามไป
+            # 1. REMEDIATION MODE / โหมดการแก้ไข
             if mode == "remediate":
                 remediation_cfg = self.get_remediation_config_for_check(script_id)
+                
+                # Check if remediation is enabled / ตรวจสอบว่าเปิดใช้งานการแก้ไขหรือไม่
                 if remediation_cfg.get("skip", False) or not remediation_cfg.get("enabled", True):
                     return self._create_result(
                         script, "SKIPPED",
                         f"Skipped by remediation config",
                         time.time() - start_time
                     )
-            
-            # Check if manual check / ตรวจสอบว่าเป็นการตรวจสอบด้วยตนเองหรือไม่
+                
+                # Call internal remediation router / เรียกใช้ตัวเลือกการแก้ไขภายใน
+                status, reason, fix_hint, cmds = self.fix_item_internal(script, remediation_cfg)
+                duration = round(time.time() - start_time, 2)
+                
+                return {
+                    "id": script_id,
+                    "role": script["role"],
+                    "level": script["level"],
+                    "status": status,
+                    "duration": duration,
+                    "reason": reason,
+                    "fix_hint": fix_hint,
+                    "cmds": cmds,
+                    "output": reason,
+                    "path": script["path"],
+                    "component": self.get_component_for_rule(script_id)
+                }
+
+            # 2. AUDIT MODE / โหมดการตรวจสอบ
             is_manual = self._is_manual_check(script["path"])
             
-            if is_manual and self.skip_manual and mode == "audit":
+            if is_manual and self.skip_manual:
                 return self._create_result(
                     script, "SKIPPED",
                     "Manual check skipped by user",
                     time.time() - start_time
                 )
             
-            # For remediation scripts, wait for cluster to be healthy
-            # This handles cases where a previous remediation restarted the API server
-            if mode == "remediate":
-                # SMART WAIT: Determine if health check is needed based on remediation type
-                requires_health_check, _ = self._classify_remediation_type(script_id)
-                skip_this_health_check = not requires_health_check
-                
-                if not self.wait_for_healthy_cluster(skip_health_check=skip_this_health_check):
-                    # EMERGENCY STOP: Cluster failure detected during remediation
-                    # Continuing would cause cascading failures
-                    error_msg = (
-                        f"\n{Colors.RED}{'='*70}\n"
-                        f"[CRITICAL] EMERGENCY STOP: Cluster Unavailable\n"
-                        f"{'='*70}\n"
-                        f"Status: {self.health_status}\n"
-                        f"Failed Check: {script_id}\n"
-                        f"Time to Failure: {round(time.time() - start_time, 2)}s\n\n"
-                        f"Remediation loop aborted to prevent cascading failures.\n"
-                        f"Manual intervention required:\n"
-                        f"  1. Verify cluster health: kubectl get nodes\n"
-                        f"  2. Check API server status: kubectl get pods -n kube-system\n"
-                        f"  3. Review logs: journalctl -u kubelet -n 100\n"
-                        f"  4. Restore from backup if needed: /var/backups/cis-remediation/\n"
-                        f"{'='*70}{Colors.ENDC}\n"
-                    )
-                    print(error_msg)
-                    self.log_activity("REMEDIATION_EMERGENCY_STOP", f"Cluster unavailable at check {script_id}")
-                    sys.exit(1)
-            
-            # Prepare environment variables for remediation scripts / เตรียมตัวแปรสภาพแวดล้อมสำหรับสคริปต์การแก้ไข
-            env = os.environ.copy()
-            
-            if mode == "remediate":
-                # Add global remediation config / เพิ่มการตั้งค่าการแก้ไขแบบโลก
-                env.update({
-                    "BACKUP_ENABLED": str(self.remediation_global_config.get("backup_enabled", True)).lower(),
-                    "BACKUP_DIR": self.remediation_global_config.get("backup_dir", "/var/backups/cis-remediation"),
-                    "DRY_RUN": str(self.remediation_global_config.get("dry_run", False)).lower(),
-                    "WAIT_FOR_API": str(self.wait_for_api_enabled).lower(),
-                    "API_CHECK_INTERVAL": str(self.api_check_interval),
-                    "API_MAX_RETRIES": str(self.api_max_retries)
-                })
-                
-                # Add check-specific remediation config / เพิ่มการตั้งค่าการแก้ไขเฉพาะการตรวจสอบ
-                remediation_cfg = self.get_remediation_config_for_check(script_id)
-                if remediation_cfg:
-                    # Convert config to environment variables (uppercase, prefixed with CONFIG_) / แปลงการตั้งค่าเป็นตัวแปรสภาพแวดล้อม
-                    for key, value in remediation_cfg.items():
-                        if key in ['skip', 'enabled']:
-                            # Skip metadata keys / ข้ามคีย์ข้อมูลเมตา
-                            continue
-                        
-                        env_key = f"CONFIG_{key.upper()}"
-                        if isinstance(value, (dict, list)):
-                            # Pass complex objects as JSON strings / ส่งอบเจ็กต์ที่ซับซ้อนเป็นสตริง JSON
-                            env[env_key] = json.dumps(value)
-                        else:
-                            # Simple values as strings / ค่าง่าย ๆ เป็นสตริง
-                            env[env_key] = str(value)
-                
-                # Add global environment overrides / เพิ่มการแทนที่สภาพแวดล้อมแบบโลก
-                env.update(self.remediation_env_vars)
-                
-                if self.verbose >= 2:
-                    print(f"{Colors.BLUE}[DEBUG] Environment variables for {script_id}:{Colors.ENDC}")
-                    for k, v in sorted(env.items()):
-                        if k.startswith("CONFIG_") or k.startswith("BACKUP_") or k.startswith("DRY_RUN") or k.startswith("WAIT_") or k.startswith("API_"):
-                            # Truncate long JSON values / ตัดคีย์ JSON ที่ยาว
-                            display_val = v if len(v) < 80 else v[:77] + "..."
-                            print(f"{Colors.BLUE}      {k}={display_val}{Colors.ENDC}")
+            # Prepare environment variables for audit scripts / เตรียมตัวแปรสภาพแวดล้อมสำหรับสคริปต์ตรวจสอบ
+            env = self._prepare_remediation_env(script_id, self.get_remediation_config_for_check(script_id))
             
             # Run script / รันสคริปต์
             result = subprocess.run(
@@ -709,14 +1567,38 @@ class CISUnifiedRunner:
                 result, script_id, mode, is_manual
             )
             
-            # Handle silent script output with context-aware messages / จัดการ output ที่เงียบ
-            # When script produces no output, inject status-specific message
+            # NEW: Deep Verification for Audit Mode (Config checks)
+            if status == "PASS":
+                process_name = self._get_process_name_for_check(script_id)
+                remediation_cfg = self.get_remediation_config_for_check(script_id)
+                
+                # Check if it's a flag check / ตรวจสอบว่าเป็น flag check หรือไม่
+                if process_name and remediation_cfg.get("check_type") == "flag_check":
+                    flag = remediation_cfg.get("flag")
+                    expected = remediation_cfg.get("required_value")
+                    
+                    if flag and expected:
+                        # Use the new verify_runtime_config method
+                        is_applied = self.verify_runtime_config(process_name, flag, expected)
+                        runtime_status, runtime_msg = self.verify_process_runtime(process_name, flag, expected)
+                        
+                        if self.verbose >= 1:
+                            print(f"    [INFO] File Config:   ✅ Correct ({flag}={expected})")
+                            if is_applied:
+                                print(f"    [INFO] Runtime State: ✅ VERIFIED ({runtime_msg})")
+                            else:
+                                print(f"    [INFO] Runtime State: ❌ {runtime_status} ({runtime_msg})")
+                        
+                        if not is_applied:
+                            # Downgrade to FAIL if runtime doesn't match / ลดระดับเป็น FAIL หาก runtime ไม่ตรงกัน
+                            status = "FAIL"
+                            reason = f"[STALE_PROCESS] File is correct but runtime state is {runtime_status}: {runtime_msg}"
+            
+            # Handle silent script output / จัดการผลลัพธ์สคริปต์ที่ไม่มีข้อความ
             combined_output = result.stdout.strip() + result.stderr.strip()
             if not combined_output:
                 if status == "PASS":
                     reason = "[INFO] Check completed successfully with no output"
-                elif status == "FIXED":
-                    reason = "[INFO] Remediation completed successfully with no output"
                 elif status == "FAIL":
                     reason = "[ERROR] Script failed silently without output"
                 elif status == "MANUAL":
@@ -760,6 +1642,607 @@ class CISUnifiedRunner:
                 f"Unexpected error: {str(e)}",
                 time.time() - start_time
             )
+
+    def _get_backup_file_path(self, check_id, env):
+        """
+        Identify backup file location for the manifest being remediated.
+        ระบุตำแหน่งไฟล์สำรองข้อมูลสำหรับ manifest ที่กำลังถูกแก้ไข
+        
+        Priority 1: Check environment variable BACKUP_FILE / ลำดับความสำคัญ 1: ตรวจสอบตัวแปรสภาพแวดล้อม BACKUP_FILE
+        Priority 2: Check standard backup path / ลำดับความสำคัญ 2: ตรวจสอบเส้นทางสำรองข้อมูลมาตรฐาน
+        """
+        # PRIORITY 1: Check environment variable / ตรวจสอบตัวแปรสภาพแวดล้อม
+        if "BACKUP_FILE" in env and os.path.exists(env["BACKUP_FILE"]):
+            if self.verbose >= 1:
+                print(f"{Colors.BLUE}[DEBUG] Found backup file from env: {env['BACKUP_FILE']}{Colors.ENDC}")
+            return env["BACKUP_FILE"]
+        
+        # PRIORITY 2: Search standard backup path / ค้นหาในเส้นทางสำรองข้อมูลมาตรฐาน
+        backup_dir = env.get("BACKUP_DIR", "/var/backups/cis-remediation")
+        if os.path.exists(backup_dir):
+            # Find most recent backup for this check / ค้นหาการสำรองข้อมูลล่าสุดสำหรับการตรวจสอบนี้
+            backup_pattern = os.path.join(backup_dir, f"{check_id}_*.bak")
+            backups = sorted(glob.glob(backup_pattern), reverse=True)
+            
+            if backups:
+                if self.verbose >= 1:
+                    print(f"{Colors.BLUE}[DEBUG] Found backup file: {backups[0]}{Colors.ENDC}")
+                return backups[0]
+        
+        if self.verbose >= 1:
+            print(f"{Colors.YELLOW}[!] No backup file found for {check_id}{Colors.ENDC}")
+        return None
+
+    def _wait_for_api_healthy(self, check_id, timeout=300):
+        """
+        Wait for API Server to become healthy after remediation.
+        รอให้ API Server กลับมาใช้งานได้ปกติหลังจากการแก้ไข
+        """
+        print(f"{Colors.CYAN}[*] Waiting for API Server to become healthy (timeout: {timeout}s)...{Colors.ENDC}")
+        
+        start_time = time.time()
+        check_interval = 5  # Check every 5 seconds / ตรวจสอบทุก 5 วินาที
+        
+        while time.time() - start_time < timeout:
+            elapsed = int(time.time() - start_time)
+            try:
+                # Use curl with -k (insecure) for localhost to avoid SSLError
+                # ใช้ curl พร้อม -k (ไม่ปลอดภัย) สำหรับ localhost เพื่อหลีกเลี่ยง SSLError
+                curl_cmd = ["curl", "-s", "-k", "-m", "5", "-w", "%{http_code}"]
+                curl_cmd += ["https://127.0.0.1:6443/healthz"]
+                
+                result = subprocess.run(
+                    curl_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                
+                # Check if response is "ok" or status code is 200/401
+                # ตรวจสอบว่าการตอบสนองคือ "ok" หรือรหัสสถานะคือ 200/401
+                output = result.stdout.strip()
+                http_code = output[-3:] if len(output) >= 3 else ""
+                
+                if result.returncode == 0 and ("ok" in output.lower() or http_code in ("200", "401")):
+                    print(f"{Colors.GREEN}[✓] API Server healthy (Status: {http_code or 'OK'}) after {elapsed}s{Colors.ENDC}")
+                    self.log_activity("API_HEALTH_OK", f"{check_id}: {elapsed}s")
+                    return True
+                elif http_code in ("500", "503"):
+                    print(f"{Colors.YELLOW}    [*] API initializing... (Status: {http_code}, {elapsed}s/{timeout}s){Colors.ENDC}")
+                elif result.returncode != 0:
+                    print(f"{Colors.YELLOW}    [*] API restarting... (Connection Refused, {elapsed}s/{timeout}s){Colors.ENDC}")
+                else:
+                    print(f"{Colors.YELLOW}    [*] API responding with status {http_code}... ({elapsed}s/{timeout}s){Colors.ENDC}")
+            
+            except Exception as e:
+                if self.verbose >= 2:
+                    print(f"{Colors.BLUE}[DEBUG] API check attempt failed: {str(e)[:60]}...{Colors.ENDC}")
+            
+            # Wait before next attempt / รอก่อนการพยายามครั้งต่อไป
+            time.sleep(check_interval)
+        
+        # Timeout reached / หมดเวลา
+        print(f"{Colors.RED}[✗] API Server did not become healthy within {timeout}s{Colors.ENDC}")
+        self.log_activity("API_HEALTH_TIMEOUT", f"{check_id}: No response after {timeout}s")
+        return False
+
+    def _rollback_manifest(self, check_id, backup_file):
+        """
+        Rollback manifest file to backup copy.
+        ย้อนกลับไฟล์ manifest ไปยังชุดข้อมูลสำรอง
+        """
+        if not backup_file or not os.path.exists(backup_file):
+            print(f"{Colors.RED}[✗] Backup file not found: {backup_file}{Colors.ENDC}")
+            self.log_activity("ROLLBACK_NO_BACKUP", f"{check_id}: {backup_file}")
+            return False
+        
+        # Determine original manifest path based on check ID / กำหนดเส้นทาง manifest เดิมตาม ID การตรวจสอบ
+        if check_id.startswith("1.2"):
+            original_path = "/etc/kubernetes/manifests/kube-apiserver.yaml"
+        elif check_id.startswith("2."):
+            original_path = "/etc/kubernetes/manifests/etcd.yaml"
+        elif check_id.startswith("4."):
+            original_path = "/var/lib/kubelet/config.yaml"
+        else:
+            original_path = backup_file.replace(".bak", "")
+        
+        try:
+            print(f"{Colors.YELLOW}[*] Rolling back: {original_path}{Colors.ENDC}")
+            print(f"    From backup: {backup_file}")
+            
+            # Create backup of current broken state before rollback / สร้างการสำรองข้อมูลของสถานะที่เสียก่อนการย้อนกลับ
+            if os.path.exists(original_path):
+                broken_backup = f"{original_path}.broken_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                shutil.copy2(original_path, broken_backup)
+                print(f"    Saved broken config: {broken_backup}")
+            
+            # Restore original file / กู้คืนไฟล์เดิม
+            shutil.copy2(backup_file, original_path)
+            
+            print(f"{Colors.GREEN}[✓] Rollback completed successfully{Colors.ENDC}")
+            self.log_activity("ROLLBACK_SUCCESS", f"{check_id}: {original_path}")
+            
+            # Wait briefly for manifest reload / รอสักครู่เพื่อให้ manifest โหลดใหม่
+            time.sleep(2)
+            
+            return True
+        
+        except FileNotFoundError as e:
+            print(f"{Colors.RED}[✗] Rollback failed - file not found: {str(e)}{Colors.ENDC}")
+            self.log_activity("ROLLBACK_FILE_NOT_FOUND", f"{check_id}: {str(e)}")
+            return False
+        
+        except PermissionError as e:
+            print(f"{Colors.RED}[✗] Rollback failed - permission denied: {str(e)}{Colors.ENDC}")
+            self.log_activity("ROLLBACK_PERMISSION_DENIED", f"{check_id}: {str(e)}")
+            return False
+        
+        except Exception as e:
+            print(f"{Colors.RED}[✗] Rollback failed - unexpected error: {str(e)}{Colors.ENDC}")
+            self.log_activity("ROLLBACK_ERROR", f"{check_id}: {str(e)}")
+            return False
+
+    def update_manifest_safely(self, filepath, key, value):
+        """
+        Atomically update a manifest file using safe copy-paste pattern.
+        อัปเดตไฟล์ manifest แบบ atomic โดยใช้รูปแบบการคัดลอกและวางที่ปลอดภัย
+        
+        ATOMIC COPY-PASTE MODIFIER / ตัวแก้ไขแบบ ATOMIC:
+        1. Read original file content / อ่านเนื้อหาไฟล์เดิม
+        2. Modify specific line / แก้ไขบรรทัดที่ระบุ
+        3. Write to temporary file / เขียนลงไฟล์ชั่วคราว
+        4. Atomic overwrite / เขียนทับแบบ atomic
+        5. Preserve indentation / รักษาระยะย่อหน้า
+        """
+        # ===== STEP 1: Validation & Read / ขั้นตอนที่ 1: การตรวจสอบและการอ่าน =====
+        if not os.path.exists(filepath):
+            msg = f"[ERROR] Manifest file not found: {filepath}"
+            print(f"{Colors.RED}{msg}{Colors.ENDC}")
+            return False, msg
+        
+        if not os.access(filepath, os.R_OK):
+            msg = f"[ERROR] Cannot read manifest file: {filepath}"
+            print(f"{Colors.RED}{msg}{Colors.ENDC}")
+            return False, msg
+        
+        try:
+            # Read original file content / อ่านเนื้อหาไฟล์เดิม
+            with open(filepath, 'r', encoding='utf-8') as f:
+                original_content = f.read()
+                original_lines = original_content.split('\n')
+            
+            if self.verbose >= 2:
+                print(f"{Colors.BLUE}[DEBUG] Read manifest: {filepath} ({len(original_lines)} lines){Colors.ENDC}")
+            
+            # ===== STEP 2-4: Parse and Modify / ขั้นตอนที่ 2-4: การแยกวิเคราะห์และการแก้ไข =====
+            modified_lines = []
+            changes_made = 0
+            found_key = False
+            in_command_section = False
+            command_indent = None
+            
+            for i, line in enumerate(original_lines):
+                # Detect command section / ตรวจจับส่วนของคำสั่ง
+                if line.strip().startswith(('command:', 'args:')):
+                    in_command_section = True
+                    command_indent = len(line) - len(line.lstrip())
+                    modified_lines.append(line)
+                    if self.verbose >= 2:
+                        print(f"{Colors.BLUE}[DEBUG] Found command section at line {i+1}, indent={command_indent}{Colors.ENDC}")
+                    continue
+                
+                # If in command section, look for the key to modify / หากอยู่ในส่วนคำสั่ง ให้ค้นหาคีย์ที่จะแก้ไข
+                if in_command_section:
+                    current_indent = len(line) - len(line.lstrip()) if line.strip() else 0
+                    
+                    # Exit command section if we dedent back to original level / ออกจากส่วนคำสั่งหากระยะย่อหน้ากลับมาเท่าเดิม
+                    if line.strip() and current_indent <= command_indent:
+                        in_command_section = False
+                    
+                    # Look for key in this line / ค้นหาคีย์ในบรรทัดนี้
+                    if key in line:
+                        # Found the key - modify the value / พบคีย์ - แก้ไขค่า
+                        indent = len(line) - len(line.lstrip())
+                        stripped = line.strip()
+                        
+                        # List of flags that should be treated as CSV lists / รายการ flag ที่ควรจัดการเป็นรายการ CSV
+                        CSV_FLAGS = [
+                            "--authorization-mode", 
+                            "--enable-admission-plugins", 
+                            "--disable-admission-plugins", 
+                            "--tls-cipher-suites"
+                        ]
+                        
+                        if '=' in stripped:
+                            # Split by key to get prefix / แยกด้วยคีย์เพื่อรับคำนำหน้า
+                            parts = stripped.split(key, 1)
+                            prefix = parts[0] + key
+                            
+                            if key in CSV_FLAGS:
+                                # Smart Append: Don't overwrite, append to CSV list if not present
+                                # การเพิ่มแบบอัจฉริยะ: ไม่เขียนทับ แต่เพิ่มลงในรายการ CSV หากยังไม่มี
+                                current_val_str = parts[1].lstrip('=')
+                                existing_values = [v.strip() for v in current_val_str.split(',') if v.strip()]
+                                
+                                if value not in existing_values:
+                                    existing_values.append(value)
+                                    new_value = ','.join(existing_values)
+                                    modified_line = ' ' * indent + prefix + '=' + new_value
+                                    changes_made += 1
+                                else:
+                                    # Value already exists, no change needed / มีค่าอยู่แล้ว ไม่จำเป็นต้องเปลี่ยนแปลง
+                                    modified_line = line
+                            else:
+                                # Normal overwrite for non-CSV flags / การเขียนทับปกติสำหรับ flag ที่ไม่ใช่ CSV
+                                modified_line = ' ' * indent + prefix + value
+                                changes_made += 1
+                        else:
+                            # No '=' in line, just append it / ไม่มี '=' ในบรรทัด ให้เพิ่มเข้าไปเลย
+                            modified_line = ' ' * indent + stripped + '=' + value
+                            changes_made += 1
+                        
+                        modified_lines.append(modified_line)
+                        found_key = True
+                        
+                        if self.verbose >= 1 and modified_line != line:
+                            print(f"{Colors.YELLOW}[*] Modified line {i+1}: {key}={value} (Smart Append){Colors.ENDC}")
+                        continue
+                
+                # No change needed for this line
+                modified_lines.append(line)
+            
+            # ===== STEP 5: Append if key not found =====
+            if not found_key and in_command_section:
+                # Key not found - append to command section
+                print(f"{Colors.YELLOW}[*] Key '{key}' not found in command section - appending...{Colors.ENDC}")
+                
+                # Find where to append (end of command list)
+                for i in range(len(modified_lines) - 1, -1, -1):
+                    line = modified_lines[i]
+                    if line.strip() and (line.strip().startswith('-') or 
+                                         (i > 0 and modified_lines[i-1].strip().startswith(('command:', 'args:')))):
+                        # Found last item in list
+                        list_item_indent = len(line) - len(line.lstrip())
+                        new_item = ' ' * list_item_indent + f'- {key}{value}'
+                        modified_lines.insert(i + 1, new_item)
+                        changes_made += 1
+                        if self.verbose >= 1:
+                            print(f"{Colors.YELLOW}[*] Appended line {i+2}: {key}{value}{Colors.ENDC}")
+                        break
+            
+            # ===== STEP 6: Create backup before writing =====
+            backup_path = f"{filepath}.bak_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            try:
+                shutil.copy2(filepath, backup_path)
+                if self.verbose >= 1:
+                    print(f"{Colors.CYAN}[✓] Backup created: {backup_path}{Colors.ENDC}")
+            except Exception as e:
+                msg = f"[ERROR] Failed to create backup: {str(e)}"
+                print(f"{Colors.RED}{msg}{Colors.ENDC}")
+                return False, msg
+            
+            # ===== STEP 7: Write to temporary file =====
+            temp_file = f"{filepath}.tmp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            modified_content = '\n'.join(modified_lines)
+            
+            # Visual Diff Generation / การสร้างความแตกต่างของไฟล์ด้วยสายตา
+            print(f"\n{Colors.BOLD}[DIFF] {filepath}:{Colors.ENDC}")
+            diff = difflib.unified_diff(
+                original_content.splitlines(),
+                modified_content.splitlines(),
+                fromfile='original',
+                tofile='modified',
+                lineterm=''
+            )
+            
+            diff_summary = []
+            for line in diff:
+                if line.startswith('---') or line.startswith('+++') or line.startswith('@@'):
+                    continue
+                if line.startswith('+'):
+                    formatted_line = f"[+] {line[1:]}"
+                    print(f"{Colors.GREEN}{formatted_line}{Colors.ENDC}")
+                    diff_summary.append(formatted_line)
+                elif line.startswith('-'):
+                    formatted_line = f"[-] {line[1:]}"
+                    print(f"{Colors.RED}{formatted_line}{Colors.ENDC}")
+                    diff_summary.append(formatted_line)
+            
+            diff_text = "\n".join(diff_summary)
+            if diff_text:
+                self.log_activity("MANIFEST_DIFF", f"Changes for {filepath}:\n{diff_text}")
+
+            try:
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    f.write(modified_content)
+            except Exception as e:
+                msg = f"[ERROR] Failed to write temporary file: {str(e)}"
+                print(f"{Colors.RED}{msg}{Colors.ENDC}")
+                if os.path.exists(temp_file): os.unlink(temp_file)
+                return False, msg
+            
+            # ===== STEP 8: Atomic replace (CRITICAL) =====
+            try:
+                os.replace(temp_file, filepath)
+                
+                # Post-Write Read-Back Verification (Double Check)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    verified_content = f.read()
+                
+                if key in verified_content and value in verified_content:
+                    print(f"{Colors.GREEN}[SUCCESS] Verified change on disk: {key}={value}{Colors.ENDC}")
+                else:
+                    msg = f"[ERROR] Panic! File write reported success but content verification failed."
+                    print(f"{Colors.RED}{msg}{Colors.ENDC}")
+                    # Trigger Immediate Rollback
+                    shutil.copy2(backup_path, filepath)
+                    return False, msg
+
+                success_msg = f"[SUCCESS] Manifest updated atomically with {changes_made} change(s)"
+                print(f"{Colors.GREEN}[✓] {success_msg}{Colors.ENDC}")
+                self.log_activity("MANIFEST_UPDATE_SUCCESS", f"{filepath}: {changes_made} change(s), backup: {backup_path}")
+                
+                return True, success_msg
+            
+            except OSError as e:
+                msg = f"[ERROR] Atomic replace failed: {str(e)}"
+                print(f"{Colors.RED}{msg}{Colors.ENDC}")
+                if os.path.exists(temp_file): os.unlink(temp_file)
+                return False, msg
+        
+        except Exception as e:
+            msg = f"[ERROR] Unexpected error: {str(e)}"
+            print(f"{Colors.RED}{msg}{Colors.ENDC}")
+            return False, msg
+
+    def apply_remediation_with_health_gate(self, filepath, key, value, check_id, script_dict, timeout=60):
+        """
+        Apply remediation using atomic modifier with health-gated rollback.
+        
+        HEALTH-GATED ROLLBACK FLOW:
+        1. Backup: Archive current filepath to filepath.bak
+        2. Apply: Call update_manifest_safely() for atomic modification
+        3. Wait: Loop check https://127.0.0.1:6443/healthz for up to 'timeout' seconds
+        4. Decision:
+           - IF Unhealthy (Timeout):
+             * Log: [CRITICAL] API Server failed to restart. Rolling back...
+             * Restore: Copy backup_path back to filepath
+             * Return: False (Fail)
+           - IF Healthy:
+             * Run audit check immediately
+             * If Audit Pass: Return True (Success)
+             * If Audit Fail: Rollback and Return False (Config invalid)
+        
+        Args:
+            filepath (str): Path to manifest file
+            key (str): Key-value pair to modify
+            value (str): Value for the key
+            check_id (str): CIS check ID for logging
+            script_dict (dict): Script metadata dict (contains 'path' for audit script location)
+            timeout (int): Seconds to wait for API health (default: 60)
+        
+        Returns:
+            dict: {
+                'success': bool,
+                'status': str ('FIXED', 'REMEDIATION_FAILED', 'REMEDIATION_PARTIAL'),
+                'reason': str,
+                'backup_path': str,
+                'audit_verified': bool
+            }
+        """
+        result = {
+            'success': False,
+            'status': 'REMEDIATION_FAILED',
+            'reason': '',
+            'backup_path': None,
+            'audit_verified': False
+        }
+        
+        print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*70}")
+        print(f"[HEALTH-GATED REMEDIATION] {check_id}")
+        print(f"{'='*70}{Colors.ENDC}")
+        
+        # ========== STEP 1: Backup ==========
+        print(f"{Colors.CYAN}[STEP 1/4] Creating backup...{Colors.ENDC}")
+        backup_path = f"{filepath}.bak_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        try:
+            if not os.path.exists(filepath):
+                result['reason'] = f"[ERROR] Manifest not found: {filepath}"
+                print(f"{Colors.RED}{result['reason']}{Colors.ENDC}")
+                return result
+            
+            shutil.copy2(filepath, backup_path)
+            result['backup_path'] = backup_path
+            print(f"{Colors.GREEN}[✓] Backup created: {backup_path}{Colors.ENDC}")
+            self.log_activity("REMEDIATION_BACKUP_CREATED", f"{check_id}: {backup_path}")
+        
+        except Exception as e:
+            result['reason'] = f"[ERROR] Failed to create backup: {str(e)}"
+            print(f"{Colors.RED}{result['reason']}{Colors.ENDC}")
+            return result
+        
+        # ========== STEP 2: Apply Atomic Modification ==========
+        print(f"{Colors.CYAN}[STEP 2/4] Applying atomic modification...{Colors.ENDC}")
+        success, msg = self.update_manifest_safely(filepath, key, value)
+        
+        if not success:
+            result['reason'] = f"[ERROR] Atomic modification failed: {msg}"
+            print(f"{Colors.RED}{result['reason']}{Colors.ENDC}")
+            return result
+        
+        print(f"{Colors.GREEN}[✓] Manifest modified atomically.{Colors.ENDC}")
+        self.log_activity("REMEDIATION_APPLIED", f"{check_id}: {msg}")
+        
+        # ========== STEP 3: Wait for Health Check ==========
+        print(f"{Colors.CYAN}[STEP 3/4] Waiting for API Server health check (timeout: {timeout}s)...{Colors.ENDC}")
+        api_healthy = self._wait_for_api_healthy(check_id, timeout=timeout)
+        
+        if not api_healthy:
+            # ========== FAILURE: ROLLBACK ==========
+            print(f"{Colors.RED}[✗] CRITICAL: API Server failed to restart within {timeout}s.{Colors.ENDC}")
+            print(f"{Colors.RED}[!] Triggering automatic rollback...{Colors.ENDC}")
+            
+            rollback_ok = self._rollback_manifest(check_id, backup_path)
+            
+            if rollback_ok:
+                print(f"{Colors.YELLOW}[✓] Rollback succeeded. Waiting for cluster recovery...{Colors.ENDC}")
+                time.sleep(5)
+                self.wait_for_healthy_cluster(skip_health_check=False)
+                result['status'] = 'REMEDIATION_FAILED_ROLLED_BACK'
+                result['reason'] = (
+                    f"[CRITICAL] API Server failed to restart. "
+                    f"Automatic rollback succeeded. Manual investigation required."
+                )
+            else:
+                result['status'] = 'REMEDIATION_FAILED_ROLLBACK_FAILED'
+                result['reason'] = (
+                    f"[CRITICAL] API Server failed to restart AND rollback failed! "
+                    f"MANUAL INTERVENTION REQUIRED immediately!"
+                )
+                print(f"{Colors.RED}{Colors.BOLD}[!!!] EMERGENCY: Rollback failed!{Colors.ENDC}")
+            
+            self.log_activity("REMEDIATION_HEALTH_FAILED", f"{check_id}: Rollback {'success' if rollback_ok else 'FAILED'}")
+            return result
+        
+        # ========== SUCCESS: API is Healthy - Verify with Audit ==========
+        print(f"{Colors.GREEN}[✓] API Server became healthy. Running deep verification...{Colors.ENDC}")
+        
+        # ========== NEW: Deep Verification (Runtime State) ==========
+        process_name = self._get_process_name_for_check(check_id)
+        if process_name:
+            print(f"{Colors.CYAN}[INFO] File Config:   ✅ Correct ({key}={value}){Colors.ENDC}")
+            
+            # Check if runtime matches / ตรวจสอบว่า runtime ตรงกันหรือไม่
+            if not self.verify_runtime_config(process_name, key, value):
+                # STALE PROCESS DETECTED / ตรวจพบโปรเซสที่ค้างอยู่
+                print(f"{Colors.YELLOW}[WARN] Configuration updated on disk but process is stale.{Colors.ENDC}")
+                self._force_pod_reload(process_name)
+                
+                # Re-verify after force reload / ตรวจสอบอีกครั้งหลังบังคับโหลดใหม่
+                print(f"{Colors.CYAN}[*] Re-verifying runtime state after forced reload...{Colors.ENDC}")
+                time.sleep(5)
+                
+                # If still stale, try restarting Kubelet / หากยังค้างอยู่ ให้ลองรีสตาร์ท Kubelet
+                if not self.verify_runtime_config(process_name, key, value):
+                    # FORCE APPLY: Restart Kubelet / บังคับใช้: รีสตาร์ท Kubelet
+                    self._restart_kubelet()
+            
+            runtime_status, runtime_msg = self.verify_process_runtime(process_name, key, value)
+            
+            if runtime_status == "VERIFIED":
+                print(f"{Colors.GREEN}[INFO] Runtime State: ✅ {runtime_status} ({runtime_msg}){Colors.ENDC}")
+            else:
+                print(f"{Colors.RED}[INFO] Runtime State: ❌ {runtime_status} ({runtime_msg}){Colors.ENDC}")
+                print(f"{Colors.RED}[!] Configuration not reflected in runtime. Triggering rollback...{Colors.ENDC}")
+                
+                rollback_ok = self._rollback_manifest(check_id, backup_path)
+                
+                if rollback_ok:
+                    print(f"{Colors.YELLOW}[✓] Rollback succeeded. Waiting for cluster recovery...{Colors.ENDC}")
+                    time.sleep(5)
+                    self.wait_for_healthy_cluster(skip_health_check=False)
+                    result['status'] = 'REMEDIATION_FAILED_ROLLED_BACK'
+                    result['reason'] = f"[STALE_PROCESS] {runtime_msg}. Rolled back for safety."
+                else:
+                    result['status'] = 'REMEDIATION_FAILED_ROLLBACK_FAILED'
+                    result['reason'] = f"[CRITICAL] Stale process AND rollback failed!"
+                
+                self.log_activity("REMEDIATION_RUNTIME_FAILED", f"{check_id}: {runtime_msg}")
+                return result
+
+        # ========== STEP 4: Audit Verification ==========
+        print(f"{Colors.CYAN}[STEP 4/4] Running audit verification...{Colors.ENDC}")
+        
+        audit_script_path = script_dict.get("path", "").replace("_remediate.sh", "_audit.sh")
+        
+        if not os.path.exists(audit_script_path):
+            print(f"{Colors.YELLOW}[!] Audit script not found: {audit_script_path}{Colors.ENDC}")
+            print(f"{Colors.YELLOW}[!] Skipping audit verification (proceeding with health check success){Colors.ENDC}")
+            
+            result['success'] = True
+            result['status'] = 'FIXED'
+            result['reason'] = f"[FIXED] Remediation applied and API healthy (audit script not found)"
+            result['audit_verified'] = False
+            self.log_activity("REMEDIATION_SUCCESS_NO_AUDIT", check_id)
+            return result
+        
+        try:
+            # Wait for config propagation
+            time.sleep(2)
+            
+            # Run audit script
+            env = os.environ.copy()
+            audit_result = subprocess.run(
+                ["bash", audit_script_path],
+                capture_output=True,
+                text=True,
+                timeout=self.script_timeout,
+                env=env
+            )
+            
+            # Parse audit result
+            audit_status, audit_reason, _, _ = self._parse_script_output(
+                audit_result, check_id, "audit", False
+            )
+            
+            if audit_status == "PASS":
+                # ========== SUCCESS: All checks passed ==========
+                print(f"{Colors.GREEN}[✓] VERIFIED: Audit check PASSED{Colors.ENDC}")
+                print(f"{Colors.GREEN}{'='*70}")
+                print(f"[SUCCESS] Remediation complete and verified")
+                print(f"{'='*70}{Colors.ENDC}")
+                
+                result['success'] = True
+                result['status'] = 'FIXED'
+                result['reason'] = f"[FIXED] Remediation applied, API healthy, and audit verified"
+                result['audit_verified'] = True
+                
+                self.log_activity("REMEDIATION_SUCCESS_VERIFIED", check_id)
+                return result
+            
+            else:
+                # ========== FAILURE: Audit failed despite healthy API ==========
+                print(f"{Colors.RED}[✗] AUDIT FAILED: API healthy but audit verification failed.{Colors.ENDC}")
+                print(f"{Colors.RED}[!] Audit reason: {audit_reason}{Colors.ENDC}")
+                print(f"{Colors.RED}[!] Triggering automatic rollback...{Colors.ENDC}")
+                
+                rollback_ok = self._rollback_manifest(check_id, backup_path)
+                
+                if rollback_ok:
+                    print(f"{Colors.YELLOW}[✓] Rollback succeeded. Waiting for cluster recovery...{Colors.ENDC}")
+                    time.sleep(5)
+                    self.wait_for_healthy_cluster(skip_health_check=False)
+                    result['status'] = 'REMEDIATION_FAILED_ROLLED_BACK'
+                    result['reason'] = (
+                        f"[REMEDIATION_FAILED] Audit verification failed: {audit_reason}. "
+                        f"Automatic rollback succeeded."
+                    )
+                else:
+                    result['status'] = 'REMEDIATION_FAILED_ROLLBACK_FAILED'
+                    result['reason'] = (
+                        f"[CRITICAL] Audit verification failed AND rollback failed! "
+                        f"MANUAL INTERVENTION REQUIRED!"
+                    )
+                    print(f"{Colors.RED}{Colors.BOLD}[!!!] EMERGENCY: Rollback failed!{Colors.ENDC}")
+                
+                self.log_activity("REMEDIATION_AUDIT_FAILED", 
+                                  f"{check_id}: {audit_reason}, Rollback {'success' if rollback_ok else 'FAILED'}")
+                return result
+        
+        except subprocess.TimeoutExpired:
+            print(f"{Colors.YELLOW}[!] Audit verification TIMEOUT for {check_id}{Colors.ENDC}")
+            result['status'] = 'REMEDIATION_FAILED'
+            result['reason'] = "[REMEDIATION_FAILED] Audit verification timed out"
+            self.log_activity("REMEDIATION_AUDIT_TIMEOUT", check_id)
+            return result
+        
+        except Exception as e:
+            print(f"{Colors.RED}[✗] Unexpected error during audit verification: {str(e)}{Colors.ENDC}")
+            result['status'] = 'REMEDIATION_FAILED'
+            result['reason'] = f"[REMEDIATION_FAILED] Unexpected audit error: {str(e)}"
+            self.log_activity("REMEDIATION_AUDIT_ERROR", f"{check_id}: {str(e)}")
+            return result
 
     def _is_manual_check(self, script_path):
         """Check if script is marked as manual / ตรวจสอบว่าสคริปต์ถูกทำเครื่องหมายเป็นด้วยตนเองหรือไม่"""
@@ -934,7 +2417,7 @@ class CISUnifiedRunner:
         
         Status Mapping / แมปสถานะ:
         - PASS, FIXED -> pass counter
-        - FAIL, ERROR -> fail counter  
+        - FAIL, ERROR, REMEDIATION_FAILED -> fail counter  
         - MANUAL -> manual counter
         - SKIPPED, IGNORED -> skipped counter
         """
@@ -947,7 +2430,7 @@ class CISUnifiedRunner:
         # Map various statuses to counter keys / แมปสถานะต่าง ๆ
         if status in ("PASS", "FIXED"):
             counter_key = "pass"
-        elif status in ("FAIL", "ERROR"):
+        elif status in ("FAIL", "ERROR", "REMEDIATION_FAILED"):
             counter_key = "fail"
         elif status == "MANUAL":
             counter_key = "manual"
@@ -964,10 +2447,58 @@ class CISUnifiedRunner:
         if self.verbose >= 2:
             print(f"{Colors.BLUE}[DEBUG] Updated stats: {result['id']} -> {status} ({counter_key}){Colors.ENDC}")
 
+    def _rotate_backups(self, max_backups=5):
+        """
+        Maintain only the N most recent backup folders.
+        Deletes older backups automatically to save disk space.
+        
+        Args:
+            max_backups (int): Maximum number of backups to keep (default: 5)
+        """
+        if not os.path.exists(self.backup_dir):
+            return
+        
+        try:
+            # List all backup directories (format: backup_YYYYMMDD_HHMMSS)
+            backup_folders = []
+            for item in os.listdir(self.backup_dir):
+                item_path = os.path.join(self.backup_dir, item)
+                if os.path.isdir(item_path) and item.startswith("backup_"):
+                    # Get modification time for sorting
+                    mtime = os.path.getmtime(item_path)
+                    backup_folders.append((item_path, item, mtime))
+            
+            # Sort by modification time (newest first)
+            backup_folders.sort(key=lambda x: x[2], reverse=True)
+            
+            # Delete old backups beyond the limit
+            if len(backup_folders) > max_backups:
+                removed_count = 0
+                for backup_path, backup_name, _ in backup_folders[max_backups:]:
+                    try:
+                        shutil.rmtree(backup_path)
+                        removed_count += 1
+                        self.log_activity("BACKUP_ROTATION", 
+                                        f"Removed old backup: {backup_name}")
+                        print(f"{Colors.YELLOW}[INFO] Cleaned up old backups: removed {backup_name}{Colors.ENDC}")
+                    except Exception as e:
+                        print(f"{Colors.RED}[!] Failed to delete backup {backup_name}: {e}{Colors.ENDC}")
+                
+                if removed_count > 0:
+                    print(f"{Colors.GREEN}[+] Backup rotation complete: {removed_count} old backup(s) removed{Colors.ENDC}")
+        
+        except Exception as e:
+            print(f"{Colors.RED}[!] Backup rotation error: {e}{Colors.ENDC}")
+
     def perform_backup(self):
         """
-        Create backup of critical Kubernetes configs
-        สร้างสำรองข้อมูลของการตั้งค่า Kubernetes ที่สำคัญ
+        Create backup of critical Kubernetes configs with automatic rotation.
+        สร้างสำรองข้อมูลของการตั้งค่า Kubernetes ที่สำคัญพร้อมการหมุนเวียนอัตโนมัติ
+        
+        Features:
+        - Backs up critical Kubernetes configuration files
+        - Automatically rotates backups (keeps only 5 most recent)
+        - Logs all backup operations
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = os.path.join(self.backup_dir, f"backup_{timestamp}")
@@ -991,6 +2522,11 @@ class CISUnifiedRunner:
                 print(f"{Colors.RED}[!] Backup error {target}: {e}{Colors.ENDC}")
         
         print(f"   -> Saved to: {backup_path}")
+        self.log_activity("BACKUP_CREATED", f"New backup created: backup_{timestamp}")
+        
+        # Perform automatic backup rotation
+        print(f"{Colors.CYAN}[*] Checking for old backups...{Colors.ENDC}")
+        self._rotate_backups(max_backups=5)
 
     def scan(self, target_level, target_role, skip_menu=False):
         """
@@ -1042,6 +2578,7 @@ class CISUnifiedRunner:
         รันสคริปต์แบบขนานพร้อมการติดตามความคืบหน้า
         
         For remediation mode: Implements "Emergency Brake" - stops execution if cluster becomes unhealthy
+        สำหรับโหมดการแก้ไข: ใช้ "เบรกฉุกเฉิน" - หยุดการทำงานหากคลัสเตอร์ไม่สมบูรณ์
         """
         futures = {executor.submit(self.run_script, s, mode): s for s in scripts}
         
@@ -1063,9 +2600,12 @@ class CISUnifiedRunner:
                     
                     # EMERGENCY BRAKE: Check cluster health after remediation
                     # If cluster fails after remediation script, stop immediately to prevent cascading damage
+                    # เบรกฉุกเฉิน: ตรวจสอบความสมบูรณ์ของคลัสเตอร์หลังการแก้ไข
+                    # หากคลัสเตอร์ล้มเหลวหลังสคริปต์แก้ไข ให้หยุดทันทีเพื่อป้องกันความเสียหายต่อเนื่อง
                     if mode == "remediate" and result['status'] in ['PASS', 'FIXED']:
                         if not self.wait_for_healthy_cluster():
                             # CRITICAL: Cluster became unhealthy after this remediation
+                            # วิกฤต: คลัสเตอร์ไม่สมบูรณ์หลังจากการแก้ไขนี้
                             error_banner = (
                                 f"\n{Colors.RED}{'='*70}\n"
                                 f"⛔ CRITICAL: CLUSTER UNHEALTHY - EMERGENCY BRAKE ACTIVATED\n"
@@ -1095,7 +2635,10 @@ class CISUnifiedRunner:
             print("\n[!] Aborted.")
 
     def _print_progress(self, result, completed, total, percentage):
-        """Print progress line / พิมพ์บรรทัดความคืบหน้า"""
+        """
+        Print progress line
+        พิมพ์บรรทัดความคืบหน้า
+        """
         if self.verbose > 0:
             self.show_verbose_result(result)
             return
@@ -1106,7 +2649,8 @@ class CISUnifiedRunner:
             "MANUAL": Colors.YELLOW,
             "SKIPPED": Colors.CYAN,
             "FIXED": Colors.GREEN,
-            "ERROR": Colors.RED
+            "ERROR": Colors.RED,
+            "REMEDIATION_FAILED": Colors.RED
         }
         
         color = status_color.get(result['status'], Colors.WHITE)
@@ -1123,9 +2667,12 @@ class CISUnifiedRunner:
             target_role: Target node role ("master", "worker", or "all")
             fix_failed_only: If True, only remediate checks that FAILED in audit. Otherwise, remediate ALL.
         
-        ดำเนินการแก้ไขพร้อมกลยุทธ์การแยกการดำเนิน
+        ดำเนินการแก้ไขพร้อมกลยุทธ์การแยกการทำงาน
+        กลุ่ม A (วิกฤต/การตั้งค่า - ID 1.x, 2.x, 3.x, 4.x): รันแบบลำดับ (SEQUENTIAL) พร้อมการตรวจสอบความสมบูรณ์
+        กลุ่ม B (ทรัพยากร - ID 5.x): รันแบบขนาน (PARALLEL)
         """
         # Prevent remediation if cluster is critical
+        # ป้องกันการแก้ไขหากคลัสเตอร์อยู่ในสถานะวิกฤต
         if "CRITICAL" in self.health_status:
             print(f"{Colors.RED}[-] Cannot remediate: Cluster health is CRITICAL.{Colors.ENDC}")
             self.log_activity("FIX_SKIPPED", "Cluster health critical")
@@ -1135,10 +2682,15 @@ class CISUnifiedRunner:
         self.log_activity("FIX_START", f"Level:{target_level}, Role:{target_role}, FailedOnly:{fix_failed_only}")
         self.perform_backup()
         
+        # Ensure audit log directory exists before starting remediation
+        # ตรวจสอบให้แน่ใจว่ามีไดเรกทอรีบันทึกการตรวจสอบก่อนเริ่มการแก้ไข
+        self.ensure_audit_log_dir()
+        
         print(f"\n{Colors.YELLOW}[*] Starting Remediation with Split Strategy...{Colors.ENDC}")
         scripts = self.get_scripts("remediate", target_level, target_role)
         
         # Filter scripts if "fix failed only" mode is enabled
+        # กรองสคริปต์หากเปิดใช้งานโหมด "แก้ไขเฉพาะที่ล้มเหลว"
         if fix_failed_only:
             scripts = self._filter_failed_checks(scripts)
             if not scripts:
@@ -1149,13 +2701,14 @@ class CISUnifiedRunner:
         self._init_stats()
         
         # Execute remediation with split strategy
+        # ดำเนินการแก้ไขด้วยกลยุทธ์การแยกการทำงาน
         self._run_remediation_with_split_strategy(scripts)
         
         print(f"\n{Colors.GREEN}[+] Remediation Complete.{Colors.ENDC}")
         self.save_reports("remediate")
         self.print_stats_summary()
         
-        # Trend analysis
+        # Trend analysis / การวิเคราะห์แนวโน้ม
         current_score = self.calculate_score(self.stats)
         previous = self.get_previous_snapshot("remediate", target_role, target_level)
         if previous:
@@ -1171,6 +2724,7 @@ class CISUnifiedRunner:
         Logic:
         - Only includes checks that are present in self.audit_results
         - Only includes checks with status FAIL or ERROR
+        - EXCLUDES checks marked as REMEDIATION_FAILED (already failed remediation attempt)
         - Optionally includes MANUAL checks if configured
         
         Args:
@@ -1178,35 +2732,75 @@ class CISUnifiedRunner:
         
         Returns:
             Filtered list containing only failed checks from audit
+            
+        กรองสคริปต์เพื่อรวมเฉพาะรายการที่ล้มเหลว (FAILED) ในขั้นตอนการตรวจสอบ (Audit)
         """
         if not self.audit_results:
             print(f"{Colors.YELLOW}[!] No audit results available. Running full remediation.{Colors.ENDC}")
             return scripts
         
         failed_scripts = []
+        skipped_pass = []
+        skipped_remediation_failed = []
         
         for script in scripts:
             check_id = script['id']
             
             # Check if this ID was audited
+            # ตรวจสอบว่า ID นี้ได้รับการตรวจสอบแล้วหรือไม่
             if check_id not in self.audit_results:
-                # Not audited, skip it
+                # Not audited, include it in remediation
+                failed_scripts.append(script)
                 continue
             
             audit_status = self.audit_results[check_id].get('status', 'UNKNOWN')
             
-            # Include FAIL and ERROR status checks
+            # CRITICAL: Skip items marked as REMEDIATION_FAILED
+            # These already failed verification after remediation and should NOT be re-attempted
+            # They require manual intervention instead
+            # วิกฤต: ข้ามรายการที่ทำเครื่องหมายว่าเป็น REMEDIATION_FAILED
+            # รายการเหล่านี้ล้มเหลวในการตรวจสอบหลังการแก้ไขแล้ว และไม่ควรพยายามซ้ำ
+            # ต้องมีการดำเนินการด้วยตนเองแทน
+            if audit_status == 'REMEDIATION_FAILED':
+                skipped_remediation_failed.append(script)
+                print(f"{Colors.RED}    [SKIP] {check_id}: Previously failed remediation verification - requires manual intervention{Colors.ENDC}")
+                continue
+            
+            # CRITICAL: Skip items that already PASSED in audit
+            # They don't need remediation
+            # วิกฤต: ข้ามรายการที่ผ่าน (PASS) ในการตรวจสอบแล้ว
+            if audit_status == 'PASS':
+                skipped_pass.append(script)
+                continue
+            
+            # Include only FAIL, ERROR, and MANUAL status checks
+            # รวมเฉพาะการตรวจสอบสถานะ FAIL, ERROR และ MANUAL
             if audit_status in ['FAIL', 'ERROR']:
                 failed_scripts.append(script)
-            # Optionally include MANUAL checks (can be configured per preference)
             elif audit_status == 'MANUAL':
-                # Include MANUAL checks as they might need re-verification after partial remediation
+                # Include MANUAL checks as they might need re-verification
                 failed_scripts.append(script)
         
-        print(f"{Colors.CYAN}[*] Filtered {len(scripts)} total checks -> {len(failed_scripts)} FAILED/MANUAL items to remediate{Colors.ENDC}")
+        # Summary report / รายงานสรุป
+        print(f"{Colors.CYAN}[*] Remediation Filter Summary:{Colors.ENDC}")
+        print(f"    Total checks available: {len(scripts)}")
+        print(f"    {Colors.GREEN}Already PASSED:{Colors.ENDC} {len(skipped_pass)} (SKIPPED - no remediation needed)")
+        print(f"    {Colors.RED}REMEDIATION_FAILED:{Colors.ENDC} {len(skipped_remediation_failed)} (SKIPPED - manual intervention required)")
+        print(f"    {Colors.RED}FAILED/ERROR:{Colors.ENDC} {len([s for s in failed_scripts if self.audit_results.get(s['id'], {}).get('status') in ['FAIL', 'ERROR']])}")
+        print(f"    {Colors.YELLOW}MANUAL:{Colors.ENDC} {len([s for s in failed_scripts if self.audit_results.get(s['id'], {}).get('status') == 'MANUAL'])}")
+        print(f"    {Colors.CYAN}NOT AUDITED:{Colors.ENDC} {len([s for s in failed_scripts if s['id'] not in self.audit_results])}")
+        print(f"    → Will remediate: {len(failed_scripts)} checks\n")
         
-        if self.verbose >= 1:
-            print(f"    Skipped: {len(scripts) - len(failed_scripts)} PASSED items from audit")
+        if self.verbose >= 2:
+            if skipped_pass:
+                print(f"{Colors.CYAN}[DEBUG] Skipped PASSED checks:{Colors.ENDC}")
+                for script in skipped_pass:
+                    print(f"        {script['id']}")
+            if skipped_remediation_failed:
+                print(f"{Colors.RED}[DEBUG] Skipped REMEDIATION_FAILED checks (manual intervention required):{Colors.ENDC}")
+                for script in skipped_remediation_failed:
+                    print(f"        {script['id']}")
+            print()
         
         return failed_scripts
     
@@ -1214,6 +2808,9 @@ class CISUnifiedRunner:
         """
         Store current audit results in a dictionary keyed by check ID.
         Used for targeted remediation (fixing only failed items).
+        
+        จัดเก็บผลการตรวจสอบปัจจุบันในพจนานุกรมโดยใช้ ID การตรวจสอบเป็นคีย์
+        ใช้สำหรับการแก้ไขที่ตรงเป้าหมาย (แก้ไขเฉพาะรายการที่ล้มเหลว)
         """
         self.audit_results.clear()
         
@@ -1232,31 +2829,43 @@ class CISUnifiedRunner:
     def _classify_remediation_type(self, check_id):
         """
         SMART WAIT OPTIMIZATION: Classify remediation type to determine if health check is needed.
+        Also identifies manifest path for internal YAML fixes.
         
         Classification Rules:
-        - SAFE_SKIP: Permission/ownership changes (1.1.x) - no service restart, skip health check
-        - FULL_CHECK: Config file changes, service restarts (others) - require health check
+        - SYSTEM_CHECK: Permission/ownership changes (1.1.x) or other non-YAML fixes
+        - YAML_CONFIG: Config file changes in static pod manifests (1.2.x, 1.3.x, 1.4.x, 2.x)
         
         Args:
             check_id (str): The CIS check ID (e.g., '1.1.1', '1.2.1', '5.6.4')
         
         Returns:
-            tuple: (requires_health_check: bool, description: str)
-                - (False, "Safe (Permission/Ownership)") for 1.1.x checks
-                - (True, "Critical Config Change") for all other checks
+            tuple: (type: str, manifest_path: str)
+            
+        การเพิ่มประสิทธิภาพการรอแบบอัจฉริยะ: จำแนกประเภทการแก้ไขเพื่อพิจารณาว่าจำเป็นต้องตรวจสอบความสมบูรณ์หรือไม่
         """
+        # YAML Config Checks - API Server
+        if check_id.startswith('1.2.'):
+            return ("YAML_CONFIG", "/etc/kubernetes/manifests/kube-apiserver.yaml")
+            
+        # YAML Config Checks - Controller Manager
+        if check_id.startswith('1.3.'):
+            return ("YAML_CONFIG", "/etc/kubernetes/manifests/kube-controller-manager.yaml")
+            
+        # YAML Config Checks - Scheduler
+        if check_id.startswith('1.4.'):
+            return ("YAML_CONFIG", "/etc/kubernetes/manifests/kube-scheduler.yaml")
+            
+        # YAML Config Checks - Etcd
+        if check_id.startswith('2.'):
+            return ("YAML_CONFIG", "/etc/kubernetes/manifests/etcd.yaml")
+            
         # Safe checks - file permissions (chmod) or ownership (chown), no service impact
-        # CIS 1.1.x series: file and directory permissions for Kubernetes components
-        safe_skip_patterns = [
-            '1.1.',  # Master Node - File and directory permissions (chmod/chown only)
-        ]
+        # การตรวจสอบที่ปลอดภัย - การอนุญาตไฟล์ (chmod) หรือความเป็นเจ้าของ (chown) ไม่มีผลกระทบต่อบริการ
+        if check_id.startswith('1.1.'):
+            return ("SYSTEM_CHECK", None)
         
-        for pattern in safe_skip_patterns:
-            if check_id.startswith(pattern):
-                return (False, "Safe (Permission/Ownership)")
-        
-        # All other remediation checks require health check (config changes, service restarts)
-        return (True, "Critical Config Change")
+        # All other remediation checks default to system check
+        return ("SYSTEM_CHECK", None)
 
     def _run_remediation_with_split_strategy(self, scripts):
         """
@@ -1273,8 +2882,23 @@ class CISUnifiedRunner:
         
         Rationale: Critical config changes can cause race conditions when parallel.
         Resources are safe to execute in parallel as they don't restart services.
+        
+        ดำเนินการแก้ไขด้วยกลยุทธ์การแยกการทำงานเพื่อความเสถียร
+        กลยุทธ์การแยก:
+        - กลุ่ม A (วิกฤต/การตั้งค่า): ID ที่ขึ้นต้นด้วย 1., 2., 3., 4.
+          สิ่งเหล่านี้เกี่ยวข้องกับการรีสตาร์ทบริการ (API/Kubelet/Etcd) และรันแบบลำดับ (SEQUENTIAL)
+          มีการเรียกตรวจสอบความสมบูรณ์หลังแต่ละสคริปต์เพื่อตรวจจับความล้มเหลวแต่เนิ่นๆ
+          
+        - กลุ่ม B (ทรัพยากร): ID ที่ขึ้นต้นด้วย 5.
+          สิ่งเหล่านี้คือการเรียก API (NetworkPolicies, Namespaces) และรันแบบขนาน (PARALLEL)
+          มีความเสถียรกว่า ไม่มีการรีสตาร์ทบริการที่เกี่ยวข้อง
         """
+        # Reset manual pending items for this remediation run
+        # รีเซ็ตรายการที่รอดำเนินการด้วยตนเองสำหรับการรันการแก้ไขนี้
+        self.manual_pending_items = []
+        
         # Split scripts into Group A (critical) and Group B (resources)
+        # แยกสคริปต์ออกเป็นกลุ่ม A (วิกฤต) และกลุ่ม B (ทรัพยากร)
         group_a = [s for s in scripts if any(s['id'].startswith(prefix) for prefix in ['1.', '2.', '3.', '4.'])]
         group_b = [s for s in scripts if any(s['id'].startswith(prefix) for prefix in ['5.'])]
         
@@ -1292,10 +2916,12 @@ class CISUnifiedRunner:
         print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}\n")
         
         # --- EXECUTE GROUP A: SEQUENTIAL with Smart Wait Logic ---
+        # --- ดำเนินการกลุ่ม A: แบบลำดับพร้อมตรรกะการรออัจฉริยะ ---
         if group_a:
             print(f"\n{Colors.YELLOW}[*] Executing GROUP A (Critical/Config) - SEQUENTIAL mode (Smart Wait enabled)...{Colors.ENDC}")
             
             # Track which checks required health checks for summary
+            # ติดตามว่าการตรวจสอบใดที่ต้องมีการตรวจสอบความสมบูรณ์เพื่อสรุปผล
             skipped_health_checks = []
             performed_health_checks = []
             
@@ -1305,7 +2931,53 @@ class CISUnifiedRunner:
                 
                 print(f"\n{Colors.CYAN}[Group A {idx}/{len(group_a)}] Running: {script['id']} (SEQUENTIAL)...{Colors.ENDC}")
                 
+                # ===== MANUAL CHECK DETECTION & SKIP =====
+                # Check if this is a MANUAL check - if so, skip automation and add to pending
+                # ===== การตรวจจับและข้ามการตรวจสอบด้วยตนเอง =====
+                is_manual = False
+                
+                # Check 1: Configuration says remediation is manual
+                remediation_cfg = self.get_remediation_config_for_check(script['id'])
+                if remediation_cfg.get("remediation") == "manual":
+                    is_manual = True
+                    reason = "Remediation marked as manual in configuration"
+                
+                # Check 2: Audit status is MANUAL (from previous audit phase)
+                if not is_manual and script['id'] in self.audit_results:
+                    if self.audit_results[script['id']].get('status') == 'MANUAL':
+                        is_manual = True
+                        reason = "Audit phase identified this as manual intervention required"
+                
+                # Check 3: Script itself is marked as MANUAL
+                if not is_manual and os.path.exists(script['path']):
+                    is_manual = self._is_manual_check(script['path'])
+                    if is_manual:
+                        reason = "Script explicitly marked as MANUAL"
+                
+                # IF MANUAL: Skip execution and add to pending list
+                # หากเป็นแบบแมนนวล: ข้ามการทำงานและเพิ่มลงในรายการที่รอดำเนินการ
+                if is_manual:
+                    print(f"{Colors.YELLOW}[INFO] Check {script['id']} is MANUAL. Skipping automation and adding to final report.{Colors.ENDC}")
+                    print(f"{Colors.YELLOW}       Reason: {reason}{Colors.ENDC}")
+                    
+                    # Add to manual pending list
+                    self.manual_pending_items.append({
+                        'id': script['id'],
+                        'role': script.get('role', 'unknown'),
+                        'level': script.get('level', 'unknown'),
+                        'path': script.get('path', ''),
+                        'reason': reason,
+                        'component': self.get_component_for_rule(script['id'])
+                    })
+                    
+                    # Log activity
+                    self.log_activity("MANUAL_CHECK_SKIPPED", f"{script['id']}: {reason}")
+                    
+                    # Skip to next iteration (do NOT execute automation)
+                    continue
+                
                 # SMART WAIT: Classify remediation type to determine health check requirement
+                # การรออัจฉริยะ: จำแนกประเภทการแก้ไขเพื่อกำหนดข้อกำหนดการตรวจสอบความสมบูรณ์
                 requires_health_check, classification = self._classify_remediation_type(script['id'])
                 print(f"{Colors.BLUE}    [Smart Wait] {classification}{Colors.ENDC}")
                 
@@ -1321,13 +2993,16 @@ class CISUnifiedRunner:
                     self._print_progress(result, idx, len(group_a), progress_pct)
                     
                     # SMART WAIT: Conditional health check based on remediation type
+                    # การรออัจฉริยะ: การตรวจสอบความสมบูรณ์ตามเงื่อนไขตามประเภทการแก้ไข
                     if result['status'] in ['PASS', 'FIXED']:
                         if requires_health_check:
                             # Full health check for config/service changes
+                            # การตรวจสอบความสมบูรณ์เต็มรูปแบบสำหรับการเปลี่ยนแปลงการตั้งค่า/บริการ
                             print(f"{Colors.YELLOW}    [Health Check] Verifying cluster stability (config change detected)...{Colors.ENDC}")
                             
                             if not self.wait_for_healthy_cluster(skip_health_check=False):
                                 # EMERGENCY BRAKE: Cluster became unhealthy
+                                # เบรกฉุกเฉิน: คลัสเตอร์ไม่สมบูรณ์
                                 error_banner = (
                                     f"\n{Colors.RED}{'='*70}\n"
                                     f"⛔ CRITICAL: CLUSTER UNHEALTHY - EMERGENCY BRAKE ACTIVATED\n"
@@ -1358,10 +3033,12 @@ class CISUnifiedRunner:
                                 print(f"{Colors.GREEN}    [OK] Cluster stable. Continuing to next Group A check...{Colors.ENDC}")
                         else:
                             # Skip health check for safe operations (permissions/ownership)
+                            # ข้ามการตรวจสอบความสมบูรณ์สำหรับการดำเนินการที่ปลอดภัย (การอนุญาต/ความเป็นเจ้าของ)
                             skipped_health_checks.append(result['id'])
                             print(f"{Colors.GREEN}    [OK] Safe operation (no health check needed). Continuing...{Colors.ENDC}")
             
             # FINAL: Full health check at end of Group A to ensure all safe operations are stable
+            # ขั้นสุดท้าย: การตรวจสอบความสมบูรณ์เต็มรูปแบบเมื่อสิ้นสุดกลุ่ม A เพื่อให้แน่ใจว่าการดำเนินการที่ปลอดภัยทั้งหมดมีความเสถียร
             if skipped_health_checks:
                 print(f"\n{Colors.YELLOW}[*] GROUP A Final Stability Check (after {len(skipped_health_checks)} safe operations)...{Colors.ENDC}")
                 print(f"    Skipped health checks for: {', '.join(skipped_health_checks)}")
@@ -1388,7 +3065,7 @@ class CISUnifiedRunner:
                 else:
                     print(f"{Colors.GREEN}    [OK] All GROUP A checks stable. Proceeding to GROUP B...{Colors.ENDC}")
             
-            # Summary of Group A execution
+            # Summary of Group A execution / สรุปการดำเนินการกลุ่ม A
             if self.verbose >= 1:
                 print(f"\n{Colors.CYAN}[GROUP A SUMMARY]{Colors.ENDC}")
                 print(f"  Health checks skipped: {len(skipped_health_checks)} (safe operations)")
@@ -1398,31 +3075,84 @@ class CISUnifiedRunner:
             print(f"\n{Colors.GREEN}[+] GROUP A (Critical/Config) Complete.{Colors.ENDC}")
         
         # --- EXECUTE GROUP B: PARALLEL (Safe, no service restarts) ---
+        # --- ดำเนินการกลุ่ม B: แบบขนาน (ปลอดภัย ไม่มีการรีสตาร์ทบริการ) ---
         if group_b:
             print(f"\n{Colors.YELLOW}[*] Executing GROUP B (Resources) - PARALLEL mode...{Colors.ENDC}")
             
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                futures = {executor.submit(self.run_script, s, "remediate"): s for s in group_b}
+            # Filter out MANUAL checks from GROUP B
+            # กรองการตรวจสอบด้วยตนเองออกจากกลุ่ม B
+            group_b_automated = []
+            group_b_manual = []
+            
+            for script in group_b:
+                is_manual = False
+                reason = ""
                 
-                try:
-                    completed = 0
-                    for future in as_completed(futures):
-                        if self.stop_requested:
-                            break
-                        
-                        result = future.result()
-                        if result:
-                            self.results.append(result)
-                            self.update_stats(result)
-                            completed += 1
+                # Check 1: Configuration says remediation is manual
+                remediation_cfg = self.get_remediation_config_for_check(script['id'])
+                if remediation_cfg.get("remediation") == "manual":
+                    is_manual = True
+                    reason = "Remediation marked as manual in configuration"
+                
+                # Check 2: Audit status is MANUAL
+                if not is_manual and script['id'] in self.audit_results:
+                    if self.audit_results[script['id']].get('status') == 'MANUAL':
+                        is_manual = True
+                        reason = "Audit phase identified this as manual intervention required"
+                
+                # Check 3: Script itself is marked as MANUAL
+                if not is_manual and os.path.exists(script['path']):
+                    is_manual = self._is_manual_check(script['path'])
+                    if is_manual:
+                        reason = "Script explicitly marked as MANUAL"
+                
+                if is_manual:
+                    group_b_manual.append((script, reason))
+                else:
+                    group_b_automated.append(script)
+            
+            # Handle MANUAL checks / จัดการการตรวจสอบด้วยตนเอง
+            if group_b_manual:
+                print(f"\n{Colors.YELLOW}[*] GROUP B: Skipping {len(group_b_manual)} MANUAL checks...{Colors.ENDC}")
+                for script, reason in group_b_manual:
+                    print(f"{Colors.YELLOW}    [SKIP] {script['id']}: {reason}{Colors.ENDC}")
+                    
+                    self.manual_pending_items.append({
+                        'id': script['id'],
+                        'role': script.get('role', 'unknown'),
+                        'level': script.get('level', 'unknown'),
+                        'path': script.get('path', ''),
+                        'reason': reason,
+                        'component': self.get_component_for_rule(script['id'])
+                    })
+                    
+                    self.log_activity("MANUAL_CHECK_SKIPPED", f"{script['id']}: {reason}")
+            
+            # Execute automated checks in parallel
+            # ดำเนินการตรวจสอบอัตโนมัติแบบขนาน
+            if group_b_automated:
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    futures = {executor.submit(self.run_script, s, "remediate"): s for s in group_b_automated}
+                    
+                    try:
+                        completed = 0
+                        for future in as_completed(futures):
+                            if self.stop_requested:
+                                break
                             
-                            # Show progress for parallel execution
-                            progress_pct = (completed / len(group_b)) * 100
-                            self._print_progress(result, completed, len(group_b), progress_pct)
-                
-                except KeyboardInterrupt:
-                    self.stop_requested = True
-                    print("\n[!] Aborted.")
+                            result = future.result()
+                            if result:
+                                self.results.append(result)
+                                self.update_stats(result)
+                                completed += 1
+                                
+                                # Show progress for parallel execution
+                                progress_pct = (completed / len(group_b_automated)) * 100
+                                self._print_progress(result, completed, len(group_b_automated), progress_pct)
+                    
+                    except KeyboardInterrupt:
+                        self.stop_requested = True
+                        print("\n[!] Aborted.")
             
             print(f"\n{Colors.GREEN}[+] GROUP B (Resources) Complete.{Colors.ENDC}")
 
@@ -1443,7 +3173,10 @@ class CISUnifiedRunner:
         os.makedirs(self.current_report_dir, exist_ok=True)
 
     def save_snapshot(self, mode, role, level):
-        """Save results for trend comparison / บันทึกผลลัพธ์เพื่อเปรียบเทียบแนวโน้ม"""
+        """
+        Save results for trend comparison
+        บันทึกผลลัพธ์เพื่อเปรียบเทียบแนวโน้ม
+        """
         history_file = os.path.join(
             self.history_dir,
             f"snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{mode}_{role}_{level}.json"
@@ -1466,7 +3199,10 @@ class CISUnifiedRunner:
                 print(f"{Colors.RED}[DEBUG] Snapshot error: {e}{Colors.ENDC}")
 
     def get_previous_snapshot(self, mode, role, level):
-        """Retrieve most recent previous snapshot / ดึงข้อมูลสแนปชอตก่อนหน้าล่าสุด"""
+        """
+        Retrieve most recent previous snapshot
+        ดึงข้อมูลสแนปชอตก่อนหน้าล่าสุด
+        """
         pattern = f"snapshot_*_{mode}_{role}_{level}.json"
         snapshots = sorted(
             glob.glob(os.path.join(self.history_dir, pattern)),
@@ -1485,22 +3221,97 @@ class CISUnifiedRunner:
 
     def calculate_score(self, stats):
         """
-        Calculate compliance percentage score
-        คำนวณคะแนนเปอร์เซ็นต์การปฏิบัติตามข้อกำหนด
-        Score = Pass / (Pass + Fail + Manual) * 100
+        Calculate dual-metric compliance scores (LEGACY - deprecated)
+        
+        This function is maintained for backwards compatibility.
+        Use calculate_compliance_scores() instead for new code.
+        
+        Returns:
+            float: Automation Health percentage (Pass / (Pass + Fail))
+            
+        คำนวณคะแนนการปฏิบัติตามข้อกำหนดแบบเมตริกคู่ (ดั้งเดิม - เลิกใช้งานแล้ว)
         """
-        total_master = stats["master"]["pass"] + stats["master"]["fail"] + stats["master"]["manual"]
-        total_worker = stats["worker"]["pass"] + stats["worker"]["fail"] + stats["worker"]["manual"]
-        total = total_master + total_worker
+        auto_health = self.calculate_compliance_scores(stats)
+        return auto_health['automation_health']
+
+    def calculate_compliance_scores(self, stats):
+        """
+        Calculate dual compliance metrics for accurate CIS hardening assessment
         
-        if total == 0:
-            return 0.0
+        Two separate metrics address different concerns:
         
-        passed = stats["master"]["pass"] + stats["worker"]["pass"]
-        return round((passed / total) * 100, 2)
+        1. AUTOMATION HEALTH (Technical Implementation)
+           Score: Pass / (Pass + Fail)
+           Purpose: Measures remediation script effectiveness
+           Ignores: Manual checks (not script-automated)
+           Use: Identify broken automation / script fixes needed
+           
+        2. AUDIT READINESS (Overall CIS Compliance)
+           Score: Pass / Total Checks
+           Purpose: Shows true CIS compliance readiness
+           Includes: All check types (manual counts as non-passing)
+           Use: Formal audit preparation and compliance reporting
+        
+        Args:
+            stats: Dict with structure {role: {pass, fail, manual, skipped, error, total}}
+        
+        Returns:
+            Dict with keys:
+                - 'automation_health': float (0-100) - Pass/(Pass+Fail)
+                - 'audit_readiness': float (0-100) - Pass/Total
+                - 'pass': int - Total passing checks
+                - 'fail': int - Total failing checks
+                - 'manual': int - Total manual checks
+                - 'skipped': int - Total skipped checks
+                - 'error': int - Total error checks
+                - 'total': int - Total checks processed
+                
+        คำนวณเมตริกการปฏิบัติตามข้อกำหนดคู่เพื่อการประเมินการทำให้ Kubernetes แข็งแกร่งตาม CIS ที่แม่นยำ
+        """
+        # Aggregate all roles (master, worker, etc.)
+        # รวมทุกบทบาท (master, worker ฯลฯ)
+        total_pass = stats["master"]["pass"] + stats["worker"]["pass"]
+        total_fail = stats["master"]["fail"] + stats["worker"]["fail"]
+        total_manual = stats["master"]["manual"] + stats["worker"]["manual"]
+        total_skipped = stats["master"]["skipped"] + stats["worker"]["skipped"]
+        total_error = stats["master"]["error"] + stats["worker"]["error"]
+        total_all = stats["master"]["total"] + stats["worker"]["total"]
+        
+        # METRIC 1: Automation Health = Pass / (Pass + Fail)
+        # Measures: How well are remediation scripts working?
+        # Ignores: Manual checks (they're not automated)
+        # เมตริก 1: สุขภาพของระบบอัตโนมัติ = ผ่าน / (ผ่าน + ล้มเหลว)
+        automated_checks = total_pass + total_fail
+        if automated_checks > 0:
+            automation_health = round((total_pass / automated_checks) * 100, 2)
+        else:
+            automation_health = 0.0
+        
+        # METRIC 2: Audit Readiness = Pass / Total Checks
+        # Measures: What's our true CIS compliance status?
+        # Includes: All checks (manual = non-passing)
+        # เมตริก 2: ความพร้อมในการตรวจสอบ = ผ่าน / การตรวจสอบทั้งหมด
+        if total_all > 0:
+            audit_readiness = round((total_pass / total_all) * 100, 2)
+        else:
+            audit_readiness = 0.0
+        
+        return {
+            'automation_health': automation_health,
+            'audit_readiness': audit_readiness,
+            'pass': total_pass,
+            'fail': total_fail,
+            'manual': total_manual,
+            'skipped': total_skipped,
+            'error': total_error,
+            'total': total_all
+        }
 
     def show_trend_analysis(self, current_score, previous_snapshot):
-        """Display score trend comparison / แสดงการเปรียบเทียบแนวโน้มคะแนน"""
+        """
+        Display score trend comparison
+        แสดงการเปรียบเทียบแนวโน้มคะแนน
+        """
         previous_stats = previous_snapshot.get("stats", {})
         previous_score = self.calculate_score(previous_stats)
         trend = current_score - previous_score
@@ -1539,7 +3350,10 @@ class CISUnifiedRunner:
         print(f"\n   [*] Reports saved to: {self.current_report_dir}")
 
     def _save_csv_report(self):
-        """Save CSV report with structured data / บันทึกรายงาน CSV ด้วยข้อมูลที่มีโครงสร้าง"""
+        """
+        Save CSV report with structured data
+        บันทึกรายงาน CSV ด้วยข้อมูลที่มีโครงสร้าง
+        """
         if not self.current_report_dir:
             raise ValueError("Report directory not set")
         csv_file = os.path.join(self.current_report_dir, "report.csv")
@@ -1553,6 +3367,86 @@ class CISUnifiedRunner:
         except Exception as e:
             if self.verbose >= 2:
                 print(f"{Colors.RED}[DEBUG] CSV save error: {e}{Colors.ENDC}")
+
+    def export_results_to_excel(self, filename=None):
+        """
+        Export results to Excel format with formatting and color coding.
+        ส่งออกผลลัพธ์เป็นรูปแบบ Excel พร้อมการจัดรูปแบบและรหัสสี
+        """
+        if not OPENPYXL_AVAILABLE:
+            print(f"{Colors.RED}[!] openpyxl is not installed. Falling back to CSV.{Colors.ENDC}")
+            self._save_csv_report()
+            return
+
+        if not self.results:
+            print(f"{Colors.YELLOW}[!] No results to export. Run a scan first.{Colors.ENDC}")
+            return
+
+        if not filename:
+            if self.current_report_dir:
+                filename = os.path.join(self.current_report_dir, f"cis_report_{self.timestamp}.xlsx")
+            else:
+                filename = f"cis_report_{self.timestamp}.xlsx"
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "CIS Benchmark Report"
+
+            # Define columns
+            headers = ["Check ID", "Node Type", "Level", "Status", "Duration (s)", "Remediation Result / Reason", "Component"]
+            ws.append(headers)
+
+            # Formatting: Bold Header
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+                cell.alignment = Alignment(horizontal="center")
+                cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+            # Add data
+            for res in self.results:
+                row = [
+                    res.get("id", ""),
+                    res.get("role", "").capitalize(),
+                    res.get("level", ""),
+                    res.get("status", ""),
+                    res.get("duration", 0),
+                    res.get("reason", ""),
+                    res.get("component", "")
+                ]
+                ws.append(row)
+                
+                # Color code the Status cell
+                status = res.get("status", "")
+                status_cell = ws.cell(row=ws.max_row, column=4)
+                
+                if status in ["PASS", "FIXED"]:
+                    status_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") # Light Green
+                elif status == "FAIL":
+                    status_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid") # Light Red
+                elif status == "MANUAL":
+                    status_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid") # Light Orange
+
+            # Auto-adjust column width
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = (max_length + 2)
+                ws.column_dimensions[column_letter].width = min(adjusted_width, 50)
+
+            wb.save(filename)
+            print(f"{Colors.GREEN}[+] Excel report exported successfully: {filename}{Colors.ENDC}")
+            self.log_activity("EXPORT_EXCEL", f"File: {filename}")
+            
+        except Exception as e:
+            print(f"{Colors.RED}[!] Excel export error: {e}{Colors.ENDC}")
+            self.log_activity("EXPORT_EXCEL_ERROR", str(e))
 
     def _save_text_reports(self, mode):
         """Save summary and detailed text reports / บันทึกรายงานข้อความสรุปและรายละเอียด"""
@@ -1665,59 +3559,215 @@ class CISUnifiedRunner:
 
     def print_stats_summary(self):
         """
-        Display color-coded statistics summary with dynamic score visualization
-        แสดงสรุปสถิติที่มีรหัสสีพร้อมการแสดงภาพคะแนนแบบไดนามิก
+        Display comprehensive compliance status with dual-metric scoring.
         
-        Color Scheme:
-        - Pass Label: Green, Pass Value: Green
-        - Fail Label: Red, Fail Value: Red
-        - Manual Label: Yellow, Manual Value: Yellow
-        - Skipped Label: Cyan, Skipped Value: Cyan
-        - Score Color: Dynamic (>80%=Green, 50-80%=Yellow, <50%=Red)
-        - Total: Bold
+        Metrics:
+        1. AUTOMATION HEALTH: Shows remediation script effectiveness
+           - Formula: Pass / (Pass + Fail)
+           - Ignores: Manual checks (not script-automated)
+           - Use: Identify broken automation
+           
+        2. AUDIT READINESS: Shows true CIS compliance
+           - Formula: Pass / Total
+           - Includes: All check types (EXCLUDING manual pending items)
+           - Use: Formal audit preparation
+        
+        Also displays per-role breakdown and segregates MANUAL checks.
+        
+        MANUAL CHECKS: Items skipped by automation for human review are listed 
+        separately and do NOT count against automation health or audit readiness.
+        
+        แสดงสถานะการปฏิบัติตามข้อกำหนดที่ครอบคลุมพร้อมการให้คะแนนแบบเมตริกคู่
         """
+        # Calculate compliance scores
+        # คำนวณคะแนนการปฏิบัติตามข้อกำหนด
+        scores = self.calculate_compliance_scores(self.stats)
+        
+        # Determine role being assessed
+        # กำหนดบทบาทที่กำลังประเมิน
+        master_total = self.stats["master"]["total"]
+        worker_total = self.stats["worker"]["total"]
+        
+        if master_total > 0 and worker_total == 0:
+            role_name = "MASTER NODE"
+        elif worker_total > 0 and master_total == 0:
+            role_name = "WORKER NODE"
+        else:
+            role_name = "CLUSTER"
+        
+        # Color functions for score display
+        # ฟังก์ชันสีสำหรับการแสดงคะแนน
+        def get_score_color(score):
+            """Return appropriate color based on score value."""
+            if score >= 80:
+                return Colors.GREEN
+            elif score >= 50:
+                return Colors.YELLOW
+            else:
+                return Colors.RED
+        
+        def get_score_status(score):
+            """Return status text based on score value."""
+            if score >= 90:
+                return "Excellent"
+            elif score >= 80:
+                return "Good"
+            elif score >= 70:
+                return "Acceptable"
+            elif score >= 50:
+                return "Needs Improvement"
+            else:
+                return "Critical"
+        
+        # Main compliance status header
+        # ส่วนหัวสถานะการปฏิบัติตามข้อกำหนดหลัก
         print(f"\n{Colors.CYAN}{'='*70}")
-        print("STATISTICS SUMMARY")
+        print(f"COMPLIANCE STATUS: {role_name}")
         print(f"{'='*70}{Colors.ENDC}")
+        
+        # 1. AUTOMATION HEALTH
+        # 1. สุขภาพของระบบอัตโนมัติ
+        auto_health = scores['automation_health']
+        auto_color = get_score_color(auto_health)
+        auto_status = get_score_status(auto_health)
+        
+        print(f"\n{Colors.BOLD}1. AUTOMATION HEALTH (Technical Implementation){Colors.ENDC}")
+        print(f"   [Pass / (Pass + Fail)] - EXCLUDES Manual checks")
+        print(f"   - Score: {auto_color}{auto_health:.2f}%{Colors.ENDC}")
+        print(f"   - Status: {auto_color}{auto_status}{Colors.ENDC}")
+        print(f"   - Meaning: How well remediation scripts are working (excluding manual checks)")
+        
+        # 2. AUDIT READINESS
+        # 2. ความพร้อมในการตรวจสอบ
+        audit_ready = scores['audit_readiness']
+        audit_color = get_score_color(audit_ready)
+        audit_status = get_score_status(audit_ready)
+        
+        print(f"\n{Colors.BOLD}2. AUDIT READINESS (Overall CIS Compliance){Colors.ENDC}")
+        print(f"   [Pass / Total Checks] - INCLUDES all check types")
+        print(f"   - Score: {audit_color}{audit_ready:.2f}%{Colors.ENDC}")
+        print(f"   - Status: {audit_color}{audit_status}{Colors.ENDC}")
+        print(f"   - Meaning: True CIS compliance status for formal audits")
+        
+        # 3. AUTOMATED FAILURES (Critical Issues Only)
+        # 3. ความล้มเหลวของระบบอัตโนมัติ (ปัญหาที่สำคัญเท่านั้น)
+        automated_failures = scores['fail']
+        
+        print(f"\n{Colors.BOLD}3. AUTOMATED FAILURES (❌ Need Script Fixes){Colors.ENDC}")
+        if automated_failures > 0:
+            print(f"   {Colors.RED}⚠ {automated_failures} automated checks FAILED{Colors.ENDC}")
+            print(f"   Action: Debug and fix remediation scripts")
+            
+            # List failed checks
+            # รายการการตรวจสอบที่ล้มเหลว
+            failed_checks = [r for r in self.results if r['status'] == 'FAIL']
+            if failed_checks and self.verbose >= 1:
+                print(f"   Failed checks:")
+                for check in failed_checks[:10]:  # Show first 10
+                    print(f"     • {check['id']}")
+                if len(failed_checks) > 10:
+                    print(f"     ... and {len(failed_checks) - 10} more")
+        else:
+            print(f"   {Colors.GREEN}✓ All automated checks working{Colors.ENDC}")
+        
+        print(f"\n{Colors.CYAN}{'='*70}{Colors.ENDC}")
+        
+        # Per-role breakdown (detailed for transparency)
+        # รายละเอียดแยกตามบทบาท (เพื่อความโปร่งใส)
+        print(f"\n{Colors.CYAN}DETAILED BREAKDOWN BY ROLE{Colors.ENDC}")
+        print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}")
         
         for role in ["master", "worker"]:
             s = self.stats[role]
             if s['total'] == 0:
                 continue
             
-            # Calculate success rate (Pass / Total)
-            success_rate = (s['pass'] * 100 // s['total']) if s['total'] > 0 else 0
+            # Calculate per-role automation health (excluding manual)
+            # คำนวณสุขภาพของระบบอัตโนมัติตามบทบาท (ไม่รวมแมนนวล)
+            role_automated = s['pass'] + s['fail']
+            role_auto_health = round((s['pass'] / role_automated) * 100, 2) if role_automated > 0 else 0.0
             
-            # Determine score color and status based on success rate
-            if success_rate > 80:
-                score_color = Colors.GREEN
-                score_status = "Excellent"
-            elif success_rate >= 50:
-                score_color = Colors.YELLOW
-                score_status = "Needs Improvement"
-            else:
-                score_color = Colors.RED
-                score_status = "Critical"
+            # Calculate per-role audit readiness
+            # คำนวณความพร้อมในการตรวจสอบตามบทบาท
+            role_audit = round((s['pass'] / s['total']) * 100, 2) if s['total'] > 0 else 0.0
             
-            # Display role header (bold)
             print(f"\n  {Colors.BOLD}{role.upper()}:{Colors.ENDC}")
+            print(f"    {Colors.GREEN}Pass{Colors.ENDC}:      {Colors.GREEN}{s['pass']:3d}{Colors.ENDC}")
+            print(f"    {Colors.RED}Fail{Colors.ENDC}:      {Colors.RED}{s['fail']:3d}{Colors.ENDC}")
+            print(f"    {Colors.YELLOW}Manual{Colors.ENDC}:    {Colors.YELLOW}{s['manual']:3d}{Colors.ENDC} (Requires human review)")
+            print(f"    {Colors.CYAN}Skipped{Colors.ENDC}:   {Colors.CYAN}{s['skipped']:3d}{Colors.ENDC}")
             
-            # Display color-coded metrics with labels and values both colored
-            print(f"    {Colors.GREEN}Pass{Colors.ENDC}:     {Colors.GREEN}{s['pass']}{Colors.ENDC}")
-            print(f"    {Colors.RED}Fail{Colors.ENDC}:     {Colors.RED}{s['fail']}{Colors.ENDC}")
-            print(f"    {Colors.YELLOW}Manual{Colors.ENDC}:   {Colors.YELLOW}{s['manual']}{Colors.ENDC}")
-            print(f"    {Colors.CYAN}Skipped{Colors.ENDC}:  {Colors.CYAN}{s['skipped']}{Colors.ENDC}")
+            if s.get('error', 0) > 0:
+                print(f"    {Colors.RED}Error{Colors.ENDC}:     {Colors.RED}{s['error']:3d}{Colors.ENDC}")
             
-            # Display total (bold)
-            print(f"    {Colors.BOLD}Total{Colors.ENDC}:    {Colors.BOLD}{s['total']}{Colors.ENDC}")
+            print(f"    {Colors.BOLD}Total{Colors.ENDC}:     {Colors.BOLD}{s['total']:3d}{Colors.ENDC}")
             
-            # Display score with dynamic color and status message
-            print(f"    {Colors.BOLD}Score{Colors.ENDC}:    {score_color}{success_rate}% ({score_status}){Colors.ENDC}")
+            auto_color = get_score_color(role_auto_health)
+            audit_color = get_score_color(role_audit)
+            print(f"    {Colors.BOLD}Auto Health{Colors.ENDC}:  {auto_color}{role_auto_health:.2f}%{Colors.ENDC} (of automated checks)")
+            print(f"    {Colors.BOLD}Audit Ready{Colors.ENDC}:  {audit_color}{role_audit:.2f}%{Colors.ENDC} (overall)")
+        
+        # ========== NEW SECTION: MANUAL PENDING ITEMS ==========
+        # Show items that were skipped from automation
+        # ========== ส่วนใหม่: รายการที่รอดำเนินการด้วยตนเอง ==========
+        print(f"\n{Colors.CYAN}{'='*70}{Colors.ENDC}")
+        print(f"\n{Colors.BOLD}📋 MANUAL INTERVENTION REQUIRED{Colors.ENDC}")
+        print(f"{Colors.YELLOW}Items skipped from automation for human review:{Colors.ENDC}\n")
+        
+        if self.manual_pending_items:
+            total_manual = len(self.manual_pending_items)
+            print(f"  Total: {total_manual} checks require manual review\n")
+            
+            # Group by role for clarity
+            # กลุ่มตามบทบาทเพื่อความชัดเจน
+            manual_by_role = {}
+            for item in self.manual_pending_items:
+                role = item.get('role', 'unknown')
+                if role not in manual_by_role:
+                    manual_by_role[role] = []
+                manual_by_role[role].append(item)
+            
+            for role in ['master', 'worker']:
+                if role in manual_by_role:
+                    items = manual_by_role[role]
+                    print(f"  {Colors.BOLD}{role.upper()} NODE ({len(items)} items):{Colors.ENDC}")
+                    for item in items:
+                        check_id = item['id']
+                        reason = item.get('reason', 'No details available')
+                        component = item.get('component', '')
+                        
+                        # Format output nicely
+                        component_str = f" [{component}]" if component else ""
+                        print(f"    • {Colors.YELLOW}{check_id}{Colors.ENDC}{component_str}")
+                        print(f"      └─ {Colors.CYAN}{reason}{Colors.ENDC}")
+                    print()
+            
+            # Guidelines / แนวทางปฏิบัติ
+            print(f"  {Colors.CYAN}Notes:{Colors.ENDC}")
+            print(f"    • These checks are NOT failures or errors")
+            print(f"    • They require human decisions that cannot be automated")
+            print(f"    • They do NOT count against Automation Health score")
+            print(f"    • They do NOT block remediation success\n")
+            
+            print(f"  {Colors.CYAN}Recommended Actions:{Colors.ENDC}")
+            print(f"    1. Review each manual item and understand what it requires")
+            print(f"    2. Determine if the check applies to your cluster architecture")
+            print(f"    3. If applicable, implement the fix manually following CIS guidelines")
+            print(f"    4. Re-run audit to verify the fix")
+            print(f"    5. Document any decisions for compliance audit trail")
+        else:
+            print(f"  {Colors.GREEN}✓ No manual intervention items{Colors.ENDC}\n")
+            print(f"  All checks were either automated or not required for your configuration.")
         
         print(f"\n{Colors.CYAN}{'='*70}{Colors.ENDC}")
 
+
+
     def show_verbose_result(self, res):
-        """Display detailed result output / แสดงผลลัพธ์รายละเอียด"""
+        """
+        Display detailed result output
+        แสดงผลลัพธ์รายละเอียด
+        """
         if self.verbose == 0:
             return
         
@@ -1747,7 +3797,10 @@ class CISUnifiedRunner:
         print()
 
     def show_menu(self):
-        """Display main menu / แสดงเมนูหลัก"""
+        """
+        Display main menu
+        แสดงเมนูหลัก
+        """
         print(f"\n{Colors.CYAN}{'='*70}")
         print("SELECT MODE")
         print(f"{'='*70}{Colors.ENDC}\n")
@@ -1760,22 +3813,27 @@ class CISUnifiedRunner:
         print("  0) Exit\n")
         
         while True:
-            choice = input(f"{Colors.BOLD}Choose [0-6]: {Colors.ENDC}").strip()
-            if choice in ['0', '1', '2', '3', '4', '5', '6']:
+            choice = input(f"{Colors.BOLD}Choose [0-7]: {Colors.ENDC}").strip()
+            if choice in ['0', '1', '2', '3', '4', '5', '6', '7']:
                 return choice
             print(f"{Colors.RED}Invalid choice.{Colors.ENDC}")
 
     def get_audit_options(self):
-        """Get user options for audit / ได้รับตัวเลือกของผู้ใช้สำหรับการตรวจสอบ"""
+        """
+        Get user options for audit
+        ได้รับตัวเลือกของผู้ใช้สำหรับการตรวจสอบ
+        """
         print(f"\n{Colors.CYAN}AUDIT CONFIGURATION{Colors.ENDC}\n")
         
         # PRIORITY 1: Try to auto-detect node role
+        # ลำดับความสำคัญ 1: พยายามตรวจจับบทบาทของโหนดโดยอัตโนมัติ
         detected_role = self.detect_node_role()
         if detected_role:
             print(f"{Colors.GREEN}[+] Auto-detected Node Role: {detected_role.upper()}{Colors.ENDC}")
             role = detected_role
         else:
             # Detection failed - show simplified menu (no 'Both' option)
+            # การตรวจจับล้มเหลว - แสดงเมนูแบบย่อ
             print("  Select Target Role:")
             print("    1) Master")
             print("    2) Worker")
@@ -1803,16 +3861,21 @@ class CISUnifiedRunner:
         return level, role, self.verbose, False, SCRIPT_TIMEOUT
 
     def get_remediation_options(self):
-        """Get user options for remediation / ได้รับตัวเลือกของผู้ใช้สำหรับการแก้ไข"""
+        """
+        Get user options for remediation
+        ได้รับตัวเลือกของผู้ใช้สำหรับการแก้ไข
+        """
         print(f"\n{Colors.RED}[!] WARNING: REMEDIATION WILL MODIFY YOUR CLUSTER!{Colors.ENDC}\n")
         
         # PRIORITY 1: Try to auto-detect node role
+        # ลำดับความสำคัญ 1: พยายามตรวจจับบทบาทของโหนดโดยอัตโนมัติ
         detected_role = self.detect_node_role()
         if detected_role:
             print(f"{Colors.GREEN}[+] Auto-detected Node Role: {detected_role.upper()}{Colors.ENDC}")
             role = detected_role
         else:
             # Detection failed - show simplified menu (no 'Both' option)
+            # การตรวจจับล้มเหลว - แสดงเมนูแบบย่อ
             print("  Select Target Role:")
             print("    1) Master")
             print("    2) Worker")
@@ -1840,7 +3903,10 @@ class CISUnifiedRunner:
         return level, role, SCRIPT_TIMEOUT
 
     def confirm_action(self, message):
-        """Ask for user confirmation / ขอการยืนยันจากผู้ใช้"""
+        """
+        Ask for user confirmation
+        ขอการยืนยันจากผู้ใช้
+        """
         while True:
             response = input(f"\n{message} [y/n]: ").strip().lower()
             if response in ['y', 'yes']:
@@ -1850,7 +3916,10 @@ class CISUnifiedRunner:
             print(f"{Colors.RED}Please enter 'y' or 'n'.{Colors.ENDC}")
 
     def show_results_menu(self, mode):
-        """Show menu after scan/fix completion / แสดงเมนูหลังจากการสแกน/แก้ไขเสร็จสมบูรณ์"""
+        """
+        Show menu after scan/fix completion
+        แสดงเมนูหลังจากการสแกน/แก้ไขเสร็จสมบูรณ์
+        """
         if not self.current_report_dir:
             print(f"{Colors.RED}[!] No report directory available.{Colors.ENDC}")
             return
@@ -1862,9 +3931,10 @@ class CISUnifiedRunner:
             print("  1) View summary")
             print("  2) View failed items")
             print("  3) View HTML report")
-            print("  4) Return to main menu\n")
+            print("  4) Export to Excel")
+            print("  5) Return to main menu\n")
             
-            choice = input(f"{Colors.BOLD}Choose [1-4]: {Colors.ENDC}").strip()
+            choice = input(f"{Colors.BOLD}Choose [1-5]: {Colors.ENDC}").strip()
             
             if choice == '1':
                 summary_file = os.path.join(self.current_report_dir, "summary.txt")
@@ -1880,6 +3950,8 @@ class CISUnifiedRunner:
                 html_file = os.path.join(self.current_report_dir, "report.html")
                 print(f"   HTML report: {html_file}")
             elif choice == '4':
+                self.export_results_to_excel()
+            elif choice == '5':
                 break
 
     def show_help(self):
@@ -1928,7 +4000,10 @@ CIS Kubernetes Benchmark - HELP
 """)
 
     def main_loop(self):
-        """Main application loop / ลูปแอปพลิเคชันหลัก"""
+        """
+        Main application loop
+        ลูปแอปพลิเคชันหลัก
+        """
         self.show_banner()
         self.check_health()
         
@@ -1956,6 +4031,7 @@ CIS Kubernetes Benchmark - HELP
                 self.script_timeout = timeout
                 
                 # AUTO-AUDIT: If no audit results, run silent audit first
+                # การตรวจสอบอัตโนมัติ: หากไม่มีผลการตรวจสอบ ให้รันการตรวจสอบแบบเงียบก่อน
                 if not self.audit_results:
                     print(f"{Colors.CYAN}[INFO] No previous audit found. Running auto-audit to identify failures...{Colors.ENDC}")
                     # Run audit silently with same level/role settings
@@ -1963,6 +4039,7 @@ CIS Kubernetes Benchmark - HELP
                     print(f"\n{Colors.CYAN}[+] Auto-audit complete. Proceeding to remediation...{Colors.ENDC}")
                 
                 # Show summary of audit findings
+                # แสดงสรุปผลการตรวจสอบ
                 failed_count = sum(1 for r in self.audit_results.values() if r.get('status') in ['FAIL', 'ERROR', 'MANUAL'])
                 passed_count = sum(1 for r in self.audit_results.values() if r.get('status') in ['PASS', 'FIXED'])
                 
@@ -1999,6 +4076,9 @@ CIS Kubernetes Benchmark - HELP
             elif choice == '6':  # Help / ความช่วยเหลือ
                 self.show_help()
                 
+            elif choice == '7':  # Export to Excel / ส่งออกเป็น Excel
+                self.export_results_to_excel()
+                
             elif choice == '0':  # Exit / ออก
                 self.log_activity("EXIT", "Application terminated")
                 print(f"\n{Colors.CYAN}Goodbye!{Colors.ENDC}\n")
@@ -2006,6 +4086,8 @@ CIS Kubernetes Benchmark - HELP
 
 
 if __name__ == "__main__":
+    # Entry point for the CIS Kubernetes Benchmark Runner
+    # จุดเริ่มต้นสำหรับ CIS Kubernetes Benchmark Runner
     parser = argparse.ArgumentParser(
         description="CIS Kubernetes Benchmark Runner"
     )
@@ -2013,7 +4095,70 @@ if __name__ == "__main__":
         "-v", "--verbose", action="count", default=0,
         help="Verbosity level (-v: detailed, -vv: debug)"
     )
+    parser.add_argument(
+        "--config", default="cis_config.json",
+        help="Path to configuration file"
+    )
+    parser.add_argument(
+        "--mode", choices=["audit", "remediate", "both", "health"],
+        help="Run in specific mode without menu"
+    )
+    parser.add_argument(
+        "--level", choices=["1", "2", "all"], default="all",
+        help="CIS Level to run"
+    )
+    parser.add_argument(
+        "--role", choices=["master", "worker", "all"],
+        help="Node role to target"
+    )
+    parser.add_argument(
+        "--failed-only", action="store_true",
+        help="Only remediate items that failed audit"
+    )
+    parser.add_argument(
+        "--excel", action="store_true",
+        help="Export results to Excel automatically"
+    )
+    
     args = parser.parse_args()
     
-    runner = CISUnifiedRunner(verbose=args.verbose)
-    runner.main_loop()
+    runner = CISUnifiedRunner(verbose=args.verbose, config_path=args.config)
+    
+    try:
+        if args.mode:
+            # CLI Mode (Non-interactive)
+            # โหมด CLI (ไม่โต้ตอบ)
+            runner.run_preflight_checks()
+            
+            # Determine role if not provided
+            # กำหนดบทบาทหากไม่ได้ระบุ
+            target_role = args.role or runner.detect_node_role() or "all"
+            
+            if args.mode == "audit":
+                runner.scan(args.level, target_role, skip_menu=True)
+            elif args.mode == "remediate":
+                runner.fix(args.level, target_role, fix_failed_only=args.failed_only)
+            elif args.mode == "both":
+                runner.scan(args.level, target_role, skip_menu=True)
+                runner.fix(args.level, target_role, fix_failed_only=args.failed_only)
+            elif args.mode == "health":
+                runner.check_health()
+            
+            # Auto-export to Excel if requested
+            # ส่งออกเป็น Excel โดยอัตโนมัติหากมีการร้องขอ
+            if args.excel:
+                runner.export_results_to_excel()
+        else:
+            # Interactive Menu Mode
+            # โหมดเมนูแบบโต้ตอบ
+            runner.main_loop()
+            
+    except KeyboardInterrupt:
+        print("\n[!] Interrupted by user. Exiting...")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n{Colors.RED}[!] CRITICAL ERROR: {e}{Colors.ENDC}")
+        if args.verbose >= 2:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)

@@ -8,6 +8,10 @@
 CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
 MAX_PERM=600
 
+# Sanitize CONFIG_FILE to remove any leading/trailing quotes
+# This prevents issues like stat: cannot statx '"/path"'
+CONFIG_FILE=$(echo "$CONFIG_FILE" | sed 's/^["\x27]//;s/["\x27]$//')
+
 echo "[INFO] Remediating permissions for $CONFIG_FILE..."
 
 # 2. Pre-Check (Idempotency)

@@ -8,6 +8,9 @@
 CONFIG_FILE="/etc/kubernetes/manifests/etcd.yaml"
 OWNER="root:root"
 
+# Sanitize CONFIG_FILE to remove any leading/trailing quotes
+CONFIG_FILE=$(echo "$CONFIG_FILE" | sed 's/^["\x27]//;s/["\x27]$//')
+
 echo "[INFO] Remediating ownership for $CONFIG_FILE..."
 
 # 2. Pre-Check (Idempotency)

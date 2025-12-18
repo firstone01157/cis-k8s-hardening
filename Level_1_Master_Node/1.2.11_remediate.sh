@@ -1,36 +1,36 @@
 #!/bin/bash
 # CIS Benchmark: 1.2.11
-# Title: Ensure that the --enable-admission-plugins argument is set to a value that does not include AlwaysAdmit
+# Title: Ensure that the --enable-admission-plugins argument is set appropriately
 # Level: Level 1 - Master Node
 # Remediation Script
 
-# 1. Define Variables
-CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
-KEY="--enable-admission-plugins"
-BAD_VALUE="AlwaysAdmit"
+remediate_rule() {
+	echo "[INFO] CIS 1.2.11 - Admission plugins must be configured based on cluster needs"
+	echo ""
+	echo "[INFO] This check requires MANUAL configuration. Here's what to do:"
+	echo ""
+	echo "1. Edit the kube-apiserver static pod manifest:"
+	echo "   sudo nano /etc/kubernetes/manifests/kube-apiserver.yaml"
+	echo ""
+	echo "2. Find the 'command:' section and ensure '--enable-admission-plugins' is set with:"
+	echo "   - pod-security-policy  (controls pod security policies)"
+	echo "   - node-restriction    (limits kubelet API access)"
+	echo "   - alwayspullimages    (ensure image pull policy)"
+	echo "   - defaultstorageclass (manages storage classes)"
+	echo ""
+	echo "3. Example line to add:"
+	echo "   - --enable-admission-plugins=pod-security-policy,node-restriction,alwayspullimages,defaultstorageclass"
+	echo ""
+	echo "4. Save the file. kubelet will automatically detect the change and restart the pod."
+	echo ""
+	echo "5. Verify with:"
+	echo "   kubectl describe pod -n kube-system kube-apiserver-<node-name> | grep -A5 'enable-admission-plugins'"
+	echo ""
+	echo "[MANUAL] Please configure admission plugins and return to this check after the API server restarts."
+	
+	# This requires manual intervention - return 3
+	return 3
+}
 
-echo "[INFO] Remediating $KEY to remove $BAD_VALUE..."
-
-# 2. Pre-Check
-if ! grep -q "$KEY=.*$BAD_VALUE" "$CONFIG_FILE"; then
-    echo "[FIXED] $KEY does not include $BAD_VALUE."
-    exit 0
-fi
-
-# 3. Apply Fix
-# Remove AlwaysAdmit from comma-separated list
-# Handle: AlwaysAdmit, | ,AlwaysAdmit | AlwaysAdmit
-sed -i "s/$BAD_VALUE,//g" "$CONFIG_FILE"
-sed -i "s/,$BAD_VALUE//g" "$CONFIG_FILE"
-# If it was the only value, we might have empty value now.
-# We can check if line ends with = and remove it or warn.
-# But usually there are other plugins.
-
-# 4. Verification
-if ! grep -q "$KEY=.*$BAD_VALUE" "$CONFIG_FILE"; then
-    echo "[FIXED] Successfully removed $BAD_VALUE from $KEY"
-    exit 0
-else
-    echo "[ERROR] Failed to remove $BAD_VALUE from $KEY"
-    exit 1
-fi
+remediate_rule
+exit $?

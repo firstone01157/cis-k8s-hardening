@@ -1,41 +1,48 @@
 #!/bin/bash
-set -e
+# CIS Benchmark 1.2.9
+# Ensure that the --enable-admission-plugins argument includes EventRateLimit
+# Level: 1 - Master Node
 
-# CIS Benchmark: 1.2.9
-# Title: Ensure that the --authorization-mode argument includes RBAC
-# Level: Level 1 - Master Node
-# Remediation Script
+set -euo pipefail
 
-# Configuration
-CONFIG_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
-KEY="--authorization-mode"
-VALUE="RBAC"
-BINARY_NAME="kube-apiserver"
+# 1. Resolve Python Script Absolute Path
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$CURRENT_DIR")"
+HARDENER_SCRIPT="$PROJECT_ROOT/harden_manifests.py"
 
-echo "[INFO] Remediating ${KEY}..."
+# Verification with fallbacks
+if [ ! -f "$HARDENER_SCRIPT" ]; then
+    if [ -f "$CURRENT_DIR/../harden_manifests.py" ]; then
+        HARDENER_SCRIPT="$CURRENT_DIR/../harden_manifests.py"
+    elif [ -f "/home/master/cis-k8s-hardening/harden_manifests.py" ]; then
+        HARDENER_SCRIPT="/home/master/cis-k8s-hardening/harden_manifests.py"
+    else
+        echo "[ERROR] harden_manifests.py not found. Cannot proceed."
+        exit 1
+    fi
+fi
 
-# 1. Pre-check using 'grep -F --' to handle dashes safely
-if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
-    echo "[FIXED] ${KEY} includes ${VALUE}."
+# 2. Set Variables (Allow overrides)
+VALUE=$(echo "${CONFIG_REQUIRED_VALUE:-EventRateLimit}" | tr -d '"')
+MANIFEST_FILE="/etc/kubernetes/manifests/kube-apiserver.yaml"
+
+echo "[INFO] Running Hardener: $HARDENER_SCRIPT"
+echo "[INFO] Task: Setting --enable-admission-plugins to $VALUE in $MANIFEST_FILE"
+
+# 3. Execute Python Hardener (Using = to prevent parsing errors)
+python3 "$HARDENER_SCRIPT" \
+    --manifest="$MANIFEST_FILE" \
+    --flag="--enable-admission-plugins" \
+    --value="$VALUE" \
+    --ensure=present
+
+# 4. Check Result & Force Reload
+if [ $? -eq 0 ]; then
+    echo "[FIXED] CIS 1.2.9: Successfully updated --enable-admission-plugins"
+    # Touch manifest to force kubelet reload of static pod
+    touch "$MANIFEST_FILE"
     exit 0
-fi
-
-# 2. Backup
-cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
-
-# 3. Apply Fix using sed
-if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
-    # Key exists, append value to comma-separated list
-    sed -i "s|${KEY}=|&${VALUE},|" "${CONFIG_FILE}"
 else
-    # Key missing, insert with default Node,RBAC
-    sed -i "/- ${BINARY_NAME}/a \    - ${KEY}=Node,RBAC" "${CONFIG_FILE}"
-fi
-
-# 4. Verify
-if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
-    echo "[FIXED] Successfully applied ${KEY} includes ${VALUE}"
-else
-    echo "[ERROR] Failed to apply ${KEY}"
+    echo "[ERROR] Failed to update --enable-admission-plugins"
     exit 1
 fi

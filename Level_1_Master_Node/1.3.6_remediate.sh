@@ -1,41 +1,48 @@
 #!/bin/bash
-set -e
+# CIS Benchmark 1.3.6
+# Ensure that RotateKubeletServerCertificate is enabled
+# Level: 1 - Master Node
 
-# CIS Benchmark: 1.3.6
-# Title: Ensure that the RotateKubeletServerCertificate argument is set to true
-# Level: Level 1 - Master Node
-# Remediation Script
+set -euo pipefail
 
-# Configuration
-CONFIG_FILE="/etc/kubernetes/manifests/kube-controller-manager.yaml"
-BINARY_NAME="kube-controller-manager"
-KEY="--feature-gates"
-VALUE="RotateKubeletServerCertificate=true"
-FULL_PARAM="${KEY}=${VALUE}"
+# 1. Resolve Python Script Absolute Path
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$CURRENT_DIR")"
+HARDENER_SCRIPT="$PROJECT_ROOT/harden_manifests.py"
 
-echo "[INFO] Remediating ${KEY}..."
-
-# 1. Pre-check
-if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
-    echo "[PASS] ${FULL_PARAM} is already set."
-    exit 0
+# Verification with fallbacks
+if [ ! -f "$HARDENER_SCRIPT" ]; then
+    if [ -f "$CURRENT_DIR/../harden_manifests.py" ]; then
+        HARDENER_SCRIPT="$CURRENT_DIR/../harden_manifests.py"
+    elif [ -f "/home/master/cis-k8s-hardening/harden_manifests.py" ]; then
+        HARDENER_SCRIPT="/home/master/cis-k8s-hardening/harden_manifests.py"
+    else
+        echo "[ERROR] harden_manifests.py not found. Cannot proceed."
+        exit 1
+    fi
 fi
 
-# 2. Backup
-cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%s)"
+# 2. Set Variables (Allow overrides)
+VALUE=$(echo "${CONFIG_REQUIRED_VALUE:-RotateKubeletServerCertificate=true}" | tr -d '"')
+MANIFEST_FILE="/etc/kubernetes/manifests/kube-controller-manager.yaml"
 
-# 3. Apply Fix
-if grep -Fq -- "${KEY}" "${CONFIG_FILE}"; then
-    sed -i "s|${KEY}=\(.*\)|${KEY}=\1,${VALUE}|g" "${CONFIG_FILE}"
-else
-    sed -i "/  - ${BINARY_NAME}/a \    - ${FULL_PARAM}" "${CONFIG_FILE}"
-fi
+echo "[INFO] Running Hardener: $HARDENER_SCRIPT"
+echo "[INFO] Task: Setting --feature-gates to $VALUE in $MANIFEST_FILE"
 
-# 4. Verify
-if grep -Fq -- "${VALUE}" "${CONFIG_FILE}"; then
-    echo "[PASS] Successfully applied ${FULL_PARAM}"
+# 3. Execute Python Hardener (Using = to prevent parsing errors)
+python3 "$HARDENER_SCRIPT" \
+    --manifest="$MANIFEST_FILE" \
+    --flag="--feature-gates" \
+    --value="$VALUE" \
+    --ensure=present
+
+# 4. Check Result & Force Reload
+if [ $? -eq 0 ]; then
+    echo "[FIXED] CIS 1.3.6: Successfully updated --feature-gates"
+    # Touch manifest to force kubelet reload of static pod
+    touch "$MANIFEST_FILE"
     exit 0
 else
-    echo "[FAIL] Failed to apply ${FULL_PARAM}"
+    echo "[ERROR] Failed to update --feature-gates"
     exit 1
 fi

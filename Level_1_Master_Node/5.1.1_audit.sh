@@ -34,8 +34,8 @@ audit_rule() {
 
 	# Get all cluster role bindings that reference cluster-admin
 	# Filter out system components (system:*, kubeadm:*)
-	echo "[CMD] Executing: admin_bindings=$(kubectl get clusterrolebindings -o json 2>/dev/null | jq -r '.items[] | select(.roleRef.name==\"cluster-admin\") | .metadata.name as $binding | .subjects[]? // empty | select(.name | test(\"^(system:|kubeadm:)\") | not) | \"\($binding)|\(.kind):\(.name)\"')"
-	admin_bindings=$(kubectl get clusterrolebindings -o json 2>/dev/null | jq -r '.items[] | select(.roleRef.name=="cluster-admin") | .metadata.name as $binding | .subjects[]? // empty | select(.name | test("^(system:|kubeadm:)") | not) | "\($binding)|\(.kind):\(.name)"')
+	echo "[CMD] Executing: kubectl get clusterrolebindings -o json | jq to filter cluster-admin bindings excluding system subjects"
+	admin_bindings=$(kubectl get clusterrolebindings -o json 2>/dev/null | jq -r '.items[] | select(.roleRef.name=="cluster-admin") | .metadata.name as $binding | (.subjects[]? | select(.name | startswith("system:") or startswith("kubeadm:") | not)) | "\($binding)|\(.kind):\(.name)"')
 	
 	count=0
 	if [ -n "$admin_bindings" ]; then

@@ -28,6 +28,10 @@ ENDC='\033[0m'
 
 # Configuration
 ETCD_DATA_DIR="${ETCD_DATA_DIR:-/var/lib/etcd}"
+
+# Sanitize ETCD_DATA_DIR to remove any leading/trailing quotes
+ETCD_DATA_DIR=$(echo "$ETCD_DATA_DIR" | sed 's/^["\x27]//;s/["\x27]$//')
+
 ETCD_USER="etcd"
 ETCD_GROUP="etcd"
 LOG_FILE="/var/log/cis-remediation.log"
