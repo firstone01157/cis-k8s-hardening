@@ -23,7 +23,7 @@ fi
 
 echo "[INFO] Fetching all pods from all namespaces..."
 # Get all pods and check for added capabilities
-# Exclude system namespaces: kube-system, kube-public, kube-node-lease
+# Exclude system namespaces AND kube-flannel (CNI needs NET_ADMIN/NET_RAW)
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     
@@ -38,7 +38,8 @@ while IFS= read -r line; do
         caps_pods_found+=("$namespace/$pod_name (capabilities: $capabilities)")
         audit_passed=false
     fi
-done < <(kubectl get pods -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,CAPABILITIES:'.spec.containers[*].securityContext.capabilities.add[*]' 2>/dev/null | grep -v "kube-system" | grep -v "kube-public" | grep -v "kube-node-lease" | tail -n +2)
+# แก้ไขบรรทัดล่างนี้: เพิ่ม | grep -v "kube-flannel"
+done < <(kubectl get pods -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,CAPABILITIES:'.spec.containers[*].securityContext.capabilities.add[*]' 2>/dev/null | grep -v "kube-system" | grep -v "kube-public" | grep -v "kube-node-lease" | grep -v "kube-flannel" | tail -n +2)
 
 # Final report
 echo ""

@@ -25,18 +25,24 @@ audit_rule() {
         return 2
     fi
 
-    # Get all target namespaces (excluding system namespaces)
-    target_ns=$(echo "$ns_json" | jq -r '.items[] | select(.metadata.name != "kube-system" and .metadata.name != "kube-public" and .metadata.name != "kube-node-lease") | .metadata.name')
+    # --- [MODIFIED HERE] ---
+    # Get all target namespaces (Excluded: kube-system, kube-public, kube-node-lease AND kube-flannel)
+    # เพิ่มเงื่อนไข .metadata.name != "kube-flannel" ลงไปใน jq filter เลย
+    target_ns=$(echo "$ns_json" | jq -r '.items[] | select(
+        .metadata.name != "kube-system" and 
+        .metadata.name != "kube-public" and 
+        .metadata.name != "kube-node-lease" and 
+        .metadata.name != "kube-flannel"
+    ) | .metadata.name')
+    # -----------------------
 
     failed_ns=()
     compliant_ns=()
 
     for ns in $target_ns; do
+        # ไม่จำเป็นต้องมี check "kube-flannel" ใน loop แล้ว เพราะกรองออกตั้งแต่ข้างบน
+
         # Check if ANY of the PSS labels are set to restricted or baseline
-        # pod-security.kubernetes.io/enforce
-        # pod-security.kubernetes.io/warn
-        # pod-security.kubernetes.io/audit
-        
         is_compliant=$(echo "$ns_json" | jq -r --arg ns "$ns" '
             .items[] | select(.metadata.name == $ns) | .metadata.labels | 
             (

@@ -10,8 +10,8 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- \"--authorization-mode=.*(,|$)Node(,|$)\"; then"
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=.*(,|$)Node(,|$)"; then
+	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- \"--authorization-mode=([^ ]*,)?Node(,[^ ]*)?\"; then"
+	if ps -ef | grep kube-apiserver | grep -v grep | grep -E -- "--authorization-mode=([^ ]*,)?Node(,[^ ]*)?"; then
 		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: --authorization-mode includes Node")
 	else

@@ -11,7 +11,7 @@ audit_rule() {
 	unset a_output2
 
 	echo "[CMD] Executing: if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q \"(^|\\s|,)RotateKubeletServerCertificate=true($|\\s|,)\"; then"
-	if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "(^|\s|,)RotateKubeletServerCertificate=true($|\s|,)"; then
+if ps -ef | grep kube-controller-manager | grep -v grep | grep -E -q "(^|\s|,|=)RotateKubeletServerCertificate=true($|\s|,)"; then
 		echo "[INFO] Check Passed"
 		a_output+=(" - Check Passed: RotateKubeletServerCertificate is set to true")
 	else

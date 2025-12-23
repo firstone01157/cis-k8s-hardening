@@ -15,13 +15,49 @@
         "kube_config": "/etc/kubernetes/admin.conf"
     },
     "health_check": {
-        "check_services": [ "kubelet", "containerd", "etcd" ],
-        "check_ports": [ 6443, 10250 ],
+        "check_services": [
+            "kubelet",
+            "containerd",
+            "etcd"
+        ],
+        "check_ports": [
+            6443,
+            10250
+        ],
         "api_health_url": "https://localhost:6443/healthz"
     },
     "logging": {
         "enabled": true,
         "log_dir": "logs"
+    },
+    "level2_preferences": {
+        "network_policy": {
+            "enabled": true,
+            "policy_name": "cis-baseline-allow",
+            "namespaces": [
+                "default",
+                "secure-zone",
+                "kube-system",
+                "kube-flannel"
+            ]
+        },
+        "capabilities": {
+            "enforce": false,
+            "exempt_namespaces": [
+                "kube-system",
+                "kube-flannel"
+            ]
+        },
+        "seccomp": {
+            "enforce": false,
+            "manifests": [
+                "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                "/etc/kubernetes/manifests/kube-scheduler.yaml",
+                "/etc/kubernetes/manifests/etcd.yaml"
+            ],
+            "restart_after": true
+        }
     },
     "variables": {
         "_description": "Centralized configuration for all paths, permissions, and hardening parameters with shadow keys for documentation",
@@ -179,1031 +215,1035 @@
             "_api_settle_time_comment": "Seconds to wait for component sync"
         },
         "checks": {
-            "1.1.1": {
-                "enabled": true,
-                "description": "Ensure API server pod specification file permissions are set to 600 or more restrictive",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "_config_file_comment": "Default location for kubeadm API server",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.1 - owner RW only)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.2": {
-                "enabled": true,
-                "description": "Ensure controller manager pod specification file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.2)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.3": {
-                "enabled": true,
-                "description": "Ensure scheduler pod specification file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/manifests/kube-scheduler.yaml",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.3)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.4": {
-                "enabled": true,
-                "description": "Ensure etcd pod specification file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/manifests/etcd.yaml",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.4)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.5": {
-                "enabled": true,
-                "description": "Ensure manifest files are owned by root:root",
-                "level": "L1",
-                "target": "Master Node",
-                "target_dir": "/etc/kubernetes/manifests",
-                "owner": "root:root",
-                "_owner_default": "root:root (CIS L1.1.5)",
-                "requires_health_check": false
-            },
-            "1.1.6": {
-                "enabled": true,
-                "description": "Ensure /etc/kubernetes/pki directory permissions are set to 755",
-                "level": "L1",
-                "target": "Master Node",
-                "target_dir": "/etc/kubernetes/pki",
-                "dir_mode": "755",
-                "_dir_mode_default": "755 (CIS L1.1.6)",
-                "requires_health_check": false
-            },
-            "1.1.7": {
-                "enabled": true,
-                "description": "Ensure /etc/kubernetes/pki/etcd directory permissions are set to 755",
-                "level": "L1",
-                "target": "Master Node",
-                "target_dir": "/etc/kubernetes/pki/etcd",
-                "dir_mode": "755",
-                "_dir_mode_default": "755 (CIS L1.1.7)",
-                "requires_health_check": false
-            },
-            "1.1.8": {
-                "enabled": true,
-                "description": "Ensure SA private key file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/pki/sa.key",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.8)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.9": {
-                "enabled": true,
-                "description": "Ensure SA public key file permissions are set to 644",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/pki/sa.pub",
-                "file_mode": "644",
-                "_file_mode_default": "644 (CIS L1.1.9)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.10": {
-                "enabled": true,
-                "description": "Ensure CA certificate file permissions are set to 644",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/pki/ca.crt",
-                "file_mode": "644",
-                "_file_mode_default": "644 (CIS L1.1.10)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.11": {
-                "enabled": true,
-                "description": "Ensure etcd CA certificate file permissions are set to 644",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/pki/etcd/ca.crt",
-                "file_mode": "644",
-                "_file_mode_default": "644 (CIS L1.1.11)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.12": {
-                "enabled": true,
-                "description": "Ensure admin.conf file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/admin.conf",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.12)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.13": {
-                "enabled": true,
-                "description": "Ensure controller-manager.conf file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/controller-manager.conf",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.13)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.14": {
-                "enabled": true,
-                "description": "Ensure scheduler.conf file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/scheduler.conf",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.14)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.15": {
-                "enabled": true,
-                "description": "Ensure etcd.conf file permissions are set to 600",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/etcd.conf",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L1.1.15)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "1.1.16": {
-                "enabled": true,
-                "description": "Ensure admin.conf is owned by root:root",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/admin.conf",
-                "owner": "root:root",
-                "_owner_default": "root:root (CIS L1.1.16)",
-                "requires_health_check": false
-            },
-            "1.1.17": {
-                "enabled": true,
-                "description": "Ensure controller-manager.conf is owned by root:root",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/controller-manager.conf",
-                "owner": "root:root",
-                "_owner_default": "root:root (CIS L1.1.17)",
-                "requires_health_check": false
-            },
-            "1.1.18": {
-                "enabled": true,
-                "description": "Ensure scheduler.conf is owned by root:root",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/scheduler.conf",
-                "owner": "root:root",
-                "_owner_default": "root:root (CIS L1.1.18)",
-                "requires_health_check": false
-            },
-            "1.1.19": {
-                "enabled": true,
-                "description": "Ensure etcd.conf is owned by root:root",
-                "level": "L1",
-                "target": "Master Node",
-                "config_file": "/etc/kubernetes/etcd.conf",
-                "owner": "root:root",
-                "_owner_default": "root:root (CIS L1.1.19)",
-                "requires_health_check": false
-            },
-            "1.1.20": {
-                "enabled": true,
-                "description": "Ensure certificate files are owned by root:root",
-                "level": "L1",
-                "target": "Master Node",
-                "target_dir": "/etc/kubernetes/pki",
-                "owner": "root:root",
-                "_owner_default": "root:root (CIS L1.1.20)",
-                "requires_health_check": false
-            },
-            "1.1.21": {
-                "enabled": true,
-                "description": "Ensure certificate directories are owned by root:root",
-                "level": "L1",
-                "target": "Master Node",
-                "target_dir": "/etc/kubernetes/pki",
-                "owner": "root:root",
-                "_owner_default": "root:root (CIS L1.1.21)",
-                "requires_health_check": false
-            },
-            "3.2.1": {
-                "enabled": true,
-                "description": "Ensure audit policy and logging are configured",
-                "level": "L1",
-                "target": "Master Node",
-                "audit_policy_path": "/etc/kubernetes/audit-policy.yaml",
-                "audit_log_path": "/var/log/kubernetes/audit/audit.log",
-                "audit_log_maxage": 30,
-                "audit_log_maxbackup": 10,
-                "audit_log_maxsize": 100,
-                "audit_level": "Metadata",
-                "requires_health_check": true
-            },
-            "3.2.2": {
-                "enabled": true,
-                "description": "Ensure audit policy covers key security concerns",
-                "level": "L1",
-                "target": "Master Node",
-                "audit_policy_path": "/etc/kubernetes/audit-policy.yaml",
-                "requires_health_check": true
-            },
-            "4.1.9": {
-                "enabled": true,
-                "description": "Ensure kubelet config file permissions are set to 600",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L4.1.9)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "4.1.10": {
-                "enabled": true,
-                "description": "Ensure kubelet service file permissions are set to 644",
-                "level": "L1",
-                "target": "Worker Node",
-                "service_file": "/etc/systemd/system/kubelet.service.d/10-kubeadm.conf",
-                "file_mode": "644",
-                "_file_mode_default": "644 (CIS L4.1.10)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "4.1.11": {
-                "enabled": true,
-                "description": "Ensure kubelet client certificate permissions are set to 600",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/pki/kubelet-client.crt",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L4.1.11)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "4.1.12": {
-                "enabled": true,
-                "description": "Ensure kubelet client key permissions are set to 600",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/pki/kubelet-client.key",
-                "file_mode": "600",
-                "_file_mode_default": "600 (CIS L4.1.12)",
-                "owner": "root:root",
-                "requires_health_check": false
-            },
-            "4.2.1": {
-                "enabled": true,
-                "description": "Ensure anonymous-auth is set to false",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "anonymous_auth": false,
-                "_anonymous_auth_default": "false (CIS L4.2.1)",
-                "requires_health_check": true
-            },
-            "4.2.2": {
-                "enabled": true,
-                "description": "Ensure authorization mode is set to Webhook",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "authorization_mode": "Webhook",
-                "_authorization_mode_default": "Webhook (CIS L4.2.2)",
-                "requires_health_check": true
-            },
-            "4.2.3": {
-                "enabled": true,
-                "description": "Ensure client CA file is set appropriately",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "client_ca_file": "/etc/kubernetes/pki/ca.crt",
-                "_client_ca_file_default": "/etc/kubernetes/pki/ca.crt (CIS L4.2.3)",
-                "requires_health_check": true
-            },
-            "4.2.4": {
-                "enabled": true,
-                "description": "Ensure read-only port is set to 0",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "read_only_port": 0,
-                "_read_only_port_default": "0 (CIS L4.2.4)",
-                "requires_health_check": true
-            },
-            "4.2.5": {
-                "enabled": true,
-                "description": "Ensure streaming connection idle timeout is set",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "streaming_connection_idle_timeout": "4h0m0s",
-                "_streaming_timeout_default": "4h0m0s (CIS L4.2.5)",
-                "requires_health_check": true
-            },
-            "4.2.6": {
-                "enabled": true,
-                "description": "Ensure make-iptables-util-chains is set to true",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "make_iptables_util_chains": true,
-                "_make_iptables_util_chains_default": "true (CIS L4.2.6)",
-                "requires_health_check": true
-            },
-            "4.2.7": {
-                "enabled": true,
-                "description": "Ensure event-record-qps is set appropriately",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "event_record_qps": 5,
-                "_event_record_qps_default": "5 (CIS L4.2.7)",
-                "requires_health_check": true
-            },
-            "4.2.8": {
-                "enabled": true,
-                "description": "Ensure protect-kernel-defaults is set to true",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "protect_kernel_defaults": true,
-                "_protect_kernel_defaults_default": "true (CIS L4.2.8)",
-                "requires_health_check": true
-            },
-            "4.2.9": {
-                "enabled": true,
-                "description": "Ensure hostname-override is not set",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "hostname_override": null,
-                "_hostname_override_default": "null - must not be set (CIS L4.2.9)",
-                "requires_health_check": true
-            },
-            "4.2.10": {
-                "enabled": true,
-                "description": "Ensure kubelet certificate rotation is enabled",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "rotate_certificates": true,
-                "_rotate_certificates_default": "true (CIS L4.2.10)",
-                "requires_health_check": true
-            },
-            "4.2.11": {
-                "enabled": true,
-                "description": "Ensure kubelet server certificate rotation is enabled",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "rotate_server_certificates": true,
-                "_rotate_server_certificates_default": "true (CIS L4.2.11)",
-                "requires_health_check": true
-            },
-            "4.2.12": {
-                "enabled": true,
-                "description": "Ensure kubelet TLS cipher suites are configured",
-                "level": "L1",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "tls_cipher_suites": [
-                    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-                    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-                    "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
-                    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
-                    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
-                    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
-                ],
-                "_tls_cipher_suites_default": "Strong FIPS-compliant ciphers (CIS L4.2.12)",
-                "requires_health_check": true
-            },
-            "4.2.13": {
-                "enabled": true,
-                "description": "Ensure pod PIDs limit is set appropriately",
-                "level": "L2",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "pod_pids_limit": -1,
-                "_pod_pids_limit_default": "-1 (unlimited) (CIS L4.2.13)",
-                "requires_health_check": true
-            },
-            "4.2.14": {
-                "enabled": true,
-                "description": "Ensure seccomp default is set appropriately",
-                "level": "L2",
-                "target": "Worker Node",
-                "config_file": "/var/lib/kubelet/config.yaml",
-                "seccomp_default": true,
-                "_seccomp_default_default": "true (CIS L4.2.14)",
-                "requires_health_check": true
-            },
-            "5.2.1": {
-                "enabled": true,
-                "description": "Pod Security Standards - default namespace (Safe Mode)",
-                "level": "L1",
-                "target": "Master Node",
-                "safe_mode_namespace": "default",
-                "secure_namespace": "secure-zone",
-                "mode": "warn-audit",
-                "namespaces": {
-                    "default": {
-                        "warn": "restricted",
-                        "audit": "restricted",
-                        "enforce": "disabled"
-                    }
+            "L1": {
+                "1.1.1": {
+                    "enabled": true,
+                    "description": "Ensure API server pod specification file permissions are set to 600 or more restrictive",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "_config_file_comment": "Default location for kubeadm API server",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.1 - owner RW only)",
+                    "owner": "root:root",
+                    "requires_health_check": false
                 },
-                "requires_health_check": true
-            },
-            "5.2.2": {
-                "enabled": true,
-                "description": "Minimize the admission of privileged containers (Safety First: Warn Mode)",
-                "level": "L1",
-                "target": "Master Node",
-                "remediation_args": "warn",
-                "safety_message": "⚠️ NOTE: Configured in 'Safety First' mode (Warn only). To fully satisfy CIS strict compliance, you must manually change namespace labels to 'enforce'.",
-                "requires_health_check": false
-            },
-            "_section_1_2": "API SERVER FLAGS - MASTER NODE (L1)",
-            "1.2.1": {
-                "enabled": true,
-                "description": "Ensure --anonymous-auth argument is set to false",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--anonymous-auth",
-                "required_value": "false",
-                "_required_value_ref": "variables.api_server_flags.anonymous_auth",
-                "requires_health_check": true
-            },
-            "1.2.2": {
-                "enabled": true,
-                "description": "Ensure --authorization-mode argument includes Node and RBAC",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--authorization-mode",
-                "required_value": "Node,RBAC",
-                "_required_value_ref": "variables.api_server_flags.authorization_mode",
-                "requires_health_check": true
-            },
-            "1.2.3": {
-                "enabled": true,
-                "description": "Ensure --client-ca-file argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--client-ca-file",
-                "required_value": "/etc/kubernetes/pki/ca.crt",
-                "_required_value_ref": "variables.api_server_flags.client_ca_file",
-                "requires_health_check": true
-            },
-            "1.2.4": {
-                "enabled": true,
-                "description": "Ensure --etcd-certfile and --etcd-keyfile arguments are set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "multi_flag_check",
-                "flags": {
-                    "--etcd-certfile": "/etc/kubernetes/pki/apiserver-etcd-client.crt",
-                    "--etcd-keyfile": "/etc/kubernetes/pki/apiserver-etcd-client.key"
+                "1.1.2": {
+                    "enabled": true,
+                    "description": "Ensure controller manager pod specification file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.2)",
+                    "owner": "root:root",
+                    "requires_health_check": false
                 },
-                "_etcd_certfile_ref": "variables.api_server_flags.etcd_certfile",
-                "_etcd_keyfile_ref": "variables.api_server_flags.etcd_keyfile",
-                "requires_health_check": true
-            },
-            "1.2.5": {
-                "enabled": true,
-                "description": "Ensure --etcd-cafile argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--etcd-cafile",
-                "required_value": "/etc/kubernetes/pki/etcd/ca.crt",
-                "requires_health_check": true
-            },
-            "1.2.6": {
-                "enabled": true,
-                "description": "Ensure --encryption-provider-config argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--encryption-provider-config",
-                "description_note": "Requires manual review of encryption policy configuration",
-                "requires_health_check": true
-            },
-            "1.2.7": {
-                "enabled": true,
-                "description": "Ensure --bind-address argument is set to 127.0.0.1",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--bind-address",
-                "required_value": "127.0.0.1",
-                "_required_value_ref": "variables.api_server_flags.bind_address",
-                "requires_health_check": true
-            },
-            "1.2.8": {
-                "enabled": true,
-                "description": "Ensure --authorization-mode argument includes NodeRestriction",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--authorization-mode",
-                "expected_value": "NodeRestriction",
-                "behavior": "append",
-                "value_type": "csv",
-                "requires_health_check": true
-            },
-            "1.2.9": {
-                "enabled": true,
-                "description": "Ensure --profiling argument is set to false",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--profiling",
-                "required_value": "false",
-                "requires_health_check": true
-            },
-            "1.2.10": {
-                "enabled": true,
-                "description": "Ensure --audit-log-path argument is set",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--audit-log-path",
-                "required_value": "/var/log/kubernetes/audit/audit.log",
-                "_required_value_ref": "variables.audit_configuration.audit_log_path",
-                "requires_health_check": true
-            },
-            "1.2.11": {
-                "enabled": true,
-                "description": "Ensure admission control is configured properly (AlwaysPullImages)",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--enable-admission-plugins",
-                "expected_value": "AlwaysPullImages",
-                "behavior": "append",
-                "value_type": "csv",
-                "remediation_note": "Automatically appends AlwaysPullImages to the admission plugins list",
-                "requires_health_check": true
-            },
-            "1.2.12": {
-                "enabled": true,
-                "description": "Ensure --audit-log-maxbackup argument is set to 10 or as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--audit-log-maxbackup",
-                "expected_value": "10",
-                "requires_health_check": true
-            },
-            "1.2.13": {
-                "enabled": true,
-                "description": "Ensure --audit-log-maxsize argument is set to 100 or as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--audit-log-maxsize",
-                "expected_value": "100",
-                "requires_health_check": true
-            },
-            "1.2.14": {
-                "enabled": true,
-                "description": "Ensure --enable-admission-plugins includes NodeRestriction",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--enable-admission-plugins",
-                "expected_value": "NodeRestriction",
-                "behavior": "append",
-                "value_type": "csv",
-                "requires_health_check": true
-            },
-            "1.2.15": {
-                "enabled": true,
-                "description": "Ensure --service-account-lookup argument is set to true",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--service-account-lookup",
-                "expected_value": "true",
-                "requires_health_check": true
-            },
-            "1.2.16": {
-                "enabled": true,
-                "description": "Ensure --service-account-key-file argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--service-account-key-file",
-                "expected_value": "/etc/kubernetes/pki/sa.pub",
-                "requires_health_check": true
-            },
-            "1.2.17": {
-                "enabled": true,
-                "description": "Ensure --audit-log-maxage argument is set to 30 or as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--audit-log-maxage",
-                "expected_value": "30",
-                "requires_health_check": true
-            },
-            "1.2.18": {
-                "enabled": true,
-                "description": "Ensure --audit-log-maxbackup argument is set to 10 or as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--audit-log-maxbackup",
-                "expected_value": "10",
-                "requires_health_check": true
-            },
-            "1.2.19": {
-                "enabled": true,
-                "description": "Ensure --audit-log-maxsize argument is set to 100 or as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--audit-log-maxsize",
-                "expected_value": "100",
-                "requires_health_check": true
-            },
-            "1.2.20": {
-                "enabled": true,
-                "description": "Ensure --request-timeout argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--request-timeout",
-                "expected_value": "300s",
-                "remediation_note": "Default 5-minute request timeout is reasonable, adjust based on environment",
-                "requires_health_check": true
-            },
-            "1.2.21": {
-                "enabled": true,
-                "description": "Ensure --service-account-lookup argument is set to true",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag_name": "--service-account-lookup",
-                "expected_value": "true",
-                "requires_health_check": true
-            },
-            "1.2.22": {
-                "enabled": true,
-                "description": "Ensure only strong public/private key pairs are used for service accounts",
-                "level": "L1",
-                "target": "Master Node",
-                "description_note": "Manual verification: RSA 2048-bit minimum",
-                "requires_health_check": false
-            },
-            "1.2.23": {
-                "enabled": true,
-                "description": "Ensure --audit-policy-file argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--audit-policy-file",
-                "_required_value_ref": "variables.api_server_flags.audit_policy_file",
-                "_comment": "Value injected at runtime from variables section",
-                "requires_health_check": true
-            },
-            "1.2.24": {
-                "enabled": true,
-                "description": "Ensure --authorization-mode argument does not include AlwaysAllow",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--authorization-mode",
-                "must_not_contain": "AlwaysAllow",
-                "requires_health_check": true
-            },
-            "1.2.25": {
-                "enabled": true,
-                "description": "Ensure --authorization-mode argument does not include AlwaysDeny",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--authorization-mode",
-                "must_not_contain": "AlwaysDeny",
-                "requires_health_check": true
-            },
-            "1.2.26": {
-                "enabled": true,
-                "description": "Ensure --experimental-encryption-provider-config is replaced with --encryption-provider-config",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--encryption-provider-config",
-                "must_not_contain": "--experimental-encryption-provider-config",
-                "requires_health_check": true
-            },
-            "1.2.27": {
-                "enabled": true,
-                "description": "Ensure --encryption-provider-config-automatic-reload is set appropriately",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--encryption-provider-config-automatic-reload",
-                "description_note": "Ensures encryption config is reloaded without restart",
-                "requires_health_check": true
-            },
-            "1.2.28": {
-                "enabled": true,
-                "description": "Ensure --encryption-provider-config does not have identity as first provider",
-                "level": "L1",
-                "target": "Master Node",
-                "description_note": "Manual verification: Check encryption policy",
-                "requires_health_check": false
-            },
-            "1.2.29": {
-                "enabled": true,
-                "description": "Ensure --etcd-prefix argument does not have hardcoded secrets or PII",
-                "level": "L1",
-                "target": "Master Node",
-                "description_note": "Manual verification: Audit etcd data",
-                "requires_health_check": false
-            },
-            "1.2.30": {
-                "enabled": true,
-                "description": "Ensure --event-ttl argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
-                "check_type": "flag_check",
-                "flag": "--event-ttl",
-                "_required_value_ref": "variables.api_server_flags.event_ttl",
-                "_comment": "Value injected at runtime from variables section",
-                "description_note": "Default 1h is reasonable",
-                "requires_health_check": true
-            },
-            "_section_1_3": "CONTROLLER MANAGER FLAGS - MASTER NODE (L1)",
-            "1.3.1": {
-                "enabled": true,
-                "description": "Ensure --terminated-pod-gc-threshold argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "check_type": "flag_check",
-                "flag": "--terminated-pod-gc-threshold",
-                "required_value": "12500",
-                "_required_value_ref": "variables.controller_manager_flags.terminated_pod_gc_threshold",
-                "requires_health_check": true
-            },
-            "1.3.2": {
-                "enabled": true,
-                "description": "Ensure --profiling argument is set to false",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "check_type": "flag_check",
-                "flag": "--profiling",
-                "required_value": "false",
-                "_required_value_ref": "variables.controller_manager_flags.profiling",
-                "requires_health_check": true
-            },
-            "1.3.3": {
-                "enabled": true,
-                "description": "Ensure --use-service-account-credentials argument is set to true",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "check_type": "flag_check",
-                "flag": "--use-service-account-credentials",
-                "required_value": "true",
-                "_required_value_ref": "variables.controller_manager_flags.use_service_account_credentials",
-                "requires_health_check": true
-            },
-            "1.3.4": {
-                "enabled": true,
-                "description": "Ensure --service-account-private-key-file argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "check_type": "flag_check",
-                "flag": "--service-account-private-key-file",
-                "required_value": "/etc/kubernetes/pki/sa.key",
-                "_required_value_ref": "variables.controller_manager_flags.service_account_private_key_file",
-                "requires_health_check": true
-            },
-            "1.3.5": {
-                "enabled": true,
-                "description": "Ensure --root-ca-file argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "check_type": "flag_check",
-                "flag": "--root-ca-file",
-                "required_value": "/etc/kubernetes/pki/ca.crt",
-                "_required_value_ref": "variables.controller_manager_flags.root_ca_file",
-                "requires_health_check": true
-            },
-            "1.3.6": {
-                "enabled": true,
-                "description": "Ensure --bind-address argument is set to 127.0.0.1",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "check_type": "flag_check",
-                "flag": "--bind-address",
-                "required_value": "127.0.0.1",
-                "_required_value_ref": "variables.controller_manager_flags.bind_address",
-                "requires_health_check": true
-            },
-            "1.3.7": {
-                "enabled": true,
-                "description": "Ensure --feature-gates argument does not contain insecure flags",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
-                "check_type": "flag_check",
-                "flag": "--feature-gates",
-                "description_note": "Review for experimental/insecure feature gates",
-                "requires_health_check": true
-            },
-            "_section_1_4": "SCHEDULER FLAGS - MASTER NODE (L1)",
-            "1.4.1": {
-                "enabled": true,
-                "description": "Ensure --profiling argument is set to false",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-scheduler.yaml",
-                "check_type": "flag_check",
-                "flag": "--profiling",
-                "required_value": "false",
-                "_required_value_ref": "variables.scheduler_flags.profiling",
-                "requires_health_check": true
-            },
-            "1.4.2": {
-                "enabled": true,
-                "description": "Ensure --bind-address argument is set to 127.0.0.1",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/kube-scheduler.yaml",
-                "check_type": "flag_check",
-                "flag": "--bind-address",
-                "required_value": "127.0.0.1",
-                "_required_value_ref": "variables.scheduler_flags.bind_address",
-                "requires_health_check": true
-            },
-            "_section_2": "ETCD FLAGS - MASTER NODE (L1)",
-            "2.1": {
-                "enabled": true,
-                "description": "Ensure --client-cert-auth argument is set to true",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/etcd.yaml",
-                "check_type": "flag_check",
-                "flag": "--client-cert-auth",
-                "required_value": "true",
-                "_required_value_ref": "variables.etcd_flags.client_cert_auth",
-                "requires_health_check": true
-            },
-            "2.2": {
-                "enabled": true,
-                "description": "Ensure --auto-tls argument is not set to true",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/etcd.yaml",
-                "check_type": "flag_check",
-                "flag": "--auto-tls",
-                "required_value": "false",
-                "_required_value_ref": "variables.etcd_flags.auto_tls",
-                "requires_health_check": true
-            },
-            "2.3": {
-                "enabled": true,
-                "description": "Ensure --peer-auto-tls argument is not set to true",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/etcd.yaml",
-                "check_type": "flag_check",
-                "flag": "--peer-auto-tls",
-                "required_value": "false",
-                "_required_value_ref": "variables.etcd_flags.peer_auto_tls",
-                "requires_health_check": true
-            },
-            "2.4": {
-                "enabled": true,
-                "description": "Ensure --cert-file and --key-file arguments are set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/etcd.yaml",
-                "check_type": "multi_flag_check",
-                "flags": {
-                    "--cert-file": "/etc/kubernetes/pki/etcd/server.crt",
-                    "--key-file": "/etc/kubernetes/pki/etcd/server.key"
+                "1.1.3": {
+                    "enabled": true,
+                    "description": "Ensure scheduler pod specification file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/manifests/kube-scheduler.yaml",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.3)",
+                    "owner": "root:root",
+                    "requires_health_check": false
                 },
-                "_cert_file_ref": "variables.etcd_flags.cert_file",
-                "_key_file_ref": "variables.etcd_flags.key_file",
-                "requires_health_check": true
-            },
-            "2.5": {
-                "enabled": true,
-                "description": "Ensure --peer-cert-file and --peer-key-file arguments are set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/etcd.yaml",
-                "check_type": "multi_flag_check",
-                "flags": {
-                    "--peer-cert-file": "/etc/kubernetes/pki/etcd/peer.crt",
-                    "--peer-key-file": "/etc/kubernetes/pki/etcd/peer.key"
+                "1.1.4": {
+                    "enabled": true,
+                    "description": "Ensure etcd pod specification file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/manifests/etcd.yaml",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.4)",
+                    "owner": "root:root",
+                    "requires_health_check": false
                 },
-                "_peer_cert_file_ref": "variables.etcd_flags.peer_cert_file",
-                "_peer_key_file_ref": "variables.etcd_flags.peer_key_file",
-                "requires_health_check": true
-            },
-            "2.6": {
-                "enabled": true,
-                "description": "Ensure --peer-client-cert-auth argument is set to true",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/etcd.yaml",
-                "check_type": "flag_check",
-                "flag": "--peer-client-cert-auth",
-                "required_value": "true",
-                "requires_health_check": true
-            },
-            "2.7": {
-                "enabled": false,
-                "description": "Ensure --etcd-cafile argument is set as appropriate",
-                "level": "L1",
-                "target": "Master Node",
-                "manifest": "/etc/kubernetes/manifests/etcd.yaml",
-                "check_type": "flag_check",
-                "flag": "--etcd-cafile",
-                "required_value": "/etc/kubernetes/pki/etcd/ca.crt",
-                "exclusion_reason": "RISK_ACCEPTED",
-                "requires_health_check": true
-            },
-            "_section_3": "LOGGING AND AUDITING - MASTER NODE (L1)",
-            "5.3.2": {
-                "enabled": false,
-                "description": "Ensure NetworkPolicies are defined (Allow-All for Safety First Strategy)",
-                "level": "L1",
-                "target": "Master Node",
-                "policy_type": "allow-all",
-                "reason": "Safety First Strategy - Allow-all NetworkPolicies prevent breaking existing cluster traffic",
-                "remediation_note": "Enable only after implementing proper network segmentation policy and thorough testing",
-                "requires_health_check": true
-            },
-            "5.6.1": {
-                "enabled": true,
-                "description": "Create restricted namespace for admin workloads",
-                "level": "L2",
-                "target": "Master Node",
-                "admin_namespace": "secure-zone",
-                "create_secure_zone": true,
-                "secure_zone_config": {
-                    "name": "secure-zone",
-                    "enforce": "restricted"
+                "1.1.5": {
+                    "enabled": true,
+                    "description": "Ensure manifest files are owned by root:root",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "target_dir": "/etc/kubernetes/manifests",
+                    "owner": "root:root",
+                    "_owner_default": "root:root (CIS L1.1.5)",
+                    "requires_health_check": false
                 },
-                "requires_health_check": true
+                "1.1.6": {
+                    "enabled": true,
+                    "description": "Ensure /etc/kubernetes/pki directory permissions are set to 755",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "target_dir": "/etc/kubernetes/pki",
+                    "dir_mode": "755",
+                    "_dir_mode_default": "755 (CIS L1.1.6)",
+                    "requires_health_check": false
+                },
+                "1.1.7": {
+                    "enabled": true,
+                    "description": "Ensure /etc/kubernetes/pki/etcd directory permissions are set to 755",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "target_dir": "/etc/kubernetes/pki/etcd",
+                    "dir_mode": "755",
+                    "_dir_mode_default": "755 (CIS L1.1.7)",
+                    "requires_health_check": false
+                },
+                "1.1.8": {
+                    "enabled": true,
+                    "description": "Ensure SA private key file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/pki/sa.key",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.8)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.9": {
+                    "enabled": true,
+                    "description": "Ensure SA public key file permissions are set to 644",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/pki/sa.pub",
+                    "file_mode": "644",
+                    "_file_mode_default": "644 (CIS L1.1.9)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.10": {
+                    "enabled": true,
+                    "description": "Ensure CA certificate file permissions are set to 644",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/pki/ca.crt",
+                    "file_mode": "644",
+                    "_file_mode_default": "644 (CIS L1.1.10)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.11": {
+                    "enabled": true,
+                    "description": "Ensure etcd CA certificate file permissions are set to 644",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/pki/etcd/ca.crt",
+                    "file_mode": "644",
+                    "_file_mode_default": "644 (CIS L1.1.11)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.12": {
+                    "enabled": true,
+                    "description": "Ensure admin.conf file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/admin.conf",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.12)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.13": {
+                    "enabled": true,
+                    "description": "Ensure controller-manager.conf file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/controller-manager.conf",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.13)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.14": {
+                    "enabled": true,
+                    "description": "Ensure scheduler.conf file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/scheduler.conf",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.14)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.15": {
+                    "enabled": true,
+                    "description": "Ensure etcd.conf file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/etcd.conf",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L1.1.15)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "1.1.16": {
+                    "enabled": true,
+                    "description": "Ensure admin.conf is owned by root:root",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/admin.conf",
+                    "owner": "root:root",
+                    "_owner_default": "root:root (CIS L1.1.16)",
+                    "requires_health_check": false
+                },
+                "1.1.17": {
+                    "enabled": true,
+                    "description": "Ensure controller-manager.conf is owned by root:root",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/controller-manager.conf",
+                    "owner": "root:root",
+                    "_owner_default": "root:root (CIS L1.1.17)",
+                    "requires_health_check": false
+                },
+                "1.1.18": {
+                    "enabled": true,
+                    "description": "Ensure scheduler.conf is owned by root:root",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/scheduler.conf",
+                    "owner": "root:root",
+                    "_owner_default": "root:root (CIS L1.1.18)",
+                    "requires_health_check": false
+                },
+                "1.1.19": {
+                    "enabled": true,
+                    "description": "Ensure etcd.conf is owned by root:root",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "config_file": "/etc/kubernetes/etcd.conf",
+                    "owner": "root:root",
+                    "_owner_default": "root:root (CIS L1.1.19)",
+                    "requires_health_check": false
+                },
+                "1.1.20": {
+                    "enabled": true,
+                    "description": "Ensure certificate files are owned by root:root",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "target_dir": "/etc/kubernetes/pki",
+                    "owner": "root:root",
+                    "_owner_default": "root:root (CIS L1.1.20)",
+                    "requires_health_check": false
+                },
+                "1.1.21": {
+                    "enabled": true,
+                    "description": "Ensure certificate directories are owned by root:root",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "target_dir": "/etc/kubernetes/pki",
+                    "owner": "root:root",
+                    "_owner_default": "root:root (CIS L1.1.21)",
+                    "requires_health_check": false
+                },
+                "3.2.1": {
+                    "enabled": true,
+                    "description": "Ensure audit policy and logging are configured",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "audit_policy_path": "/etc/kubernetes/audit-policy.yaml",
+                    "audit_log_path": "/var/log/kubernetes/audit/audit.log",
+                    "audit_log_maxage": 30,
+                    "audit_log_maxbackup": 10,
+                    "audit_log_maxsize": 100,
+                    "audit_level": "Metadata",
+                    "requires_health_check": true
+                },
+                "3.2.2": {
+                    "enabled": true,
+                    "description": "Ensure audit policy covers key security concerns",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "audit_policy_path": "/etc/kubernetes/audit-policy.yaml",
+                    "requires_health_check": true
+                },
+                "4.1.9": {
+                    "enabled": true,
+                    "description": "Ensure kubelet config file permissions are set to 600",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L4.1.9)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "4.1.10": {
+                    "enabled": true,
+                    "description": "Ensure kubelet service file permissions are set to 644",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "service_file": "/etc/systemd/system/kubelet.service.d/10-kubeadm.conf",
+                    "file_mode": "644",
+                    "_file_mode_default": "644 (CIS L4.1.10)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "4.1.11": {
+                    "enabled": true,
+                    "description": "Ensure kubelet client certificate permissions are set to 600",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/pki/kubelet-client.crt",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L4.1.11)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "4.1.12": {
+                    "enabled": true,
+                    "description": "Ensure kubelet client key permissions are set to 600",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/pki/kubelet-client.key",
+                    "file_mode": "600",
+                    "_file_mode_default": "600 (CIS L4.1.12)",
+                    "owner": "root:root",
+                    "requires_health_check": false
+                },
+                "4.2.1": {
+                    "enabled": true,
+                    "description": "Ensure anonymous-auth is set to false",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "anonymous_auth": false,
+                    "_anonymous_auth_default": "false (CIS L4.2.1)",
+                    "requires_health_check": true
+                },
+                "4.2.2": {
+                    "enabled": true,
+                    "description": "Ensure authorization mode is set to Webhook",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "authorization_mode": "Webhook",
+                    "_authorization_mode_default": "Webhook (CIS L4.2.2)",
+                    "requires_health_check": true
+                },
+                "4.2.3": {
+                    "enabled": true,
+                    "description": "Ensure client CA file is set appropriately",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "client_ca_file": "/etc/kubernetes/pki/ca.crt",
+                    "_client_ca_file_default": "/etc/kubernetes/pki/ca.crt (CIS L4.2.3)",
+                    "requires_health_check": true
+                },
+                "4.2.4": {
+                    "enabled": true,
+                    "description": "Ensure read-only port is set to 0",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "read_only_port": 0,
+                    "_read_only_port_default": "0 (CIS L4.2.4)",
+                    "requires_health_check": true
+                },
+                "4.2.5": {
+                    "enabled": true,
+                    "description": "Ensure streaming connection idle timeout is set",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "streaming_connection_idle_timeout": "4h0m0s",
+                    "_streaming_timeout_default": "4h0m0s (CIS L4.2.5)",
+                    "requires_health_check": true
+                },
+                "4.2.6": {
+                    "enabled": true,
+                    "description": "Ensure make-iptables-util-chains is set to true",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "make_iptables_util_chains": true,
+                    "_make_iptables_util_chains_default": "true (CIS L4.2.6)",
+                    "requires_health_check": true
+                },
+                "4.2.7": {
+                    "enabled": true,
+                    "description": "Ensure event-record-qps is set appropriately",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "event_record_qps": 5,
+                    "_event_record_qps_default": "5 (CIS L4.2.7)",
+                    "requires_health_check": true
+                },
+                "4.2.8": {
+                    "enabled": true,
+                    "description": "Ensure protect-kernel-defaults is set to true",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "protect_kernel_defaults": true,
+                    "_protect_kernel_defaults_default": "true (CIS L4.2.8)",
+                    "requires_health_check": true
+                },
+                "4.2.9": {
+                    "enabled": true,
+                    "description": "Ensure hostname-override is not set",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "hostname_override": null,
+                    "_hostname_override_default": "null - must not be set (CIS L4.2.9)",
+                    "requires_health_check": true
+                },
+                "4.2.10": {
+                    "enabled": true,
+                    "description": "Ensure kubelet certificate rotation is enabled",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "rotate_certificates": true,
+                    "_rotate_certificates_default": "true (CIS L4.2.10)",
+                    "requires_health_check": true
+                },
+                "4.2.11": {
+                    "enabled": true,
+                    "description": "Ensure kubelet server certificate rotation is enabled",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "rotate_server_certificates": true,
+                    "_rotate_server_certificates_default": "true (CIS L4.2.11)",
+                    "requires_health_check": true
+                },
+                "4.2.12": {
+                    "enabled": true,
+                    "description": "Ensure kubelet TLS cipher suites are configured",
+                    "level": "L1",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "tls_cipher_suites": [
+                        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+                        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+                        "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+                        "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+                        "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+                        "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+                    ],
+                    "_tls_cipher_suites_default": "Strong FIPS-compliant ciphers (CIS L4.2.12)",
+                    "requires_health_check": true
+                },
+                "5.2.1": {
+                    "enabled": true,
+                    "description": "Pod Security Standards - default namespace (Safe Mode)",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "safe_mode_namespace": "default",
+                    "secure_namespace": "secure-zone",
+                    "mode": "warn-audit",
+                    "namespaces": {
+                        "default": {
+                            "warn": "restricted",
+                            "audit": "restricted",
+                            "enforce": "disabled"
+                        }
+                    },
+                    "requires_health_check": true
+                },
+                "5.2.2": {
+                    "enabled": true,
+                    "description": "Minimize the admission of privileged containers (Safety First: Warn Mode)",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "remediation_args": "warn",
+                    "safety_message": "\u26a0\ufe0f NOTE: Configured in 'Safety First' mode (Warn only). To fully satisfy CIS strict compliance, you must manually change namespace labels to 'enforce'.",
+                    "requires_health_check": false
+                },
+                "_section_1_2": "API SERVER FLAGS - MASTER NODE (L1)",
+                "1.2.1": {
+                    "enabled": true,
+                    "description": "Ensure --anonymous-auth argument is set to false",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--anonymous-auth",
+                    "required_value": "false",
+                    "_required_value_ref": "variables.api_server_flags.anonymous_auth",
+                    "requires_health_check": true
+                },
+                "1.2.2": {
+                    "enabled": true,
+                    "description": "Ensure --authorization-mode argument includes Node and RBAC",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--authorization-mode",
+                    "required_value": "Node,RBAC",
+                    "_required_value_ref": "variables.api_server_flags.authorization_mode",
+                    "requires_health_check": true
+                },
+                "1.2.3": {
+                    "enabled": true,
+                    "description": "Ensure --client-ca-file argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--client-ca-file",
+                    "required_value": "/etc/kubernetes/pki/ca.crt",
+                    "_required_value_ref": "variables.api_server_flags.client_ca_file",
+                    "requires_health_check": true
+                },
+                "1.2.4": {
+                    "enabled": true,
+                    "description": "Ensure --etcd-certfile and --etcd-keyfile arguments are set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "multi_flag_check",
+                    "flags": {
+                        "--etcd-certfile": "/etc/kubernetes/pki/apiserver-etcd-client.crt",
+                        "--etcd-keyfile": "/etc/kubernetes/pki/apiserver-etcd-client.key"
+                    },
+                    "_etcd_certfile_ref": "variables.api_server_flags.etcd_certfile",
+                    "_etcd_keyfile_ref": "variables.api_server_flags.etcd_keyfile",
+                    "requires_health_check": true
+                },
+                "1.2.5": {
+                    "enabled": true,
+                    "description": "Ensure --etcd-cafile argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--etcd-cafile",
+                    "required_value": "/etc/kubernetes/pki/etcd/ca.crt",
+                    "requires_health_check": true
+                },
+                "1.2.6": {
+                    "enabled": true,
+                    "description": "Ensure --encryption-provider-config argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--encryption-provider-config",
+                    "description_note": "Requires manual review of encryption policy configuration",
+                    "requires_health_check": true
+                },
+                "1.2.7": {
+                    "enabled": true,
+                    "description": "Ensure --bind-address argument is set to 127.0.0.1",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--bind-address",
+                    "required_value": "127.0.0.1",
+                    "_required_value_ref": "variables.api_server_flags.bind_address",
+                    "requires_health_check": true
+                },
+                "1.2.8": {
+                    "enabled": true,
+                    "description": "Ensure --authorization-mode argument includes NodeRestriction",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--authorization-mode",
+                    "expected_value": "NodeRestriction",
+                    "behavior": "append",
+                    "value_type": "csv",
+                    "requires_health_check": true
+                },
+                "1.2.9": {
+                    "enabled": true,
+                    "description": "Ensure --profiling argument is set to false",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--profiling",
+                    "required_value": "false",
+                    "requires_health_check": true
+                },
+                "1.2.10": {
+                    "enabled": true,
+                    "description": "Ensure --audit-log-path argument is set",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--audit-log-path",
+                    "required_value": "/var/log/kubernetes/audit/audit.log",
+                    "_required_value_ref": "variables.audit_configuration.audit_log_path",
+                    "requires_health_check": true
+                },
+                "1.2.11": {
+                    "enabled": true,
+                    "description": "Ensure admission control is configured properly (AlwaysPullImages)",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--enable-admission-plugins",
+                    "expected_value": "AlwaysPullImages",
+                    "behavior": "append",
+                    "value_type": "csv",
+                    "remediation_note": "Automatically appends AlwaysPullImages to the admission plugins list",
+                    "requires_health_check": true
+                },
+                "1.2.12": {
+                    "enabled": true,
+                    "description": "Ensure --audit-log-maxbackup argument is set to 10 or as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--audit-log-maxbackup",
+                    "expected_value": "10",
+                    "requires_health_check": true
+                },
+                "1.2.13": {
+                    "enabled": true,
+                    "description": "Ensure --audit-log-maxsize argument is set to 100 or as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--audit-log-maxsize",
+                    "expected_value": "100",
+                    "requires_health_check": true
+                },
+                "1.2.14": {
+                    "enabled": true,
+                    "description": "Ensure --enable-admission-plugins includes NodeRestriction",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--enable-admission-plugins",
+                    "expected_value": "NodeRestriction",
+                    "behavior": "append",
+                    "value_type": "csv",
+                    "requires_health_check": true
+                },
+                "1.2.15": {
+                    "enabled": true,
+                    "description": "Ensure --service-account-lookup argument is set to true",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--service-account-lookup",
+                    "expected_value": "true",
+                    "requires_health_check": true
+                },
+                "1.2.16": {
+                    "enabled": true,
+                    "description": "Ensure --service-account-key-file argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--service-account-key-file",
+                    "expected_value": "/etc/kubernetes/pki/sa.pub",
+                    "requires_health_check": true
+                },
+                "1.2.17": {
+                    "enabled": true,
+                    "description": "Ensure --audit-log-maxage argument is set to 30 or as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--audit-log-maxage",
+                    "expected_value": "30",
+                    "requires_health_check": true
+                },
+                "1.2.18": {
+                    "enabled": true,
+                    "description": "Ensure --audit-log-maxbackup argument is set to 10 or as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--audit-log-maxbackup",
+                    "expected_value": "10",
+                    "requires_health_check": true
+                },
+                "1.2.19": {
+                    "enabled": true,
+                    "description": "Ensure --audit-log-maxsize argument is set to 100 or as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--audit-log-maxsize",
+                    "expected_value": "100",
+                    "requires_health_check": true
+                },
+                "1.2.20": {
+                    "enabled": true,
+                    "description": "Ensure --request-timeout argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--request-timeout",
+                    "expected_value": "300s",
+                    "remediation_note": "Default 5-minute request timeout is reasonable, adjust based on environment",
+                    "requires_health_check": true
+                },
+                "1.2.21": {
+                    "enabled": true,
+                    "description": "Ensure --service-account-lookup argument is set to true",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag_name": "--service-account-lookup",
+                    "expected_value": "true",
+                    "requires_health_check": true
+                },
+                "1.2.22": {
+                    "enabled": true,
+                    "description": "Ensure only strong public/private key pairs are used for service accounts",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "description_note": "Manual verification: RSA 2048-bit minimum",
+                    "requires_health_check": false
+                },
+                "1.2.23": {
+                    "enabled": true,
+                    "description": "Ensure --audit-policy-file argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--audit-policy-file",
+                    "_required_value_ref": "variables.api_server_flags.audit_policy_file",
+                    "_comment": "Value injected at runtime from variables section",
+                    "requires_health_check": true
+                },
+                "1.2.24": {
+                    "enabled": true,
+                    "description": "Ensure --authorization-mode argument does not include AlwaysAllow",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--authorization-mode",
+                    "must_not_contain": "AlwaysAllow",
+                    "requires_health_check": true
+                },
+                "1.2.25": {
+                    "enabled": true,
+                    "description": "Ensure --authorization-mode argument does not include AlwaysDeny",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--authorization-mode",
+                    "must_not_contain": "AlwaysDeny",
+                    "requires_health_check": true
+                },
+                "1.2.26": {
+                    "enabled": true,
+                    "description": "Ensure --experimental-encryption-provider-config is replaced with --encryption-provider-config",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--encryption-provider-config",
+                    "must_not_contain": "--experimental-encryption-provider-config",
+                    "requires_health_check": true
+                },
+                "1.2.27": {
+                    "enabled": true,
+                    "description": "Ensure --encryption-provider-config-automatic-reload is set appropriately",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--encryption-provider-config-automatic-reload",
+                    "description_note": "Ensures encryption config is reloaded without restart",
+                    "requires_health_check": true
+                },
+                "1.2.28": {
+                    "enabled": true,
+                    "description": "Ensure --encryption-provider-config does not have identity as first provider",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "description_note": "Manual verification: Check encryption policy",
+                    "requires_health_check": false
+                },
+                "1.2.29": {
+                    "enabled": true,
+                    "description": "Ensure --etcd-prefix argument does not have hardcoded secrets or PII",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "description_note": "Manual verification: Audit etcd data",
+                    "requires_health_check": false
+                },
+                "1.2.30": {
+                    "enabled": true,
+                    "description": "Ensure --event-ttl argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-apiserver.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--event-ttl",
+                    "_required_value_ref": "variables.api_server_flags.event_ttl",
+                    "_comment": "Value injected at runtime from variables section",
+                    "description_note": "Default 1h is reasonable",
+                    "requires_health_check": true
+                },
+                "_section_1_3": "CONTROLLER MANAGER FLAGS - MASTER NODE (L1)",
+                "1.3.1": {
+                    "enabled": true,
+                    "description": "Ensure --terminated-pod-gc-threshold argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--terminated-pod-gc-threshold",
+                    "required_value": "12500",
+                    "_required_value_ref": "variables.controller_manager_flags.terminated_pod_gc_threshold",
+                    "requires_health_check": true
+                },
+                "1.3.2": {
+                    "enabled": true,
+                    "description": "Ensure --profiling argument is set to false",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--profiling",
+                    "required_value": "false",
+                    "_required_value_ref": "variables.controller_manager_flags.profiling",
+                    "requires_health_check": true
+                },
+                "1.3.3": {
+                    "enabled": true,
+                    "description": "Ensure --use-service-account-credentials argument is set to true",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--use-service-account-credentials",
+                    "required_value": "true",
+                    "_required_value_ref": "variables.controller_manager_flags.use_service_account_credentials",
+                    "requires_health_check": true
+                },
+                "1.3.4": {
+                    "enabled": true,
+                    "description": "Ensure --service-account-private-key-file argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--service-account-private-key-file",
+                    "required_value": "/etc/kubernetes/pki/sa.key",
+                    "_required_value_ref": "variables.controller_manager_flags.service_account_private_key_file",
+                    "requires_health_check": true
+                },
+                "1.3.5": {
+                    "enabled": true,
+                    "description": "Ensure --root-ca-file argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--root-ca-file",
+                    "required_value": "/etc/kubernetes/pki/ca.crt",
+                    "_required_value_ref": "variables.controller_manager_flags.root_ca_file",
+                    "requires_health_check": true
+                },
+                "1.3.6": {
+                    "enabled": true,
+                    "description": "Ensure --bind-address argument is set to 127.0.0.1",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--bind-address",
+                    "required_value": "127.0.0.1",
+                    "_required_value_ref": "variables.controller_manager_flags.bind_address",
+                    "requires_health_check": true
+                },
+                "1.3.7": {
+                    "enabled": true,
+                    "description": "Ensure --feature-gates argument does not contain insecure flags",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-controller-manager.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--feature-gates",
+                    "description_note": "Review for experimental/insecure feature gates",
+                    "requires_health_check": true
+                },
+                "_section_1_4": "SCHEDULER FLAGS - MASTER NODE (L1)",
+                "1.4.1": {
+                    "enabled": true,
+                    "description": "Ensure --profiling argument is set to false",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-scheduler.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--profiling",
+                    "required_value": "false",
+                    "_required_value_ref": "variables.scheduler_flags.profiling",
+                    "requires_health_check": true
+                },
+                "1.4.2": {
+                    "enabled": true,
+                    "description": "Ensure --bind-address argument is set to 127.0.0.1",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/kube-scheduler.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--bind-address",
+                    "required_value": "127.0.0.1",
+                    "_required_value_ref": "variables.scheduler_flags.bind_address",
+                    "requires_health_check": true
+                },
+                "_section_2": "ETCD FLAGS - MASTER NODE (L1)",
+                "2.1": {
+                    "enabled": true,
+                    "description": "Ensure --client-cert-auth argument is set to true",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/etcd.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--client-cert-auth",
+                    "required_value": "true",
+                    "_required_value_ref": "variables.etcd_flags.client_cert_auth",
+                    "requires_health_check": true
+                },
+                "2.2": {
+                    "enabled": true,
+                    "description": "Ensure --auto-tls argument is not set to true",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/etcd.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--auto-tls",
+                    "required_value": "false",
+                    "_required_value_ref": "variables.etcd_flags.auto_tls",
+                    "requires_health_check": true
+                },
+                "2.3": {
+                    "enabled": true,
+                    "description": "Ensure --peer-auto-tls argument is not set to true",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/etcd.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--peer-auto-tls",
+                    "required_value": "false",
+                    "_required_value_ref": "variables.etcd_flags.peer_auto_tls",
+                    "requires_health_check": true
+                },
+                "2.4": {
+                    "enabled": true,
+                    "description": "Ensure --cert-file and --key-file arguments are set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/etcd.yaml",
+                    "check_type": "multi_flag_check",
+                    "flags": {
+                        "--cert-file": "/etc/kubernetes/pki/etcd/server.crt",
+                        "--key-file": "/etc/kubernetes/pki/etcd/server.key"
+                    },
+                    "_cert_file_ref": "variables.etcd_flags.cert_file",
+                    "_key_file_ref": "variables.etcd_flags.key_file",
+                    "requires_health_check": true
+                },
+                "2.5": {
+                    "enabled": true,
+                    "description": "Ensure --peer-cert-file and --peer-key-file arguments are set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/etcd.yaml",
+                    "check_type": "multi_flag_check",
+                    "flags": {
+                        "--peer-cert-file": "/etc/kubernetes/pki/etcd/peer.crt",
+                        "--peer-key-file": "/etc/kubernetes/pki/etcd/peer.key"
+                    },
+                    "_peer_cert_file_ref": "variables.etcd_flags.peer_cert_file",
+                    "_peer_key_file_ref": "variables.etcd_flags.peer_key_file",
+                    "requires_health_check": true
+                },
+                "2.6": {
+                    "enabled": true,
+                    "description": "Ensure --peer-client-cert-auth argument is set to true",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/etcd.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--peer-client-cert-auth",
+                    "required_value": "true",
+                    "requires_health_check": true
+                },
+                "2.7": {
+                    "enabled": false,
+                    "description": "Ensure --etcd-cafile argument is set as appropriate",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "manifest": "/etc/kubernetes/manifests/etcd.yaml",
+                    "check_type": "flag_check",
+                    "flag": "--etcd-cafile",
+                    "required_value": "/etc/kubernetes/pki/etcd/ca.crt",
+                    "exclusion_reason": "RISK_ACCEPTED",
+                    "requires_health_check": true
+                },
+                "_section_3": "LOGGING AND AUDITING - MASTER NODE (L1)",
+                "5.3.2": {
+                    "enabled": false,
+                    "description": "Ensure NetworkPolicies are defined (Allow-All for Safety First Strategy)",
+                    "level": "L1",
+                    "target": "Master Node",
+                    "policy_type": "allow-all",
+                    "reason": "Safety First Strategy - Allow-all NetworkPolicies prevent breaking existing cluster traffic",
+                    "remediation_note": "Enable only after implementing proper network segmentation policy and thorough testing",
+                    "requires_health_check": true
+                }
+            },
+            "L2": {
+                "4.2.13": {
+                    "enabled": true,
+                    "description": "Ensure pod PIDs limit is set appropriately",
+                    "level": "L2",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "pod_pids_limit": -1,
+                    "_pod_pids_limit_default": "-1 (unlimited) (CIS L4.2.13)",
+                    "requires_health_check": true
+                },
+                "4.2.14": {
+                    "enabled": true,
+                    "description": "Ensure seccomp default is set appropriately",
+                    "level": "L2",
+                    "target": "Worker Node",
+                    "config_file": "/var/lib/kubelet/config.yaml",
+                    "seccomp_default": true,
+                    "_seccomp_default_default": "true (CIS L4.2.14)",
+                    "requires_health_check": true
+                },
+                "5.6.1": {
+                    "enabled": true,
+                    "description": "Create restricted namespace for admin workloads",
+                    "level": "L2",
+                    "target": "Master Node",
+                    "admin_namespace": "secure-zone",
+                    "create_secure_zone": true,
+                    "secure_zone_config": {
+                        "name": "secure-zone",
+                        "enforce": "restricted"
+                    },
+                    "requires_health_check": true
+                }
             }
         },
         "environment_overrides": {
