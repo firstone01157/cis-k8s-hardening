@@ -10,15 +10,24 @@ audit_rule() {
 	unset a_output
 	unset a_output2
 
-	echo "[CMD] Executing: if ps -ef | grep kube-apiserver | grep -v grep | grep -E \"\\s--enable-admission-plugins=.*(,|\\s)AlwaysPullImages(,|\\s|$)\"; then"
-	if ps -ef | grep kube-apiserver | grep -v grep | grep -E "\s--enable-admission-plugins=.*(,|\s)AlwaysPullImages(,|\s|$)"; then
-		echo "[INFO] Check Passed"
-		a_output+=(" - Check Passed: AlwaysPullImages is enabled")
+	kube_apiserver_cmd=$(ps -ef | grep kube-apiserver | grep -v grep || true)
+	if [ -z "${kube_apiserver_cmd}" ]; then
+		echo "[INFO] kube-apiserver process not detected"
+		a_output2+=(" - Check Failed: kube-apiserver process could not be read")
+		echo "[FAIL_REASON] Unable to inspect kube-apiserver command line"
+		echo "[FIX_HINT] Ensure kube-apiserver is running before re-running this audit"
 	else
-		echo "[INFO] Check Failed"
-		a_output2+=(" - Check Failed: AlwaysPullImages is NOT enabled")
-		echo "[FAIL_REASON] Check Failed: AlwaysPullImages is NOT enabled"
-		echo "[FIX_HINT] Run remediation script: 1.2.11_remediate.sh"
+		pattern='[[:space:]]--enable-admission-plugins=[^[:space:]]*(,|[[:space:]])AlwaysPullImages(,|[[:space:]]|$)'
+		echo "[CMD] Executing: grep -E '${pattern}'"
+		if printf '%s' "${kube_apiserver_cmd}" | grep -E -q "${pattern}"; then
+			echo "[INFO] Check Passed"
+			a_output+=(" - Check Passed: AlwaysPullImages is enabled")
+		else
+			echo "[INFO] Check Failed"
+			a_output2+=(" - Check Failed: --enable-admission-plugins does not include AlwaysPullImages")
+			echo "[FAIL_REASON] Check Failed: AlwaysPullImages is NOT enabled"
+			echo "[FIX_HINT] Run remediation script: 1.2.11_remediate.sh"
+		fi
 	fi
 
 	if [ "${#a_output2[@]}" -le 0 ]; then

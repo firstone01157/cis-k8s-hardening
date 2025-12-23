@@ -24,6 +24,7 @@ import logging
 import requests
 import difflib
 import re
+import shlex
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -32,7 +33,12 @@ import glob
 import socket
 import urllib3
 import modules.golden_configs as golden_configs
-from modules.cis_level2_remediation import Level2Remediation
+from modules.cis_level2_remediation import Level2Remediator
+from modules.verification_utils import (
+    get_component_pids as fetch_component_pids,
+    verify_with_retry,
+    wait_for_api_ready,
+)
 
 yaml = None
 try:
@@ -1348,6 +1354,50 @@ class CISUnifiedRunner:
         labels = data.get("metadata", {}).get("labels", {}) or {}
         return labels.get("pod-security.kubernetes.io/enforce") == "privileged"
 
+    def is_namespace_exempt(self, namespace: str) -> bool:
+        if not namespace:
+            return False
+        cmd = self.get_kubectl_cmd() + [
+            "get",
+            "namespace",
+            namespace,
+            "-o",
+            "jsonpath={.metadata.labels.cis-compliance/exempt}",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            return False
+        if result.returncode != 0:
+            return False
+        return result.stdout.strip().lower() == "true"
+
+    def label_namespace_as_exempt(self, namespace: str) -> bool:
+        if not namespace:
+            return False
+        if not wait_for_api_ready(
+            log_callback=lambda msg: print(f"{Colors.YELLOW}[WARN] {msg}{Colors.ENDC}")
+        ):
+            return False
+        cmd = self.get_kubectl_cmd() + [
+            "label",
+            "namespace",
+            namespace,
+            "cis-compliance/exempt=true",
+            "--overwrite",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            print(f"{Colors.YELLOW}[WARN] kubectl missing — cannot label {namespace}.{Colors.ENDC}")
+            return False
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            print(f"{Colors.YELLOW}[WARN] Failed to label namespace {namespace}: {stderr}{Colors.ENDC}")
+            return False
+        print(f"{Colors.GREEN}[✓] Marked {namespace} as cis-compliance/exempt=true{Colors.ENDC}")
+        return True
+
     def fix_item_internal(self, script, remediation_cfg):
         """
         Main remediation router for internal Python-based fixes.
@@ -1632,11 +1682,8 @@ class CISUnifiedRunner:
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     def _get_component_pids(self, component):
-        try:
-            result = subprocess.run(["pgrep", "-f", component], capture_output=True, text=True, check=False)
-        except Exception:
-            return set()
-        return {pid for pid in result.stdout.split() if pid.isdigit()}
+        """Wrapper around the shared PID tracker for compatibility."""
+        return fetch_component_pids(component)
 
     def _get_crictl_component_name(self, component):
         aliases = {
@@ -1689,41 +1736,31 @@ class CISUnifiedRunner:
         comp_name = self._get_crictl_component_name(component)
         timeout = 60
         max_retries = 10
-        attempt = 0
-        start_time = time.time()
 
-        # Avoid hanging forever by capping retries/time in the verification loop
-        # หลีกเลี่ยงการค้างไม่รู้จบด้วยการจำกัดจำนวนครั้งและเวลาที่ใช้ตรวจสอบ
-        while attempt < max_retries and time.time() - start_time < timeout:
-            attempt += 1
-            running_ready = True
-            if comp_name:
-                running_ready = bool(self._list_crictl_ids(comp_name, state="Running"))
-            if running_ready:
-                try:
-                    audit_res = subprocess.run(["bash", audit_script_path], capture_output=True, text=True, timeout=self.script_timeout, env=env)
-                except subprocess.TimeoutExpired:
-                    reason = "Audit timed out"
-                    print(f"{Colors.YELLOW}[WARN] {audit_script_path} timed out, retrying...{Colors.ENDC}")
-                    time.sleep(2)
-                    continue
+        def log_attempt(message: str) -> None:
+            print(f"{Colors.YELLOW}[WARN] {message}{Colors.ENDC}")
 
-                status, reason, _, _ = self._parse_script_output(audit_res, script['id'], "audit", False)
-                if status in ["PASS", "FIXED"]:
-                    print(f"{Colors.GREEN}[✓] Verified PASS for {script['id']}.{Colors.ENDC}")
-                    return status, reason
-                print(f"{Colors.YELLOW}[WARN] {script['id']} still not compliant ({status}). Retrying...{Colors.ENDC}")
-            time.sleep(2)
+        def audit_callable() -> Tuple[str, str]:
+            audit_res = subprocess.run([
+                "bash",
+                audit_script_path,
+            ], capture_output=True, text=True, timeout=self.script_timeout, env=env)
+            status, reason, _, _ = self._parse_script_output(audit_res, script['id'], "audit", False)
+            return status, reason
 
-        # Emit a critical-style warning if we never hit PASS but exhausted the capped retries
-        # ส่งสัญญาณเตือนทันทีหากยังไม่ผ่านแต่พยายามครบตามที่กำหนดไว้แล้ว
-        if attempt >= max_retries:
-            warning = f"[!] Verification failed for {script['id']} after maximum retries. Possible template mismatch."
-            print(f"{Colors.RED}{warning}{Colors.ENDC}")
-            return "FAIL", warning
+        status, reason = verify_with_retry(
+            audit_callable,
+            script['id'],
+            component_name=comp_name,
+            timeout=timeout,
+            max_retries=max_retries,
+            log_callback=log_attempt,
+        )
 
-        print(f"{Colors.RED}[!] Remediation Failed (Timeout) for {script['id']}.{Colors.ENDC}")
-        return "FAIL", "Remediation failed (timeout)"
+        if status in ["PASS", "FIXED"]:
+            print(f"{Colors.GREEN}[✓] Verified PASS for {script['id']}.{Colors.ENDC}")
+
+        return status, reason
 
     def run_script(self, script, mode):
         """
@@ -3106,12 +3143,23 @@ class CISUnifiedRunner:
             return
 
         try:
-            helper = Level2Remediation(self.config_data)
-            helper.apply_permissive_baseline()
-            helper.log_capability_strategy()
-            helper.enforce_seccomp_profiles()
-            helper.log_default_namespace_marker()
-            self.log_activity("LEVEL2_PREFERENCES", "Applied Level 2 safe defaults")
+            helper = Level2Remediator(
+                self.config_data,
+                kubectl_cmd=shlex.join(self.get_kubectl_cmd()),
+                namespace_exempt_checker=self.is_namespace_exempt,
+                namespace_label_applier=self.label_namespace_as_exempt,
+            )
+            summary = helper.run_all()
+            enforced_tasks = [res["task_id"] for res in summary["enforced"]]
+            skipped_messages = [f"{res['task_id']}: {res['detail']}" for res in summary["skipped"]]
+            if enforced_tasks:
+                print(f"{Colors.GREEN}[✓] Level 2 tasks enforced: {', '.join(enforced_tasks)}{Colors.ENDC}")
+            if skipped_messages:
+                print(f"{Colors.YELLOW}[WARN] Level 2 tasks skipped: {', '.join(skipped_messages)}{Colors.ENDC}")
+            self.log_activity(
+                "LEVEL2_PREFERENCES",
+                f"Enforced: {enforced_tasks}; Skipped: {skipped_messages}",
+            )
         except Exception as exc:
             warning = f"Level 2 preferences application failed: {exc}"
             print(f"{Colors.YELLOW}[WARN] {warning}{Colors.ENDC}")

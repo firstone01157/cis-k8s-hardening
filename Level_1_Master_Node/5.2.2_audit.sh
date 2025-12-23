@@ -25,16 +25,9 @@ audit_rule() {
         return 2
     fi
 
-    # --- [MODIFIED HERE] ---
-    # Get all target namespaces (Excluded: kube-system, kube-public, kube-node-lease AND kube-flannel)
-    # เพิ่มเงื่อนไข .metadata.name != "kube-flannel" ลงไปใน jq filter เลย
-    target_ns=$(echo "$ns_json" | jq -r '.items[] | select(
-        .metadata.name != "kube-system" and 
-        .metadata.name != "kube-public" and 
-        .metadata.name != "kube-node-lease" and 
-        .metadata.name != "kube-flannel"
-    ) | .metadata.name')
-    # -----------------------
+    # --- Label enforcement logic ---
+    target_ns=$(printf '%s' "$ns_json" | jq -r '.items[] | select(.metadata.labels["cis-compliance/exempt"] != "true") | .metadata.name')
+    # --------------------------------
 
     failed_ns=()
     compliant_ns=()

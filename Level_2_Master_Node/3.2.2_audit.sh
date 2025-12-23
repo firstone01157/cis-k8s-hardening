@@ -1,4 +1,5 @@
 #!/bin/bash
+# pyright: strict
 set -xe
 
 # CIS Benchmark: 3.2.2
