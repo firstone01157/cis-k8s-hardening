@@ -63,6 +63,10 @@ def load_manifest() -> dict:
 
 
 def write_manifest(data: dict) -> None:
+    if yaml is None:
+        print("[ERROR] PyYAML is required for rendering the manifest.")
+        sys.exit(1)
+
     with MANIFEST_PATH.open("w", encoding="utf-8") as fh:
         yaml.safe_dump(
             data,

@@ -32,6 +32,21 @@ ENV/
 results/
 logs/
 
+# Secrets, credentials, and personal data
+*.env
+*.env.*
+*.secret
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*.asc
+*.gpg
+secrets/
+credentials/
+backups/
+
 # Node/npm (if used in future)
 node_modules/
 package-lock.json

@@ -27,22 +27,27 @@ import re
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Union
 import glob
 import socket
 import urllib3
 import modules.golden_configs as golden_configs
 from modules.cis_level2_remediation import Level2Remediation
 
+yaml = None
 try:
     import yaml
 except ImportError:
     # Fallback will be handled in classes
-    pass
+    yaml = None
 
+openpyxl = None
+Font = PatternFill = Alignment = None
+get_column_letter = None
 try:
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
@@ -73,6 +78,21 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+
+def _excel_column_letter(col_idx: int) -> str:
+    """Return column letter even if openpyxl helper is unavailable."""
+    if callable(get_column_letter):
+        return get_column_letter(col_idx)
+
+    if col_idx <= 0:
+        return "A"
+
+    result = ""
+    while col_idx > 0:
+        col_idx, remainder = divmod(col_idx - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
 
 
 def save_yaml_robust(path: str, data: str, expected_flags: Optional[List[str]] = None) -> None:
@@ -133,9 +153,12 @@ class YAMLSafeModifier:
         try:
             with open(self.file_path, 'r') as f:
                 self.original_content = f.read()
-                self.data = yaml.safe_load(self.original_content)
-                if self.data is None:
+                if yaml is None:
                     self.data = {}
+                else:
+                    self.data = yaml.safe_load(self.original_content)
+                    if self.data is None:
+                        self.data = {}
         except Exception:
             # Fallback to empty dict if parsing fails / ใช้ dict ว่างหากการแยกวิเคราะห์ล้มเหลว
             self.data = {}
@@ -151,6 +174,9 @@ class YAMLSafeModifier:
         if 'flags' in modifications:
             self._update_command_flags(modifications['flags'], mod_type)
             
+        if yaml is None:
+            return self.original_content or ""
+            
         return yaml.dump(
             self.data,
             default_flow_style=False,
@@ -165,6 +191,8 @@ class YAMLSafeModifier:
         อัปเดต flag คำสั่งในส่วนของ container spec
         """
         try:
+            if not isinstance(self.data, dict):
+                return
             spec = self.data.get('spec', {})
             containers = spec.get('containers', [])
             if containers:
@@ -251,7 +279,7 @@ class AtomicRemediationManager:
             self.ssl_verify = False
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
-    def create_backup(self, filepath: str) -> Tuple[bool, str]:
+    def create_backup(self, filepath: Union[str, Path]) -> Tuple[bool, str]:
         """
         Create a backup of the specified file / สร้างการสำรองข้อมูลของไฟล์ที่ระบุ
         """
@@ -266,7 +294,7 @@ class AtomicRemediationManager:
         except Exception:
             return False, ""
     
-    def update_manifest_safely(self, filepath: str, modifications: Dict[str, Any], mod_type: str = "string") -> Tuple[bool, str]:
+    def update_manifest_safely(self, filepath: Union[str, Path], modifications: Dict[str, Any], mod_type: str = "string") -> Tuple[bool, str]:
         """
         Update a manifest file atomically with backup / อัปเดตไฟล์ manifest แบบ atomic พร้อมการสำรองข้อมูล
         """
@@ -775,11 +803,6 @@ class CISUnifiedRunner:
             return True
         except Exception as e:
             print(f"{Colors.RED}[!] Error ensuring audit log directory: {str(e)}{Colors.ENDC}")
-            return False
-            
-            return True
-        except Exception as e:
-            print(f"{Colors.RED}[!] Failed to ensure audit log directory: {str(e)}{Colors.ENDC}")
             return False
 
     def check_dependencies(self):
@@ -1665,9 +1688,14 @@ class CISUnifiedRunner:
         env = self._prepare_remediation_env(script['id'], cfg)
         comp_name = self._get_crictl_component_name(component)
         timeout = 60
+        max_retries = 10
+        attempt = 0
         start_time = time.time()
 
-        while time.time() - start_time < timeout:
+        # Avoid hanging forever by capping retries/time in the verification loop
+        # หลีกเลี่ยงการค้างไม่รู้จบด้วยการจำกัดจำนวนครั้งและเวลาที่ใช้ตรวจสอบ
+        while attempt < max_retries and time.time() - start_time < timeout:
+            attempt += 1
             running_ready = True
             if comp_name:
                 running_ready = bool(self._list_crictl_ids(comp_name, state="Running"))
@@ -1686,6 +1714,13 @@ class CISUnifiedRunner:
                     return status, reason
                 print(f"{Colors.YELLOW}[WARN] {script['id']} still not compliant ({status}). Retrying...{Colors.ENDC}")
             time.sleep(2)
+
+        # Emit a critical-style warning if we never hit PASS but exhausted the capped retries
+        # ส่งสัญญาณเตือนทันทีหากยังไม่ผ่านแต่พยายามครบตามที่กำหนดไว้แล้ว
+        if attempt >= max_retries:
+            warning = f"[!] Verification failed for {script['id']} after maximum retries. Possible template mismatch."
+            print(f"{Colors.RED}{warning}{Colors.ENDC}")
+            return "FAIL", warning
 
         print(f"{Colors.RED}[!] Remediation Failed (Timeout) for {script['id']}.{Colors.ENDC}")
         return "FAIL", "Remediation failed (timeout)"
@@ -2149,8 +2184,9 @@ class CISUnifiedRunner:
                     current_indent = len(line) - len(line.lstrip()) if line.strip() else 0
                     
                     # Exit command section if we dedent back to original level / ออกจากส่วนคำสั่งหากระยะย่อหน้ากลับมาเท่าเดิม
-                    if line.strip() and current_indent <= command_indent:
+                    if line.strip() and command_indent is not None and current_indent <= command_indent:
                         in_command_section = False
+                        command_indent = None
                     
                     # Look for key in this line / ค้นหาคีย์ในบรรทัดนี้
                     if key in line:
@@ -3253,7 +3289,10 @@ class CISUnifiedRunner:
         # 1. Load the target YAML file to extract dynamic values
         try:
             with open(manifest_path, 'r') as f:
-                data = yaml.safe_load(f)
+                if yaml:
+                    data = yaml.safe_load(f)
+                else:
+                    data = {}
             if not data:
                 data = {}
         except Exception as e:
@@ -3447,6 +3486,8 @@ rules:
 
             # Write the dictionary back to disk with atomic persistence
             try:
+                if not yaml:
+                    raise RuntimeError("yaml module is required to serialize manifests during batch remediation")
                 content = yaml.dump(data, default_flow_style=False, width=1000, indent=2, sort_keys=False)
                 self.atomic_manager.create_backup(manifest_path)
                 save_yaml_robust(manifest_path, content, expected_flags=expected_flags)
@@ -3995,6 +4036,11 @@ rules:
             self._save_csv_report()
             return
 
+        if openpyxl is None:
+            print(f"{Colors.RED}[!] openpyxl failed to import. Falling back to CSV.{Colors.ENDC}")
+            self._save_csv_report()
+            return
+
         if not self.results:
             print(f"{Colors.YELLOW}[!] No results to export. Run a scan first.{Colors.ENDC}")
             return
@@ -4006,8 +4052,18 @@ rules:
                 filename = f"cis_report_{self.timestamp}.xlsx"
 
         try:
+            from openpyxl.styles import Font as ExcelFont, PatternFill as ExcelPatternFill, Alignment as ExcelAlignment
+        except ImportError as exc:
+            print(f"{Colors.RED}[!] Unable to import openpyxl styling helpers ({exc}). Falling back to CSV.{Colors.ENDC}")
+            self._save_csv_report()
+            return
+
+        try:
+            assert openpyxl is not None, "openpyxl module unexpectedly missing"
             wb = openpyxl.Workbook()
             ws = wb.active
+            if ws is None:
+                ws = wb.create_sheet("CIS Benchmark Report")
             ws.title = "CIS Benchmark Report"
 
             # Define columns
@@ -4016,9 +4072,9 @@ rules:
 
             # Formatting: Bold Header
             for cell in ws[1]:
-                cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal="center")
-                cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+                cell.font = ExcelFont(bold=True)
+                cell.alignment = ExcelAlignment(horizontal="center")
+                cell.fill = ExcelPatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
 
             # Add data
             for res in self.results:
@@ -4038,24 +4094,24 @@ rules:
                 status_cell = ws.cell(row=ws.max_row, column=4)
                 
                 if status in ["PASS", "FIXED"]:
-                    status_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") # Light Green
+                    status_cell.fill = ExcelPatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") # Light Green
                 elif status == "FAIL":
-                    status_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid") # Light Red
+                    status_cell.fill = ExcelPatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid") # Light Red
                 elif status == "MANUAL":
-                    status_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid") # Light Orange
+                    status_cell.fill = ExcelPatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid") # Light Orange
 
             # Auto-adjust column width
-            for column in ws.columns:
+            for col_idx, column_cells in enumerate(ws.columns, start=1):
                 max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
+                column_letter = _excel_column_letter(col_idx)
+                for cell in column_cells:
                     try:
                         if len(str(cell.value)) > max_length:
                             max_length = len(str(cell.value))
                     except:
                         pass
-                adjusted_width = (max_length + 2)
-                ws.column_dimensions[column_letter].width = min(adjusted_width, 50)
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
 
             wb.save(filename)
             print(f"{Colors.GREEN}[+] Excel report exported successfully: {filename}{Colors.ENDC}")

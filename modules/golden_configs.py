@@ -22,7 +22,7 @@ spec:
     - --allow-privileged=true
     - --authorization-mode=Node,RBAC
     - --client-ca-file=/etc/kubernetes/pki/ca.crt
-    - --enable-admission-plugins=NodeRestriction,NamespaceLifecycle,ServiceAccount,DefaultStorageClass,ResourceQuota
+    - --enable-admission-plugins=NodeRestriction,AlwaysPullImages,NamespaceLifecycle,ServiceAccount,DefaultStorageClass,ResourceQuota
     - --enable-bootstrap-token-auth=true
     - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
     - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
