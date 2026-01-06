@@ -35,7 +35,7 @@ class VerificationLoopTest(unittest.TestCase):
 
 class ExemptionTest(unittest.TestCase):
     def test_exempt_rule_is_skipped(self):
-        runner = CISUnifiedRunner.__new__(CISUnifiedRunner)
+        runner = object.__new__(CISUnifiedRunner)
         runner.stop_requested = False
         runner.excluded_rules = {"1.1.1": "EXEMPT"}
         runner.component_mapping = {}

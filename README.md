@@ -163,9 +163,13 @@ All reports include color-coded visualization:
 | **Bash** | 5.0+ | Script execution |
 | **kubectl** | 1.20+ | Kubernetes API access |
 | **jq** | 1.6+ | JSON parsing |
-| **curl** | 7.0+ | API calls |
+| **grep/sed/awk** | (any) | Script compatibility (used by checks) |
 | **Linux OS** | CentOS 7+ / Ubuntu 18.04+ | Base environment |
 | **Kubernetes** | 1.20+ | Target cluster |
+
+**Optional Python packages:**
+- `pyyaml` (improves YAML handling when available)
+- `openpyxl` (required only if you use `--excel` export)
 
 ### Quick Setup
 
@@ -219,6 +223,27 @@ Choose [0-5]: █
 ---
 
 ## Usage
+
+### Non-Interactive CLI Mode (Optional)
+
+You can run the tool without the interactive menu:
+
+```bash
+# Audit only
+sudo python3 cis_k8s_unified.py --mode audit --level all
+
+# Remediate only (optionally only failed items)
+sudo python3 cis_k8s_unified.py --mode remediate --level 1 --failed-only
+
+# Full workflow
+sudo python3 cis_k8s_unified.py --mode both --level all
+
+# Explicit config path
+sudo python3 cis_k8s_unified.py --config ./cis_config.json --mode audit
+
+# Export to Excel (requires openpyxl)
+sudo python3 cis_k8s_unified.py --mode audit --excel
+```
 
 ### Mode 1: Audit Only (Safe - No Changes)
 
@@ -381,13 +406,16 @@ END
 ```bash
 # Before remediation:
 /etc/kubernetes/manifests/kube-apiserver.yaml
-→ /backups/2025-12-08T10-30-00/kube-apiserver.yaml.backup
+→ backups/backup_YYYYMMDD_HHMMSS/... (default runner backup folder)
 ```
+
+Note: Some remediation scripts may also write to `BACKUP_DIR` (default: `/var/backups/cis-remediation`) depending on `cis_config.json` (`remediation_config.global.backup_dir`).
 
 **Manual Recovery:**
 ```bash
 # If something goes wrong:
-sudo cp /backups/2025-12-08T10-30-00/*.backup /etc/kubernetes/manifests/
+sudo ls -lah backups/ | tail -50
+sudo cp backups/backup_*/kube-apiserver.yaml* /etc/kubernetes/manifests/ 2>/dev/null || true
 sudo systemctl restart kubelet
 ```
 
@@ -419,8 +447,10 @@ sudo systemctl stop kubelet
 sudo /usr/bin/kubelet --config /var/lib/kubelet/config.yaml --dry-run 2>&1 | head -20
 
 # Step 4: If invalid config, restore from backup
-sudo ls -lh /backups/*/kubelet/config.yaml.backup | head -1
-sudo cp /backups/[LATEST]/kubelet/config.yaml.backup /var/lib/kubelet/config.yaml
+sudo ls -lh backups/**/kubelet* 2>/dev/null | head -20
+
+# If your environment uses BACKUP_DIR (see cis_config.json), check there too:
+sudo ls -lh /var/backups/cis-remediation/ 2>/dev/null | head -20
 
 # Step 5: Restart service
 sudo systemctl start kubelet
@@ -528,6 +558,7 @@ Score = 42 / (42 + 12 + 8) = 67.7% (Needs Improvement)
 ```
 cis-k8s-hardening/
 ├── cis_k8s_unified.py                 # Main orchestrator
+├── cis_config.json                    # Main configuration (default)
 ├── Level_1_Master_Node/               # L1 checks for Master nodes
 │   ├── 1.1.1_audit.sh & _remediate.sh
 │   ├── 1.1.2_audit.sh & _remediate.sh
@@ -536,7 +567,6 @@ cis-k8s-hardening/
 ├── Level_2_Master_Node/               # L2 checks for Master nodes
 ├── Level_2_Worker_Node/               # L2 checks for Worker nodes
 ├── config/
-│   ├── cis_config.json                # Configuration file
 │   └── cis_config_example.json        # Example config
 ├── reports/                           # Generated reports
 │   └── [date]/[run_id]/
@@ -613,9 +643,9 @@ The tool audits **102+ checks** across two levels:
 ## Documentation
 
 For additional information:
-- **Configuration:** See `config/cis_config_example.json`
-- **Detailed Workflows:** See `STATS_SUMMARY_ENHANCEMENT.md`
-- **Technical Reference:** See `STATS_SUMMARY_COMPLETE_REFERENCE.md`
+- **Configuration:** See `cis_config.json` and `config/cis_config_example.json`
+- **Detailed Workflows:** See `docs/2025-12-04/STATS_SUMMARY_ENHANCEMENT.md`
+- **Technical Reference:** See `docs/2025-12-04/STATS_SUMMARY_COMPLETE_REFERENCE.md`
 - **CIS Benchmark:** [Official CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes)
 - **Kubernetes Security:** [Official K8s Security Guide](https://kubernetes.io/docs/concepts/security/)
 
@@ -649,6 +679,6 @@ For issues or questions:
 
 ---
 
-**Last Updated:** December 8, 2025  
+**Last Updated:** January 6, 2026  
 **Version:** 2.0 (Production Ready)  
 **Maintainer:** Security Engineering Team

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """
 CIS Kubernetes Benchmark - Unified Interactive Runner (Enhanced & Optimized)
 คู่มือระบบตรวจสอบ CIS Kubernetes - ตัวรันโปรแกรมแบบรวมและโต้ตอบ (เพิ่มประสิทธิภาพ)
@@ -20,7 +21,6 @@ import csv
 import time
 import argparse
 import tempfile
-import logging
 import requests
 import difflib
 import re
@@ -28,7 +28,8 @@ import shlex
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any, Union
+from types import ModuleType
+from typing import List, Optional, Tuple, Dict, Any, Union, cast, Set, TypedDict
 import glob
 import socket
 import urllib3
@@ -40,23 +41,25 @@ from modules.verification_utils import (
     wait_for_api_ready,
 )
 
-yaml = None
+yaml: Optional[ModuleType] = None
 try:
-    import yaml
+    import yaml as yaml_module
+    yaml = yaml_module
 except ImportError:
     # Fallback will be handled in classes
     yaml = None
 
-openpyxl = None
+openpyxl: Optional[ModuleType] = None
 Font = PatternFill = Alignment = None
 get_column_letter = None
+openpyxl_available = False
 try:
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
+    import openpyxl as openpyxl_module
     from openpyxl.utils import get_column_letter
-    OPENPYXL_AVAILABLE = True
+    openpyxl = openpyxl_module
+    openpyxl_available = True
 except ImportError:
-    OPENPYXL_AVAILABLE = False
+    openpyxl_available = False
 
 # --- Constants / ค่าคงที่ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -72,6 +75,7 @@ SCRIPT_TIMEOUT = 60  # seconds / วินาที
 REQUIRED_TOOLS = ["kubectl", "jq", "grep", "sed", "awk"]  # Required dependencies / การพึ่งพาที่จำเป็น
 
 
+
 class Colors:
     """Terminal color codes / รหัสสีของเทอร์มินัล"""
     HEADER = '\033[95m'
@@ -85,6 +89,21 @@ class Colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
+class CISResult(TypedDict):
+    id: str
+    role: str
+    level: str
+    status: str
+    duration: float
+    reason: str
+    fix_hint: str
+    cmds: List[str]
+    output: str
+    path: str
+    component: str
+
+ResultTuple = Tuple[str, str, Optional[str], List[str]]
 
 def _excel_column_letter(col_idx: int) -> str:
     """Return column letter even if openpyxl helper is unavailable."""
@@ -104,7 +123,7 @@ def _excel_column_letter(col_idx: int) -> str:
 def save_yaml_robust(path: str, data: str, expected_flags: Optional[List[str]] = None) -> None:
     """Write YAML atomically, flush to disk, and validate critical flags."""
     tmp_path = f"{path}.tmp"
-    content = data if isinstance(data, str) else str(data)
+    content = str(data)
     expected = [flag for flag in (expected_flags or []) if flag]
 
     try:
@@ -148,8 +167,8 @@ class YAMLSafeModifier:
         """
         self.file_path = Path(file_path)
         self.dry_run = dry_run
-        self.data = None
-        self.original_content = None
+        self.data: Dict[str, Any] = {}
+        self.original_content: Optional[str] = None
         self._load_yaml()
     
     def _load_yaml(self) -> None:
@@ -159,12 +178,16 @@ class YAMLSafeModifier:
         try:
             with open(self.file_path, 'r') as f:
                 self.original_content = f.read()
-                if yaml is None:
-                    self.data = {}
-                else:
-                    self.data = yaml.safe_load(self.original_content)
-                    if self.data is None:
-                        self.data = {}
+
+            if yaml is None:
+                self.data = {}
+                return
+
+            loaded_raw = yaml.safe_load(self.original_content)
+            if isinstance(loaded_raw, dict):
+                self.data = cast(Dict[str, Any], loaded_raw)
+            else:
+                self.data = {}
         except Exception:
             # Fallback to empty dict if parsing fails / ใช้ dict ว่างหากการแยกวิเคราะห์ล้มเหลว
             self.data = {}
@@ -179,10 +202,9 @@ class YAMLSafeModifier:
             
         if 'flags' in modifications:
             self._update_command_flags(modifications['flags'], mod_type)
-            
         if yaml is None:
             return self.original_content or ""
-            
+
         return yaml.dump(
             self.data,
             default_flow_style=False,
@@ -191,15 +213,17 @@ class YAMLSafeModifier:
             width=float("inf")
         )
 
-    def _update_command_flags(self, flags: list, mod_type: str = "string") -> None:
+    def _update_command_flags(self, flags: List[str], mod_type: str = "string") -> None:
         """
         Update command-line flags in the container spec.
         อัปเดต flag คำสั่งในส่วนของ container spec
         """
         try:
-            if not isinstance(self.data, dict):
+            data = self.data
+            spec_raw = data.get('spec', {})
+            if not isinstance(spec_raw, dict):
                 return
-            spec = self.data.get('spec', {})
+            spec = cast(Dict[str, Any], spec_raw)
             containers = spec.get('containers', [])
             if containers:
                 command = containers[0].get('command', [])
@@ -213,7 +237,7 @@ class YAMLSafeModifier:
         except Exception:
             pass
 
-    def _update_flag_in_list(self, command_list: list, flag: str, value: Optional[str], mod_type: str = "string") -> None:
+    def _update_flag_in_list(self, command_list: List[str], flag: str, value: Optional[str], mod_type: str = "string") -> None:
         """
         Update or append a flag in a list of command arguments.
         อัปเดตหรือเพิ่ม flag ในรายการอาร์กิวเมนต์คำสั่ง
@@ -228,7 +252,7 @@ class YAMLSafeModifier:
         
         flag_index = -1
         for i, item in enumerate(command_list):
-            if isinstance(item, str) and (item.startswith(flag + '=') or item == flag):
+            if item.startswith(flag + '=') or item == flag:
                 flag_index = i
                 break
         
@@ -406,11 +430,11 @@ class CISUnifiedRunner:
     ตัวรันหลักของ CIS Kubernetes Benchmark
     """
     
-    def __init__(self, verbose=0, config_path=None):
+    def __init__(self, verbose: int = 0, config_path: Optional[str] = None):
         """Initialize runner with configuration / เริ่มต้นตัวรันพร้อมการตั้งค่า"""
         self.base_dir = BASE_DIR
         self.config_file = config_path if config_path else CONFIG_FILE
-        self.config_data = {}
+        self.config_data: Dict[str, Any] = {}
         self.log_file = LOG_FILE
         self.report_dir = REPORT_DIR
         self.backup_dir = BACKUP_DIR
@@ -422,12 +446,12 @@ class CISUnifiedRunner:
         self.script_timeout = SCRIPT_TIMEOUT
         
         # Results tracking / การติดตามผลลัพธ์
-        self.results = []
-        self.audit_results = {}  # Track audit results by check ID for targeted remediation
-        self.stats = {}
+        self.results: List[CISResult] = []
+        self.audit_results: Dict[str, Dict[str, Any]] = {}  # Track audit results by check ID for targeted remediation
+        self.stats: Dict[str, Dict[str, int]] = {}
         self.stop_requested = False
         self.health_status = "UNKNOWN"
-        self.manual_pending_items = []  # Separate list for manual checks (NOT failures)
+        self.manual_pending_items: List[Dict[str, Any]] = []  # Separate list for manual checks (NOT failures)
         self.current_level = "all"
         self.level_check_totals = {"L1": 0, "L2": 0}
         self.total_level_one_two_checks = 0
@@ -478,13 +502,13 @@ class CISUnifiedRunner:
         Load configuration from JSON file.
         โหลดการตั้งค่าจากไฟล์ JSON
         """
-        self.excluded_rules = {}
-        self.component_mapping = {}
-        self.remediation_config = {}
-        self.remediation_global_config = {}
-        self.remediation_checks_config = {}
-        self.remediation_env_vars = {}
-        self.variables = {}  # Store variables section for reference resolution / เก็บส่วนตัวแปรสำหรับการแก้ไขการอ้างอิง
+        self.excluded_rules: Dict[str, Any] = {}
+        self.component_mapping: Dict[str, List[str]] = {}
+        self.remediation_config: Dict[str, Any] = {}
+        self.remediation_global_config: Dict[str, Any] = {}
+        self.remediation_checks_config: Dict[str, Dict[str, Any]] = {}
+        self.remediation_env_vars: Dict[str, Any] = {}
+        self.variables: Dict[str, Any] = {}  # Store variables section for reference resolution / เก็บส่วนตัวแปรสำหรับการแก้ไขการอ้างอิง
         
         # Initialize API timeout settings with defaults / เริ่มต้นการตั้งค่า API timeout ด้วยค่าเริ่มต้น
         self.api_check_interval = 5  # seconds / วินาที
@@ -498,32 +522,47 @@ class CISUnifiedRunner:
         
         try:
             with open(self.config_file, 'r') as f:
-                config = json.load(f)
-                self.config_data = config
-                self.excluded_rules = config.get("excluded_rules", {})
-                self.component_mapping = config.get("component_mapping", {})
-                self.variables = config.get("variables", {})  # Load variables for reference resolution / โหลดตัวแปรสำหรับการแก้ไขการอ้างอิง
-                
-                # Load remediation configuration / โหลดการตั้งค่าการแก้ไข
-                self.remediation_config = config.get("remediation_config", {})
-                self.remediation_global_config = self.remediation_config.get("global", {})
-                self.remediation_checks_config = self.remediation_config.get("checks", {})
-                self.remediation_env_vars = self.remediation_config.get("environment_overrides", {})
-                
-                # Load API timeout settings from global config / โหลดการตั้งค่า API timeout จากการตั้งค่าส่วนกลาง
-                self.wait_for_api_enabled = self.remediation_global_config.get("wait_for_api", True)
-                self.api_check_interval = self.remediation_global_config.get("api_check_interval", 5)
-                self.api_max_retries = self.remediation_global_config.get("api_max_retries", 60)
-                self.api_settle_time = self.remediation_global_config.get("api_settle_time", 15)
-                
-                # Resolve all variable references in checks / แก้ไขการอ้างอิงตัวแปรทั้งหมดในการตรวจสอบ
-                self._resolve_references()
-                self._calculate_level_totals()
-                
-                if self.verbose >= 1:
-                    print(f"{Colors.BLUE}[DEBUG] Loaded remediation config for {len(self.remediation_checks_config)} checks{Colors.ENDC}")
-                    print(f"{Colors.BLUE}[DEBUG] API timeout settings: interval={self.api_check_interval}s, max_retries={self.api_max_retries}, settle_time={self.api_settle_time}s{Colors.ENDC}")
-                    print(f"{Colors.BLUE}[DEBUG] Resolved variable references in checks{Colors.ENDC}")
+                config_raw = json.load(f)
+
+            if not isinstance(config_raw, dict):
+                raise ValueError("Configuration root must be an object")
+
+            config = cast(Dict[str, Any], config_raw)
+            self.config_data = config
+            self.excluded_rules = cast(Dict[str, Any], config.get("excluded_rules", {}))
+            self.component_mapping = cast(Dict[str, List[str]], config.get("component_mapping", {}))
+            self.variables = cast(Dict[str, Any], config.get("variables", {}))  # Load variables for reference resolution / โหลดตัวแปรสำหรับการแก้ไขการอ้างอิง
+            
+            # Load remediation configuration / โหลดการตั้งค่าการแก้ไข
+            self.remediation_config = config.get("remediation_config", {})
+            self.remediation_global_config = self.remediation_config.get("global", {})
+            checks_config_raw = self.remediation_config.get("checks")
+            normalized_checks: Dict[str, Dict[str, Any]] = {}
+            if isinstance(checks_config_raw, dict):
+                checks_config = cast(Dict[str, Any], checks_config_raw)
+                for check_id, check_cfg in checks_config.items():
+                    if not isinstance(check_cfg, dict):
+                        continue
+                    normalized_checks[str(check_id)] = check_cfg
+                self.remediation_checks_config = normalized_checks
+            else:
+                self.remediation_checks_config = {}
+            self.remediation_env_vars = self.remediation_config.get("environment_overrides", {})
+            
+            # Load API timeout settings from global config / โหลดการตั้งค่า API timeout จากการตั้งค่าส่วนกลาง
+            self.wait_for_api_enabled = self.remediation_global_config.get("wait_for_api", True)
+            self.api_check_interval = self.remediation_global_config.get("api_check_interval", 5)
+            self.api_max_retries = self.remediation_global_config.get("api_max_retries", 60)
+            self.api_settle_time = self.remediation_global_config.get("api_settle_time", 15)
+            
+            # Resolve all variable references in checks / แก้ไขการอ้างอิงตัวแปรทั้งหมดในการตรวจสอบ
+            self._resolve_references()
+            self._calculate_level_totals()
+            
+            if self.verbose >= 1:
+                print(f"{Colors.BLUE}[DEBUG] Loaded remediation config for {len(self.remediation_checks_config)} checks{Colors.ENDC}")
+                print(f"{Colors.BLUE}[DEBUG] API timeout settings: interval={self.api_check_interval}s, max_retries={self.api_max_retries}, settle_time={self.api_settle_time}s{Colors.ENDC}")
+                print(f"{Colors.BLUE}[DEBUG] Resolved variable references in checks{Colors.ENDC}")
         except json.JSONDecodeError as e:
             print(f"{Colors.RED}[!] Config parse error: {e}{Colors.ENDC}")
         except Exception as e:
@@ -542,11 +581,9 @@ class CISUnifiedRunner:
         5. Inject/Overwrite the target key with the fetched value / ใส่หรือเขียนทับคีย์เป้าหมายด้วยค่าที่ดึงมา
         """
         reference_count = 0
-        invalid_refs = []
+        invalid_refs: List[Dict[str, Any]] = []
         
         for check_id, check_config in self.remediation_checks_config.items():
-            if not isinstance(check_config, dict):
-                continue
             
             # Find all keys ending with '_ref' / ค้นหาคีย์ทั้งหมดที่ลงท้ายด้วย '_ref'
             ref_keys = [key for key in check_config.keys() if key.endswith('_ref')]
@@ -565,11 +602,13 @@ class CISUnifiedRunner:
                     resolved_value = None
                 
                 if resolved_value is None:
-                    invalid_refs.append({
-                        'check_id': check_id,
-                        'ref_key': ref_key,
-                        'ref_path': ref_path
-                    })
+                    invalid_refs.append(
+                        {
+                            'check_id': check_id,
+                            'ref_key': ref_key,
+                            'ref_path': ref_path,
+                        }
+                    )
                     if self.verbose >= 1:
                         print(f"{Colors.YELLOW}[!] Invalid reference in check {check_id}: {ref_path} not found{Colors.ENDC}")
                 else:
@@ -597,9 +636,6 @@ class CISUnifiedRunner:
         totals = {"L1": 0, "L2": 0}
 
         for check_config in self.remediation_checks_config.values():
-            if not isinstance(check_config, dict):
-                continue
-
             level_tag = str(check_config.get("level", "")).upper()
             if level_tag in totals:
                 totals[level_tag] += 1
@@ -610,7 +646,7 @@ class CISUnifiedRunner:
         if self.verbose >= 2:
             print(f"{Colors.BLUE}[DEBUG] Level 1+2 check totals: {self.level_check_totals} ({self.total_level_one_two_checks} total){Colors.ENDC}")
 
-    def _get_nested_value(self, data, dotted_path):
+    def _get_nested_value(self, data: Dict[str, Any], dotted_path: str) -> Optional[Any]:
         """
         Retrieve a value from nested dictionary using dotted path notation.
         ดึงค่าจากพจนานุกรมที่ซ้อนกันโดยใช้รูปแบบ dotted path
@@ -621,36 +657,41 @@ class CISUnifiedRunner:
         """
         try:
             keys = dotted_path.split('.')
-            current = data
-            
+            node: Any = data
+
             for key in keys:
-                if isinstance(current, dict) and key in current:
-                    current = current[key]
-                else:
+                if not isinstance(node, dict):
                     return None
-            
-            return current
+
+                node_dict = cast(Dict[str, Any], node)
+                next_value: Any = node_dict.get(key)
+                if next_value is None:
+                    return None
+
+                node = next_value
+
+            return node
         except Exception:
             return None
 
-    def is_rule_excluded(self, rule_id):
+    def is_rule_excluded(self, rule_id: str) -> bool:
         """Check if rule is excluded / ตรวจสอบว่ากฎถูกยกเว้นหรือไม่"""
         return rule_id in self.excluded_rules
 
-    def get_component_for_rule(self, rule_id):
+    def get_component_for_rule(self, rule_id: str) -> str:
         """Get component category for a rule / ได้รับหมวดหมู่ส่วนประกอบสำหรับกฎ"""
         for component, rules in self.component_mapping.items():
             if rule_id in rules:
                 return component
         return "Other"
 
-    def get_remediation_config_for_check(self, check_id):
+    def get_remediation_config_for_check(self, check_id: str) -> Dict[str, Any]:
         """Get remediation configuration for a specific check / ได้รับการตั้งค่าการแก้ไขสำหรับการตรวจสอบเฉพาะ"""
         if check_id in self.remediation_checks_config:
             return self.remediation_checks_config[check_id]
         return {}
 
-    def log_activity(self, action, details=None):
+    def log_activity(self, action: str, details: Optional[str] = None):
         """Log activities to file / บันทึกกิจกรรมลงไฟล์"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] {action}"
@@ -699,7 +740,7 @@ class CISUnifiedRunner:
     def _check_required_tools(self):
         """Check if kubectl and jq are installed and executable / ตรวจสอบว่า kubectl และ jq ถูกติดตั้งหรือไม่"""
         tools_to_check = ["kubectl", "jq"]
-        missing_tools = []
+        missing_tools: List[str] = []
         
         for tool in tools_to_check:
             tool_path = shutil.which(tool)
@@ -757,7 +798,7 @@ class CISUnifiedRunner:
 
     def _check_optional_dependencies(self):
         """Check for optional dependencies like openpyxl"""
-        if OPENPYXL_AVAILABLE:
+        if openpyxl_available:
             print(f"{Colors.GREEN}[✓] openpyxl is installed (Excel reporting enabled){Colors.ENDC}")
         else:
             print(f"{Colors.YELLOW}[!] openpyxl is not installed (Excel reporting disabled){Colors.ENDC}")
@@ -819,7 +860,7 @@ class CISUnifiedRunner:
             print(f"{Colors.RED}[-] Missing: {', '.join(missing)}{Colors.ENDC}")
             sys.exit(1)
 
-    def detect_node_role(self):
+    def detect_node_role(self) -> Optional[str]:
         """
         Detect current node role using multi-method approach.
         ตรวจจับบทบาทโหนดปัจจุบันโดยใช้หลายวิธี
@@ -831,8 +872,9 @@ class CISUnifiedRunner:
         # PRIORITY 1: Check running processes (most reliable) / ตรวจสอบโปรเซสที่กำลังรัน
         try:
             # Check if kube-apiserver is running → Master node / ตรวจสอบว่า kube-apiserver รันอยู่หรือไม่
+            cmd: List[str] = ["pgrep", "-l", "kube-apiserver"]
             result = subprocess.run(
-                ["pgrep", "-l", "kube-apiserver"],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -846,8 +888,9 @@ class CISUnifiedRunner:
 
         try:
             # Check if kubelet is running (without apiserver) → Worker node / ตรวจสอบว่า kubelet รันอยู่หรือไม่
+            cmd: List[str] = ["pgrep", "-l", "kubelet"]
             result = subprocess.run(
-                ["pgrep", "-l", "kubelet"],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -890,15 +933,23 @@ class CISUnifiedRunner:
         # PRIORITY 3: Fallback to kubectl node labels (original method) / ใช้ kubectl ตรวจสอบ label
         try:
             hostname = socket.gethostname()
-            kubectl = self.get_kubectl_cmd()
+            kubectl_cmd = self.get_kubectl_cmd()
             
-            if not kubectl:
+            if not kubectl_cmd:
                 if self.verbose >= 2:
                     print("[DEBUG] Node role detection: kubectl not available, cannot determine role")
                 return None
 
+            labels_cmd: List[str] = kubectl_cmd + [
+                "get",
+                "node",
+                hostname,
+                "--no-headers",
+                "-o",
+                "jsonpath={.metadata.labels}"
+            ]
             result = subprocess.run(
-                kubectl + ["get", "node", hostname, "--no-headers", "-o", "jsonpath={.metadata.labels}"],
+                labels_cmd,
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -922,7 +973,7 @@ class CISUnifiedRunner:
             print("[DEBUG] Node role detection: all methods failed, unable to determine role")
         return None
 
-    def get_kubectl_cmd(self):
+    def get_kubectl_cmd(self) -> List[str]:
         """
         Detect kubeconfig and return kubectl command.
         ตรวจจับ kubeconfig และส่งกลับคำสั่ง kubectl
@@ -1032,7 +1083,7 @@ class CISUnifiedRunner:
 
         return self.health_status
 
-    def wait_for_healthy_cluster(self, skip_health_check=False):
+    def wait_for_healthy_cluster(self, skip_health_check: bool = False) -> bool:
         """
         Wait for cluster to be healthy after API server restart.
         รอให้คลัสเตอร์กลับมาใช้งานได้ปกติหลังจากรีสตาร์ท API server
@@ -1186,7 +1237,7 @@ class CISUnifiedRunner:
         self.health_status = "CRITICAL (Recovery Timeout - 3-Step Failed)"
         return False
 
-    def extract_metadata_from_script(self, script_path):
+    def extract_metadata_from_script(self, script_path: Optional[str]):
         """
         Extract title from script file header.
         แยกชื่อเรื่องจากส่วนหัวไฟล์สคริปต์
@@ -1219,13 +1270,13 @@ class CISUnifiedRunner:
         
         return "Title not found"
 
-    def get_scripts(self, mode, target_level, target_role):
+    def get_scripts(self, mode: str, target_level: str, target_role: str) -> List[Dict[str, Any]]:
         """
         Get list of audit/remediation scripts.
         ได้รับรายชื่อสคริปต์ตรวจสอบ/การแก้ไข
         """
         suffix = "_remediate.sh" if mode == "remediate" else "_audit.sh"
-        scripts = []
+        scripts: List[Dict[str, Any]] = []
         
         # Determine levels to scan / กำหนดระดับที่จะสแกน
         levels = ['1', '2'] if target_level == "all" else [target_level]
@@ -1252,7 +1303,7 @@ class CISUnifiedRunner:
         
         return scripts
 
-    def _prepare_remediation_env(self, script_id, remediation_cfg):
+    def _prepare_remediation_env(self, script_id: str, remediation_cfg: Optional[Dict[str, Any]]) -> Dict[str, str]:
         """Prepare environment variables for remediation scripts."""
         env = os.environ.copy()
         
@@ -1303,7 +1354,7 @@ class CISUnifiedRunner:
         env.update(self.remediation_env_vars)
         return env
 
-    def _protect_kube_flannel_pss(self, env=None):
+    def _protect_kube_flannel_pss(self, env: Optional[Dict[str, str]] = None):
         """Ensure kube-flannel keeps a privileged PSS label to avoid breaking the CNI."""
         namespace = "kube-flannel"
         label = "pod-security.kubernetes.io/enforce=privileged"
@@ -1329,7 +1380,7 @@ class CISUnifiedRunner:
             stderr = result.stderr.strip()
             print(f"{Colors.YELLOW}[WARN] kube-flannel PSS override failed (code {result.returncode}): {stderr}{Colors.ENDC}")
 
-    def _is_kube_flannel_privileged(self):
+    def _is_kube_flannel_privileged(self) -> bool:
         """Return True when kube-flannel already has a privileged PSS label."""
         try:
             result = subprocess.run(
@@ -1351,8 +1402,8 @@ class CISUnifiedRunner:
         except json.JSONDecodeError:
             return False
 
-        labels = data.get("metadata", {}).get("labels", {}) or {}
-        return labels.get("pod-security.kubernetes.io/enforce") == "privileged"
+        labels = cast(Dict[str, str], data.get("metadata", {}).get("labels") or {})
+        return bool(labels.get("pod-security.kubernetes.io/enforce") == "privileged")
 
     def is_namespace_exempt(self, namespace: str) -> bool:
         if not namespace:
@@ -1398,7 +1449,7 @@ class CISUnifiedRunner:
         print(f"{Colors.GREEN}[✓] Marked {namespace} as cis-compliance/exempt=true{Colors.ENDC}")
         return True
 
-    def fix_item_internal(self, script, remediation_cfg):
+    def fix_item_internal(self, script: Dict[str, Any], remediation_cfg: Optional[Dict[str, Any]]) -> ResultTuple:
         """
         Main remediation router for internal Python-based fixes.
         ตัวเลือกหลักสำหรับการแก้ไขโดยใช้ Python ภายใน
@@ -1408,6 +1459,7 @@ class CISUnifiedRunner:
         """
         script_id = script["id"]
         script_path = script["path"]
+        remediation_cfg = remediation_cfg or {}
         
         # 1. Detect check type / ตรวจสอบประเภทของการตรวจสอบ
         is_yaml, manifest_path = self._classify_remediation_type(script_id)
@@ -1420,7 +1472,7 @@ class CISUnifiedRunner:
             mod_type = "csv" if script_id in CSV_CHECKS else "string"
             
             # Prepare modifications from config / เตรียมการแก้ไขจากการตั้งค่า
-            modifications = {'flags': []}
+            modifications: Dict[str, List[str]] = {'flags': []}
             
             # Handle single flag / จัดการแฟล็กเดียว
             flag_name = remediation_cfg.get('flag_name')
@@ -1432,18 +1484,27 @@ class CISUnifiedRunner:
                 modifications['flags'].append(f"{flag_name}={expected_value}")
             
             # Handle multiple flags (multi_flag_check) / จัดการหลายแฟล็ก
-            flags_dict = remediation_cfg.get('flags', {})
-            if flags_dict:
-                for f_name, f_val in flags_dict.items():
-                    if not f_name.startswith('--'):
-                        f_name = '--' + f_name
-                    modifications['flags'].append(f"{f_name}={f_val}")
+            # Normalize and validate to an explicit dict so static analyzers know the type
+            flags_obj: Dict[str, Any] = {}
+            cfg_flags = remediation_cfg.get('flags', {})
+            if isinstance(cfg_flags, dict):
+                flags_obj = cast(Dict[str, Any], cfg_flags)
+            # flags_obj is now a Dict[str, Any] for iteration
+            for f_name, f_val in flags_obj.items():
+                # Normalize key to string for robustness (avoid redundant isinstance checks)
+                try:
+                    f_name_str = str(f_name)
+                except Exception:
+                    continue
+                if not f_name_str.startswith('--'):
+                    f_name_str = '--' + f_name_str
+                modifications['flags'].append(f"{f_name_str}={f_val}")
             
             # 2. Execute Atomic Remediation Flow / ดำเนินการขั้นตอนการแก้ไขแบบ Atomic
             # Phase 1: Backup & Apply / ขั้นตอนที่ 1: สำรองข้อมูลและนำไปใช้
             success, msg = self.atomic_manager.update_manifest_safely(manifest_path, modifications, mod_type)
             if not success:
-                return "FAIL", f"Atomic write failed: {msg}", None, None
+                return "FAIL", f"Atomic write failed: {msg}", None, []
             
             if msg == "No changes needed":
                 # DEEP RUNTIME VERIFICATION (Case B: File OK but Process might be STALE)
@@ -1456,7 +1517,7 @@ class CISUnifiedRunner:
                         f_key, f_val = first_flag.split('=', 1)
                         
                         if self.verify_runtime_flag(process_name, f_key, f_val):
-                            return "PASS", "No changes needed (File & Runtime compliant)", None, None
+                            return "PASS", "No changes needed (File & Runtime compliant)", None, []
                         else:
                             print(f"{Colors.YELLOW}[STALE CONFIG] File is compliant but Runtime is STALE for {process_name}. Forcing reload...{Colors.ENDC}")
                             self.log_activity("STALE_CONFIG_DETECTED", f"{script_id}: {process_name}")
@@ -1467,11 +1528,11 @@ class CISUnifiedRunner:
                             time.sleep(10) # Wait for process to stabilize
                             
                             if self.verify_runtime_flag(process_name, f_key, f_val):
-                                return "PASS", "Fixed (Stale config reloaded successfully)", None, None
+                                return "PASS", "Fixed (Stale config reloaded successfully)", None, []
                             else:
-                                return "FAIL", f"Stale config reload failed to apply changes for {process_name}", None, None
+                                return "FAIL", f"Stale config reload failed to apply changes for {process_name}", None, []
                 
-                return "PASS", "No changes needed (already compliant)", None, None
+                return "PASS", "No changes needed (already compliant)", None, []
 
             # Phase 2: Health Check (Wait for API) / ขั้นตอนที่ 2: ตรวจสอบสุขภาพ (รอ API)
             print(f"{Colors.YELLOW}[*] Waiting for cluster health...{Colors.ENDC}")
@@ -1491,7 +1552,7 @@ class CISUnifiedRunner:
                     print(f"{Colors.CYAN}[*] Waiting 15s for API server to recover from rollback...{Colors.ENDC}")
                     time.sleep(15)
                 
-                return "FAIL", f"Health check failed: {health_msg}. Rolled back.", None, None
+                return "FAIL", f"Health check failed: {health_msg}. Rolled back.", None, []
             
             # Phase 3: Deep Runtime Verification / ขั้นตอนที่ 3: การตรวจสอบรันไทม์เชิงลึก
             process_name = self._get_process_name_for_check(script_id)
@@ -1527,9 +1588,9 @@ class CISUnifiedRunner:
                         print(f"{Colors.YELLOW}[ROLLBACK] Restored original config to ensure cluster stability.{Colors.ENDC}")
                         self.atomic_manager.rollback(manifest_path, backup_path)
                         self.log_activity("REMEDIATION_ROLLBACK", f"{script_id}: Audit failed, rolled back to {backup_path}")
-                    return "FAIL", f"Audit failed: {audit_msg}", None, None
+                    return "FAIL", f"Audit failed: {audit_msg}", None, []
             
-            return "PASS", "Remediation applied and verified successfully", None, None
+            return "PASS", "Remediation applied and verified successfully", None, []
             
         else:
             # System Check (chmod/chown/etc) or manifest not found - Fallback to Bash / การตรวจสอบระบบหรือหา manifest ไม่พบ - ใช้ Bash แทน
@@ -1538,13 +1599,14 @@ class CISUnifiedRunner:
             
             env = self._prepare_remediation_env(script_id, remediation_cfg)
             result = subprocess.run(["bash", script_path], capture_output=True, text=True, timeout=self.script_timeout, env=env)
+            # Help static analyzers by casting the parsed output to a known tuple type
             status, reason, fix_hint, cmds = self._parse_script_output(result, script_id, "remediate", False)
 
             if script_id.startswith("5.2."):
                 self._protect_kube_flannel_pss(env=env)
             return status, reason, fix_hint, cmds
 
-    def _get_process_name_for_check(self, check_id):
+    def _get_process_name_for_check(self, check_id: str) -> Optional[str]:
         """Map check ID to process name / แมป ID การตรวจสอบกับชื่อโปรเซส"""
         if check_id.startswith('1.2.'): return "kube-apiserver"
         if check_id.startswith('1.3.'): return "kube-controller-manager"
@@ -1553,18 +1615,19 @@ class CISUnifiedRunner:
         if check_id.startswith('4.'): return "kubelet"
         return None
 
-    def verify_process_runtime(self, process_name, flag, expected_value):
+    def verify_process_runtime(self, process_name: str, flag: str, expected_value: Any) -> Tuple[str, str]:
         """
         Verify if the running process has the expected flag and value.
         ตรวจสอบว่าโปรเซสที่กำลังรันมี flag และค่าที่คาดหวังหรือไม่
-        
+
         Returns: (status, message)
+        Status values: "VERIFIED", "NOT_APPLIED", "CRASHED", "ERROR"
         """
         try:
             # Use pgrep -a to get full command line / ใช้ pgrep -a เพื่อรับบรรทัดคำสั่งแบบเต็ม
             cmd = ["pgrep", "-a", process_name]
             result = subprocess.run(cmd, capture_output=True, text=True)
-            
+
             if result.returncode != 0 or not result.stdout:
                 # Fallback to ps -ef for some systems / ใช้ ps -ef เป็นทางเลือกสำหรับบางระบบ
                 ps_cmd = f"ps -ef | grep {process_name} | grep -v grep"
@@ -1574,7 +1637,7 @@ class CISUnifiedRunner:
                 process_cmdline = ps_result.stdout
             else:
                 process_cmdline = result.stdout
-            
+
             # Normalize flag (ensure it starts with --)
             if not flag.startswith('--'):
                 flag = '--' + flag
@@ -1593,7 +1656,7 @@ class CISUnifiedRunner:
             # Pattern matches --flag=value or --flag value
             # Also handles boolean flags where --flag=true might be just --flag
             pattern = rf"{re.escape(flag)}([=\s]+{re.escape(str(expected_value))})?(\s|$)"
-            
+
             # Special case for boolean 'true' / กรณีพิเศษสำหรับค่าบูลีน 'true'
             if str(expected_value).lower() == 'true':
                 # Match --flag=true OR just --flag
@@ -1604,25 +1667,24 @@ class CISUnifiedRunner:
 
             if re.search(pattern, process_cmdline):
                 return "VERIFIED", f"Running with {flag}={expected_value}"
-            
+
             # Check if flag exists but value is wrong
             if flag in process_cmdline:
                 return "NOT_APPLIED", f"Flag found but value mismatch (Expected: {expected_value})"
             else:
                 return "NOT_APPLIED", f"Flag {flag} not found in runtime"
-                
+
         except Exception as e:
             return "ERROR", f"Verification error: {str(e)}"
-            return "ERROR", f"Verification error: {str(e)}"
 
-    def verify_runtime_flag(self, process_name, flag, value):
+    def verify_runtime_flag(self, process_name: str, flag: str, value: Any) -> bool:
         """
         Deep Runtime Verification: Check if the running process has the specific flag=value.
         การตรวจสอบรันไทม์เชิงลึก: ตรวจสอบว่าโปรเซสที่กำลังรันมี flag=value ที่ระบุหรือไม่
         """
         return self.verify_runtime_config(process_name, flag, value)
 
-    def verify_runtime_config(self, process_name, flag_key, expected_value):
+    def verify_runtime_config(self, process_name: str, flag_key: str, expected_value: Any) -> bool:
         """
         Verify if the running process has the expected flag and value.
         Returns: True (Applied) / False (Not Applied)
@@ -1630,7 +1692,7 @@ class CISUnifiedRunner:
         status, _ = self.verify_process_runtime(process_name, flag_key, expected_value)
         return status == "VERIFIED"
 
-    def _aggressive_restart_component(self, component):
+    def _aggressive_restart_component(self, component: str) -> bool:
         """Hard kill every container for the component and verify kubelet restarts it."""
         component_aliases = {
             "kube-apiserver": "kube-apiserver",
@@ -1674,27 +1736,40 @@ class CISUnifiedRunner:
         print(f"{Colors.RED}[!] Critical: {component} failed to resurrect. Check kubelet logs.{Colors.ENDC}")
         return False
 
-    def _list_crictl_ids(self, name, state=None):
-        cmd = ["crictl", "ps", "--name", name, "-q"]
-        if state:
-            cmd.extend(["--state", state])
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    def _list_crictl_ids(self, name: str, state: Optional[str] = None) -> List[str]:
+        """
+        List container IDs via crictl filtered by name and optional state.
+        Returns a list of container id strings; returns empty list on error.
+        """
+        try:
+            cmd = ["crictl", "ps", "--name", name, "-q"]
+            if state:
+                cmd.extend(["--state", state])
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        except Exception:
+            return []
 
-    def _get_component_pids(self, component):
+    def _get_component_pids(self, component: Optional[str]) -> Set[str]:
         """Wrapper around the shared PID tracker for compatibility."""
+        # Safely handle None to satisfy callers that may pass Optional[str]
+        if component is None:
+            return set()
         return fetch_component_pids(component)
 
-    def _get_crictl_component_name(self, component):
+    def _get_crictl_component_name(self, component: Optional[str]) -> Optional[str]:
         aliases = {
             "kube-apiserver": "kube-apiserver",
             "kube-controller-manager": "kube-controller-manager",
             "kube-scheduler": "kube-scheduler",
             "etcd": "etcd"
         }
+        # Avoid passing None to dict.get (static type checkers require str key)
+        if component is None:
+            return None
         return aliases.get(component)
 
-    def _hard_kill_containers(self, component):
+    def _hard_kill_containers(self, component: Optional[str]) -> None:
         comp_name = self._get_crictl_component_name(component)
         if not comp_name:
             print(f"{Colors.YELLOW}[WARN] No crictl helper available for {component} to kill containers.{Colors.ENDC}")
@@ -1726,7 +1801,7 @@ class CISUnifiedRunner:
         else:
             print(f"{Colors.GREEN}[✓] {component} restarted with new PID(s): {', '.join(sorted(post_pids))}.{Colors.ENDC}")
 
-    def _run_audit_verification_loop(self, script, component):
+    def _run_audit_verification_loop(self, script: Dict[str, Any], component: Optional[str]) -> Tuple[str, str]:
         audit_script_path = script['path'].replace("_remediate.sh", "_audit.sh")
         if not os.path.exists(audit_script_path):
             return "FAIL", "Audit script missing"
@@ -1762,7 +1837,7 @@ class CISUnifiedRunner:
 
         return status, reason
 
-    def run_script(self, script, mode):
+    def run_script(self, script: Dict[str, Any], mode: str) -> Optional[CISResult]:
         """
         Execute audit/remediation script with error handling.
         ดำเนินการสคริปต์ตรวจสอบ/การแก้ไขพร้อมการจัดการข้อผิดพลาด
@@ -1797,20 +1872,16 @@ class CISUnifiedRunner:
                 # Call internal remediation router / เรียกใช้ตัวเลือกการแก้ไขภายใน
                 status, reason, fix_hint, cmds = self.fix_item_internal(script, remediation_cfg)
                 duration = round(time.time() - start_time, 2)
-                
-                return {
-                    "id": script_id,
-                    "role": script["role"],
-                    "level": script["level"],
-                    "status": status,
-                    "duration": duration,
-                    "reason": reason,
-                    "fix_hint": fix_hint,
-                    "cmds": cmds,
-                    "output": reason,
-                    "path": script["path"],
-                    "component": self.get_component_for_rule(script_id)
-                }
+
+                reason_text = reason or ""
+                fix_hint_text = fix_hint or ""
+                cmds_list = cmds or []
+
+                result_record = self._create_result(script, status, reason_text, duration)
+                result_record["fix_hint"] = fix_hint_text
+                result_record["cmds"] = cmds_list
+                result_record["output"] = reason_text
+                return result_record
 
             # 2. AUDIT MODE / โหมดการตรวจสอบ
             is_manual = self._is_manual_check(script["path"])
@@ -1878,19 +1949,15 @@ class CISUnifiedRunner:
                 elif status == "MANUAL":
                     reason = "[WARN] Manual check completed with no output"
             
-            return {
-                "id": script_id,
-                "role": script["role"],
-                "level": script["level"],
-                "status": status,
-                "duration": duration,
-                "reason": reason,
-                "fix_hint": fix_hint,
-                "cmds": cmds,
-                "output": result.stdout + result.stderr,
-                "path": script["path"],
-                "component": self.get_component_for_rule(script_id)
-            }
+            reason_text = reason or ""
+            fix_hint_text = fix_hint or ""
+            cmds_list = cmds or []
+
+            result_record = self._create_result(script, status, reason_text, duration)
+            result_record["fix_hint"] = fix_hint_text
+            result_record["cmds"] = cmds_list
+            result_record["output"] = result.stdout + result.stderr
+            return result_record
         
         except subprocess.TimeoutExpired:
             return self._create_result(
@@ -1917,14 +1984,14 @@ class CISUnifiedRunner:
                 time.time() - start_time
             )
 
-    def _run_etcd_remediation(self, script, remediation_cfg):
+    def _run_etcd_remediation(self, script: Dict[str, Any], remediation_cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         start_time = time.time()
         manifest_path = "/etc/kubernetes/manifests/etcd.yaml"
         temp_config_path = None
         combined_output = ""
         csv_checks = ["1.2.8", "1.2.11", "1.2.14", "1.2.29"]
 
-        def build_result(status, reason, fix_hint=None, output=""):
+        def build_result(status: str, reason: str, fix_hint: Optional[str] = None, output: str = "") -> Dict[str, Any]:
             return {
                 "id": script["id"],
                 "role": script.get("role", "master"),
@@ -1939,7 +2006,7 @@ class CISUnifiedRunner:
                 "component": self.get_component_for_rule(script["id"])
             }
 
-        modifications = {"flags": []}
+        modifications: Dict[str, List[str]] = {"flags": []}
         flag_name = remediation_cfg.get("flag_name") if remediation_cfg else None
         expected_value = remediation_cfg.get("expected_value") if remediation_cfg else None
 
@@ -1948,8 +2015,19 @@ class CISUnifiedRunner:
                 flag_name = f"--{flag_name}"
             modifications["flags"].append(f"{flag_name}={expected_value}")
 
-        flags_dict = remediation_cfg.get("flags", {}) if remediation_cfg else {}
+        # Safely obtain flags mapping and make its type explicit for static analyzers
+        flags_dict_raw = remediation_cfg.get("flags") if remediation_cfg else None
+        if isinstance(flags_dict_raw, dict):
+            flags_dict = cast(Dict[str, Any], flags_dict_raw)
+        else:
+            flags_dict = {}
+
         for name, value in flags_dict.items():
+            # Defensive: ensure key can be represented as a string
+            try:
+                name = str(name)
+            except Exception:
+                continue
             if not name.startswith("--"):
                 name = f"--{name}"
             modifications["flags"].append(f"{name}={value}")
@@ -2028,7 +2106,7 @@ class CISUnifiedRunner:
                 except Exception:
                     pass
 
-    def _get_backup_file_path(self, check_id, env):
+    def _get_backup_file_path(self, check_id: str, env: Optional[Dict[str, str]]) -> Optional[str]:
         """
         Identify backup file location for the manifest being remediated.
         ระบุตำแหน่งไฟล์สำรองข้อมูลสำหรับ manifest ที่กำลังถูกแก้ไข
@@ -2036,15 +2114,21 @@ class CISUnifiedRunner:
         Priority 1: Check environment variable BACKUP_FILE / ลำดับความสำคัญ 1: ตรวจสอบตัวแปรสภาพแวดล้อม BACKUP_FILE
         Priority 2: Check standard backup path / ลำดับความสำคัญ 2: ตรวจสอบเส้นทางสำรองข้อมูลมาตรฐาน
         """
-        # PRIORITY 1: Check environment variable / ตรวจสอบตัวแปรสภาพแวดล้อม
-        if "BACKUP_FILE" in env and os.path.exists(env["BACKUP_FILE"]):
+        if env is None:
             if self.verbose >= 1:
-                print(f"{Colors.BLUE}[DEBUG] Found backup file from env: {env['BACKUP_FILE']}{Colors.ENDC}")
-            return env["BACKUP_FILE"]
+                print(f"{Colors.YELLOW}[!] Environment mapping is None when searching backups for {check_id}{Colors.ENDC}")
+            return None
+
+        # PRIORITY 1: Check environment variable / ตรวจสอบตัวแปรสภาพแวดล้อม
+        backup_file = env.get("BACKUP_FILE")
+        if backup_file and os.path.exists(backup_file):
+            if self.verbose >= 1:
+                print(f"{Colors.BLUE}[DEBUG] Found backup file from env: {backup_file}{Colors.ENDC}")
+            return backup_file
         
         # PRIORITY 2: Search standard backup path / ค้นหาในเส้นทางสำรองข้อมูลมาตรฐาน
         backup_dir = env.get("BACKUP_DIR", "/var/backups/cis-remediation")
-        if os.path.exists(backup_dir):
+        if backup_dir and os.path.exists(backup_dir):
             # Find most recent backup for this check / ค้นหาการสำรองข้อมูลล่าสุดสำหรับการตรวจสอบนี้
             backup_pattern = os.path.join(backup_dir, f"{check_id}_*.bak")
             backups = sorted(glob.glob(backup_pattern), reverse=True)
@@ -2058,7 +2142,7 @@ class CISUnifiedRunner:
             print(f"{Colors.YELLOW}[!] No backup file found for {check_id}{Colors.ENDC}")
         return None
 
-    def _wait_for_api_healthy(self, check_id, timeout=300):
+    def _wait_for_api_healthy(self, check_id: str, timeout: int = 300) -> bool:
         """
         Wait for API Server to become healthy after remediation.
         รอให้ API Server กลับมาใช้งานได้ปกติหลังจากการแก้ไข
@@ -2111,7 +2195,7 @@ class CISUnifiedRunner:
         self.log_activity("API_HEALTH_TIMEOUT", f"{check_id}: No response after {timeout}s")
         return False
 
-    def _rollback_manifest(self, check_id, backup_file):
+    def _rollback_manifest(self, check_id: str, backup_file: Optional[str]) -> bool:
         """
         Rollback manifest file to backup copy.
         ย้อนกลับไฟล์ manifest ไปยังชุดข้อมูลสำรอง
@@ -2123,12 +2207,13 @@ class CISUnifiedRunner:
         
         # Determine original manifest path based on check ID / กำหนดเส้นทาง manifest เดิมตาม ID การตรวจสอบ
         if check_id.startswith("1.2"):
-            original_path = "/etc/kubernetes/manifests/kube-apiserver.yaml"
+            original_path: str = "/etc/kubernetes/manifests/kube-apiserver.yaml"
         elif check_id.startswith("2."):
             original_path = "/etc/kubernetes/manifests/etcd.yaml"
         elif check_id.startswith("4."):
             original_path = "/var/lib/kubelet/config.yaml"
         else:
+            # backup_file is Optional[str], guard above ensures it's not None here
             original_path = backup_file.replace(".bak", "")
         
         try:
@@ -2167,7 +2252,7 @@ class CISUnifiedRunner:
             self.log_activity("ROLLBACK_ERROR", f"{check_id}: {str(e)}")
             return False
 
-    def update_manifest_safely(self, filepath, key, value):
+    def update_manifest_safely(self, filepath: str, key: str, value: str) -> Tuple[bool, str]:
         """
         Atomically update a manifest file using safe copy-paste pattern.
         อัปเดตไฟล์ manifest แบบ atomic โดยใช้รูปแบบการคัดลอกและวางที่ปลอดภัย
@@ -2200,7 +2285,7 @@ class CISUnifiedRunner:
                 print(f"{Colors.BLUE}[DEBUG] Read manifest: {filepath} ({len(original_lines)} lines){Colors.ENDC}")
             
             # ===== STEP 2-4: Parse and Modify / ขั้นตอนที่ 2-4: การแยกวิเคราะห์และการแก้ไข =====
-            modified_lines = []
+            modified_lines: List[str] = []
             changes_made = 0
             found_key = False
             in_command_section = False
@@ -2321,7 +2406,7 @@ class CISUnifiedRunner:
                 lineterm=''
             )
             
-            diff_summary = []
+            diff_summary: List[str] = []
             for line in diff:
                 if line.startswith('---') or line.startswith('+++') or line.startswith('@@'):
                     continue
@@ -2381,7 +2466,7 @@ class CISUnifiedRunner:
             print(f"{Colors.RED}{msg}{Colors.ENDC}")
             return False, msg
 
-    def apply_remediation_with_health_gate(self, filepath, key, value, check_id, script_dict, timeout=60):
+    def apply_remediation_with_health_gate(self, filepath: str, key: str, value: str, check_id: str, script_dict: Dict[str, Any], timeout: int = 60) -> Dict[str, Any]:
         """
         Apply remediation using atomic modifier with health-gated rollback.
         
@@ -2629,20 +2714,23 @@ class CISUnifiedRunner:
             self.log_activity("REMEDIATION_AUDIT_ERROR", f"{check_id}: {str(e)}")
             return result
 
-    def _is_manual_check(self, script_path):
+    def _is_manual_check(self, script_path: Optional[str]) -> bool:
         """Check if script is marked as manual / ตรวจสอบว่าสคริปต์ถูกทำเครื่องหมายเป็นด้วยตนเองหรือไม่"""
+        if not script_path:
+            return False
         try:
             with open(script_path, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f.readlines()[:10]:
                     if "# Title:" in line and "(Manual)" in line:
                         return True
         except Exception:
-            pass
+            # Any file error means we cannot determine; treat as non-manual to avoid blocking automation
+            return False
         return False
 
-    def _extract_pod_security_failure_names(self, combined_output):
+    def _extract_pod_security_failure_names(self, combined_output: str) -> Set[str]:
         pattern = re.compile(r"^-+\s*([a-z0-9][a-z0-9\.\-]*)$", re.IGNORECASE)
-        failures = set()
+        failures: Set[str] = set()
         for line in combined_output.splitlines():
             stripped = line.strip()
             match = pattern.match(stripped)
@@ -2650,7 +2738,7 @@ class CISUnifiedRunner:
                 failures.add(match.group(1).lower())
         return failures
 
-    def _parse_script_output(self, result, script_id, mode, is_manual):
+    def _parse_script_output(self, result: subprocess.CompletedProcess[str], script_id: str, mode: str, is_manual: bool) -> ResultTuple:
         """
         Parse structured output from script with Smart Override for MANUAL checks
         แยกวิเคราะห์ผลลัพธ์ที่มีโครงสร้างจากสคริปต์
@@ -2671,7 +2759,7 @@ class CISUnifiedRunner:
         status = "FAIL"
         reason = ""
         fix_hint = ""
-        cmds = []
+        cmds: List[str] = []
         
         # Parse structured tags from stdout / แยกแท็กจาก stdout
         for line in result.stdout.split('\n'):
@@ -2803,23 +2891,75 @@ class CISUnifiedRunner:
 
         return status, reason, fix_hint, cmds
 
-    def _create_result(self, script, status, reason, duration):
+    def _create_result(self, script: Dict[str, Any], status: str, reason: str, duration: float) -> CISResult:
         """Create result dictionary / สร้างพจนานุกรมผลลัพธ์"""
+        # Use safe .get lookups to avoid KeyError and provide stable types for static analysis
         return {
-            "id": script["id"],
-            "role": script["role"],
-            "level": script["level"],
+            "id": str(script.get("id", "")),
+            "role": str(script.get("role", "")),
+            "level": str(script.get("level", "")),
             "status": status,
-            "duration": round(duration, 2),
+            "duration": round(float(duration), 2),
             "reason": reason,
             "fix_hint": "",
             "cmds": [],
             "output": "",
-            "path": script["path"],
-            "component": self.get_component_for_rule(script["id"])
+            "path": str(script.get("path", "")),
+            "component": self.get_component_for_rule(str(script.get("id", "")))
         }
 
-    def update_stats(self, result):
+    def _coerce_cis_result(self, raw: Any) -> Optional[CISResult]:
+        """
+        Normalize any dict-like result into a CISResult so callers can safely append to self.results.
+        This prevents type checkers from seeing `Dict[str, Any] | CISResult` at append sites.
+        """
+        if raw is None:
+            return None
+
+        if not isinstance(raw, dict):
+            return None
+
+        raw_dict = cast(Dict[str, Any], raw)
+
+        check_id_obj = raw_dict.get("id")
+        check_id = str(check_id_obj) if check_id_obj is not None else ""
+        try:
+            duration_val = float(raw_dict.get("duration", 0.0))
+        except Exception:
+            duration_val = 0.0
+
+        cmds_raw = raw_dict.get("cmds", [])
+        cmds_list: List[str] = []
+        if isinstance(cmds_raw, list):
+            cmds_raw_list = cast(List[Any], cmds_raw)
+            for item in cmds_raw_list:
+                try:
+                    cmds_list.append(str(item))
+                except Exception:
+                    continue
+
+        component_raw = raw_dict.get("component")
+        component = (
+            str(component_raw)
+            if component_raw not in (None, "")
+            else self.get_component_for_rule(check_id)
+        )
+
+        return cast(CISResult, {
+            "id": check_id,
+            "role": str(raw_dict.get("role", "")),
+            "level": str(raw_dict.get("level", "")),
+            "status": str(raw_dict.get("status", "")),
+            "duration": round(duration_val, 2),
+            "reason": str(raw_dict.get("reason", "")),
+            "fix_hint": str(raw_dict.get("fix_hint", "")),
+            "cmds": cmds_list,
+            "output": str(raw_dict.get("output", "")),
+            "path": str(raw_dict.get("path", "")),
+            "component": component,
+        })
+
+    def update_stats(self, result: Optional[CISResult]) -> None:
         """
         Update statistics based on result and keep audit_results fresh.
         อัปเดตสถิติตามผลลัพธ์และรักษาข้อมูล audit_results ให้เป็นปัจจุบัน
@@ -2857,7 +2997,7 @@ class CISUnifiedRunner:
         if self.verbose >= 2:
             print(f"{Colors.BLUE}[DEBUG] Updated stats: {result['id']} -> {status} ({counter_key}){Colors.ENDC}")
 
-    def _rotate_backups(self, max_backups=5):
+    def _rotate_backups(self, max_backups: int = 5) -> None:
         """
         Maintain only the N most recent backup folders.
         Deletes older backups automatically to save disk space.
@@ -2870,7 +3010,7 @@ class CISUnifiedRunner:
         
         try:
             # List all backup directories (format: backup_YYYYMMDD_HHMMSS)
-            backup_folders = []
+            backup_folders: List[Tuple[str, str, float]] = []
             for item in os.listdir(self.backup_dir):
                 item_path = os.path.join(self.backup_dir, item)
                 if os.path.isdir(item_path) and item.startswith("backup_"):
@@ -2938,7 +3078,7 @@ class CISUnifiedRunner:
         print(f"{Colors.CYAN}[*] Checking for old backups...{Colors.ENDC}")
         self._rotate_backups(max_backups=5)
 
-    def scan(self, target_level, target_role, skip_menu=False):
+    def scan(self, target_level: str, target_role: str, skip_menu: bool = False) -> None:
         """
         Execute audit scan with parallel execution
         ดำเนินการสแกนการตรวจสอบพร้อมการดำเนินการแบบขนาน
@@ -2983,7 +3123,7 @@ class CISUnifiedRunner:
         else:
             print(f"\n{Colors.CYAN}[*] Audit Complete. Proceeding to Remediation phase...{Colors.ENDC}")
 
-    def _run_scripts_parallel(self, executor, scripts, mode):
+    def _run_scripts_parallel(self, executor: ThreadPoolExecutor, scripts: List[Dict[str, Any]], mode: str) -> None:
         """
         Run scripts in parallel with progress tracking
         รันสคริปต์แบบขนานพร้อมการติดตามความคืบหน้า
@@ -2992,28 +3132,30 @@ class CISUnifiedRunner:
         สำหรับโหมดการแก้ไข: ใช้ "เบรกฉุกเฉิน" - หยุดการทำงานหากคลัสเตอร์ไม่สมบูรณ์
         """
         futures = {executor.submit(self.run_script, s, mode): s for s in scripts}
+        total_checks = len(scripts)
         
         try:
             completed = 0
             for future in as_completed(futures):
                 if self.stop_requested:
                     break
-                
-                result = future.result()
-                if result:
-                    self.results.append(result)
-                    self.update_stats(result)
+
+                result_raw = future.result()
+                typed_result = self._coerce_cis_result(result_raw)
+                if typed_result is not None:
+                    self.results.append(typed_result)
+                    self.update_stats(typed_result)
                     completed += 1
-                    
+
                     # Show progress / แสดงความคืบหน้า
-                    progress_pct = (completed / len(scripts)) * 100
-                    self._print_progress(result, completed, len(scripts), progress_pct)
-                    
+                    progress_pct = (completed / total_checks) * 100
+                    self._print_progress(typed_result, completed, total_checks, progress_pct)
+
                     # EMERGENCY BRAKE: Check cluster health after remediation
                     # If cluster fails after remediation script, stop immediately to prevent cascading damage
                     # เบรกฉุกเฉิน: ตรวจสอบความสมบูรณ์ของคลัสเตอร์หลังการแก้ไข
                     # หากคลัสเตอร์ล้มเหลวหลังสคริปต์แก้ไข ให้หยุดทันทีเพื่อป้องกันความเสียหายต่อเนื่อง
-                    if mode == "remediate" and result['status'] in ['PASS', 'FIXED']:
+                    if mode == "remediate" and typed_result['status'] in ['PASS', 'FIXED']:
                         if not self.wait_for_healthy_cluster():
                             # CRITICAL: Cluster became unhealthy after this remediation
                             # วิกฤต: คลัสเตอร์ไม่สมบูรณ์หลังจากการแก้ไขนี้
@@ -3021,7 +3163,7 @@ class CISUnifiedRunner:
                                 f"\n{Colors.RED}{'='*70}\n"
                                 f"⛔ CRITICAL: CLUSTER UNHEALTHY - EMERGENCY BRAKE ACTIVATED\n"
                                 f"{'='*70}\n"
-                                f"Last Remediation: CIS {result['id']}\n"
+                                f"Last Remediation: CIS {typed_result['id']}\n"
                                 f"Status: {self.health_status}\n"
                                 f"Cluster Health: FAILED\n\n"
                                 f"Remediation loop aborted to prevent cascading failures.\n\n"
@@ -3038,14 +3180,44 @@ class CISUnifiedRunner:
                                 f"{'='*70}{Colors.ENDC}\n"
                             )
                             print(error_banner)
-                            self.log_activity("EMERGENCY_BRAKE", f"Cluster failed after CIS {result['id']} remediation")
+                            self.log_activity("EMERGENCY_BRAKE", f"Cluster failed after CIS {typed_result['id']} remediation")
                             sys.exit(1)
         
         except KeyboardInterrupt:
             self.stop_requested = True
             print("\n[!] Aborted.")
 
-    def _print_progress(self, result, completed, total, percentage):
+    def _show_verbose_result(self, res: CISResult) -> None:
+        """
+        Verbose result printer with explicit typing so static analyzers know the signature.
+        Prints a compact, detailed line for each result in verbose mode.
+        """
+        try:
+            status = str(res.get("status", ""))
+            comp = str(res.get("component", ""))
+            rid = str(res.get("id", ""))
+            reason = str(res.get("reason", "") or res.get("output", ""))
+            duration: float = res["duration"]
+            duration_str = f"{duration}s"
+            status_color = {
+                "PASS": Colors.GREEN,
+                "FAIL": Colors.RED,
+                "MANUAL": Colors.YELLOW,
+                "SKIPPED": Colors.CYAN,
+                "FIXED": Colors.GREEN,
+                "ERROR": Colors.RED,
+                "REMEDIATION_FAILED": Colors.RED
+            }
+            color = status_color.get(status, Colors.WHITE)
+            print(f"   [VERBOSE] {rid} | {comp} | {color}{status}{Colors.ENDC} {duration_str} - {reason}")
+        except Exception:
+            # Fallback to safe print to avoid raising in progress path
+            try:
+                print(f"   [VERBOSE] {res}")
+            except Exception:
+                pass
+
+    def _print_progress(self, result: CISResult, completed: int, total: int, percentage: float) -> None:
         """
         Print progress line
         พิมพ์บรรทัดความคืบหน้า
@@ -3064,10 +3236,10 @@ class CISUnifiedRunner:
             "REMEDIATION_FAILED": Colors.RED
         }
         
-        color = status_color.get(result['status'], Colors.WHITE)
-        print(f"   [{percentage:5.1f}%] [{completed}/{total}] {result['id']} -> {color}{result['status']}{Colors.ENDC}")
+        color = status_color.get(result.get('status', ''), Colors.WHITE)
+        print(f"   [{percentage:5.1f}%] [{completed}/{total}] {result.get('id', '')} -> {color}{result.get('status', '')}{Colors.ENDC}")
 
-    def fix(self, target_level, target_role, fix_failed_only=False):
+    def fix(self, target_level: str, target_role: str, fix_failed_only: bool = False) -> None:
         """
         Execute remediation with split execution strategy
         Group A (Critical/Config - IDs 1.x, 2.x, 3.x, 4.x): Run SEQUENTIALLY with health checks
@@ -3104,7 +3276,7 @@ class CISUnifiedRunner:
         self.ensure_audit_log_dir()
         
         print(f"\n{Colors.YELLOW}[*] Starting Remediation with Split Strategy...{Colors.ENDC}")
-        scripts = self.get_scripts("remediate", target_level, target_role)
+        scripts: List[Dict[str, Any]] = self.get_scripts("remediate", target_level, target_role) or []
         
         # Filter scripts if "fix failed only" mode is enabled
         # กรองสคริปต์หากเปิดใช้งานโหมด "แก้ไขเฉพาะที่ล้มเหลว"
@@ -3135,7 +3307,7 @@ class CISUnifiedRunner:
         self._run_level2_preferences(target_level)
         self.show_results_menu("remediate")
 
-    def _run_level2_preferences(self, target_level):
+    def _run_level2_preferences(self, target_level: str) -> None:
         """Run the Level 2 safe defaults once Level 2 remediation finishes."""
         if target_level not in {"2", "all"}:
             return
@@ -3165,7 +3337,7 @@ class CISUnifiedRunner:
             print(f"{Colors.YELLOW}[WARN] {warning}{Colors.ENDC}")
             self.log_activity("LEVEL2_PREFERENCES_ERROR", warning)
 
-    def _filter_failed_checks(self, scripts):
+    def _filter_failed_checks(self, scripts: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """
         Filter scripts to include only those that FAILED in the audit phase.
         
@@ -3183,13 +3355,20 @@ class CISUnifiedRunner:
             
         กรองสคริปต์เพื่อรวมเฉพาะรายการที่ล้มเหลว (FAILED) ในขั้นตอนการตรวจสอบ (Audit)
         """
+        # Defensive guard to make typing explicit for static analyzers
+        if not scripts:
+            if not self.audit_results:
+                print(f"{Colors.YELLOW}[!] No audit results available. Running full remediation.{Colors.ENDC}")
+            # Ensure a list is always returned
+            return []
+
         if not self.audit_results:
             print(f"{Colors.YELLOW}[!] No audit results available. Running full remediation.{Colors.ENDC}")
-            return scripts
+            return list(scripts)
         
-        failed_scripts = []
-        skipped_pass = []
-        skipped_remediation_failed = []
+        failed_scripts: List[Dict[str, Any]] = []
+        skipped_pass: List[Dict[str, Any]] = []
+        skipped_remediation_failed: List[Dict[str, Any]] = []
         
         for script in scripts:
             check_id = script['id']
@@ -3274,7 +3453,7 @@ class CISUnifiedRunner:
         if self.verbose >= 1:
             print(f"{Colors.BLUE}[DEBUG] Stored {len(self.audit_results)} audit results for targeted remediation{Colors.ENDC}")
 
-    def _classify_remediation_type(self, check_id):
+    def _classify_remediation_type(self, check_id: Optional[str]) -> Tuple[bool, str]:
         """
         SMART WAIT OPTIMIZATION: Classify remediation type to determine if health check is needed.
         Also identifies manifest path for internal YAML fixes.
@@ -3284,38 +3463,42 @@ class CISUnifiedRunner:
         - YAML_CONFIG: Config file changes in static pod manifests (1.2.x, 1.3.x, 1.4.x, 2.x)
         
         Args:
-            check_id (str): The CIS check ID (e.g., '1.1.1', '1.2.1', '5.6.4')
+            check_id (Optional[str]): The CIS check ID (e.g., '1.1.1', '1.2.1', '5.6.4')
         
         Returns:
             tuple: (requires_health_check: bool, manifest_path: str)
             
         การเพิ่มประสิทธิภาพการรอแบบอัจฉริยะ: จำแนกประเภทการแก้ไขเพื่อพิจารณาว่าจำเป็นต้องตรวจสอบความสมบูรณ์หรือไม่
         """
+        # Defensive guard for callers that might pass None or empty values
+        if not check_id:
+            return False, "System Check"
+
         # YAML Config Checks - API Server
         if check_id.startswith('1.2.'):
-            return (True, "/etc/kubernetes/manifests/kube-apiserver.yaml")
+            return True, "/etc/kubernetes/manifests/kube-apiserver.yaml"
             
         # YAML Config Checks - Controller Manager
         if check_id.startswith('1.3.'):
-            return (True, "/etc/kubernetes/manifests/kube-controller-manager.yaml")
+            return True, "/etc/kubernetes/manifests/kube-controller-manager.yaml"
             
         # YAML Config Checks - Scheduler
         if check_id.startswith('1.4.'):
-            return (True, "/etc/kubernetes/manifests/kube-scheduler.yaml")
+            return True, "/etc/kubernetes/manifests/kube-scheduler.yaml"
             
         # YAML Config Checks - Etcd
         if check_id.startswith('2.'):
-            return (True, "/etc/kubernetes/manifests/etcd.yaml")
+            return True, "/etc/kubernetes/manifests/etcd.yaml"
             
         # Safe checks - file permissions (chmod) or ownership (chown), no service impact
         # การตรวจสอบที่ปลอดภัย - การอนุญาตไฟล์ (chmod) หรือความเป็นเจ้าของ (chown) ไม่มีผลกระทบต่อบริการ
         if check_id.startswith('1.1.'):
-            return (False, "File Permissions/Ownership")
+            return False, "File Permissions/Ownership"
         
         # All other remediation checks default to system check
-        return (False, "System Check")
+        return False, "System Check"
 
-    def apply_batch_remediation(self, manifest_path, scripts):
+    def apply_batch_remediation(self, manifest_path: str, scripts: List[Dict[str, Any]]) -> None:
         """
         Requirement 1: Enforce Batch Write (Write-Once-Per-File)
         Apply multiple remediations to a single manifest file in one go.
@@ -3338,10 +3521,13 @@ class CISUnifiedRunner:
         try:
             with open(manifest_path, 'r') as f:
                 if yaml:
-                    data = yaml.safe_load(f)
+                    raw = yaml.safe_load(f)
                 else:
-                    data = {}
-            if not data:
+                    raw = {}
+            # Normalize to a concrete Dict[str, Any] so .get has a stable type for static analyzers
+            if isinstance(raw, dict):
+                data = cast(Dict[str, Any], raw)
+            else:
                 data = {}
         except Exception as e:
             print(f"{Colors.YELLOW}[WARN] Could not read {manifest_path} for dynamic values: {e}{Colors.ENDC}")
@@ -3403,32 +3589,88 @@ rules:
                 svc_acc_issuer = None
                 
                 try:
-                    containers = data.get('spec', {}).get('containers', [])
-                    if not containers:
-                        containers = data.get('spec', {}).get('template', {}).get('spec', {}).get('containers', [])
-                    
+                    # Safely extract containers ensuring a stable List[Dict[str, Any]] for static analysis
+                    containers: List[Dict[str, Any]] = []
+                    # Normalize and explicitly type intermediary variables so static analyzers can infer types
+                    spec_obj_raw: Optional[Dict[str, Any]] = None
+                    # Extract raw candidate and narrow its type using runtime checks so type checkers see Dict[str, Any]
+                    spec_candidate_raw: Optional[Any] = data.get('spec')
+                    spec_candidate: Optional[Dict[str, Any]] = None
+                    # Only cast and assign after an explicit runtime type check
+                    if isinstance(spec_candidate_raw, dict):
+                        spec_candidate = cast(Dict[str, Any], spec_candidate_raw)
+                        spec_obj_raw = spec_candidate
+
+                    # Normalize into a concrete dict for downstream usage to satisfy type checkers
+                    spec: Dict[str, Any] = {}
+                    if isinstance(spec_obj_raw, dict):
+                        spec = spec_obj_raw
+
+                        # Try top-level containers first
+                        raw_containers = spec.get('containers')
+                        if isinstance(raw_containers, list):
+                            # Build validated list of container dicts with explicit casting
+                            containers = []
+                            raw_containers_list = cast(List[Any], raw_containers)
+                            for item in raw_containers_list:
+                                if isinstance(item, dict):
+                                    containers.append(cast(Dict[str, Any], item))
+                        else:
+                            # Fallback to template.spec.containers
+                            template_obj = spec.get('template')
+                            if isinstance(template_obj, dict):
+                                # Do not overwrite the outer 'template' (which may be a string template).
+                                # Use a local variable for the dict representation of the template to avoid shadowing.
+                                template_obj_dict = cast(Dict[str, Any], template_obj)
+                                # Safely extract 'spec' with an explicit runtime check so static analyzers
+                                # can narrow the type to Dict[str, Any] before using it.
+                                t_spec_candidate: Any = template_obj_dict.get('spec')
+                                t_spec_obj: Optional[Dict[str, Any]] = None
+                                if isinstance(t_spec_candidate, dict):
+                                    t_spec_obj = cast(Dict[str, Any], t_spec_candidate)
+                                if isinstance(t_spec_obj, dict):
+                                    t_spec = t_spec_obj
+                                    raw_containers = t_spec.get('containers')
+                                    if isinstance(raw_containers, list):
+                                        containers = []
+                                        raw_containers_list = cast(List[Any], raw_containers)
+                                        for item in raw_containers_list:
+                                            if isinstance(item, dict):
+                                                containers.append(cast(Dict[str, Any], item))
+
+                    # Proceed if we have validated container dicts
                     if containers:
                         # Get version from image
-                        image = containers[0].get('image', '')
+                        image = str(containers[0].get('image', '')) if isinstance(containers[0].get('image', ''), str) else ''
                         if ':' in image:
                             k8s_ver = image.split(':')[-1]
                         
-                        # Get vital flags from command
-                        for arg in containers[0].get('command', []):
-                            if arg.startswith('--advertise-address='):
-                                adv_addr = arg.split('=')[1]
-                            elif arg.startswith('--etcd-servers='):
-                                etcd_servers = arg.split('=')[1]
-                            elif arg.startswith('--service-cluster-ip-range='):
-                                svc_cluster_ip = arg.split('=')[1]
-                            elif arg.startswith('--service-account-issuer='):
-                                svc_acc_issuer = arg.split('=')[1]
-                except:
+                        # Get vital flags from command (ensure command is a list)
+                        command_candidate = containers[0].get('command')
+                        # Only treat it as a list if it's actually a list to avoid assigning None/Any to List[str]
+                        if isinstance(command_candidate, list):
+                            # Help static analyzers by explicitly casting the list items to List[str]
+                            command_list_strs = cast(List[str], command_candidate)
+                            for arg in command_list_strs:
+                                # Coerce to string defensively to avoid unnecessary isinstance checks
+                                try:
+                                    arg_str = str(arg)
+                                except Exception:
+                                    continue
+                                if arg_str.startswith('--advertise-address='):
+                                    adv_addr = arg_str.split('=', 1)[1]
+                                elif arg_str.startswith('--etcd-servers='):
+                                    etcd_servers = arg_str.split('=', 1)[1]
+                                elif arg_str.startswith('--service-cluster-ip-range='):
+                                    svc_cluster_ip = arg_str.split('=', 1)[1]
+                                elif arg_str.startswith('--service-account-issuer='):
+                                    svc_acc_issuer = arg_str.split('=', 1)[1]
+                except Exception:
                     pass
                 
                 # Safety Net: Abort if vital flags are missing for kube-apiserver
                 if "kube-apiserver" in manifest_path:
-                    missing = []
+                    missing: List[str] = []
                     if not adv_addr: missing.append("--advertise-address")
                     if not etcd_servers: missing.append("--etcd-servers")
                     if not svc_cluster_ip: missing.append("--service-cluster-ip-range")
@@ -3441,12 +3683,13 @@ rules:
                             self.update_stats(res)
                         return
 
-                # Apply placeholders
-                final_yaml = template.replace("{{ADVERTISE_ADDRESS}}", adv_addr or "127.0.0.1") \
-                                     .replace("{{K8S_VERSION}}", k8s_ver) \
-                                     .replace("{{ETCD_SERVERS}}", etcd_servers or "https://127.0.0.1:2379") \
-                                     .replace("{{SERVICE_CLUSTER_IP_RANGE}}", svc_cluster_ip or "10.96.0.0/12") \
-                                     .replace("{{SERVICE_ACCOUNT_ISSUER}}", svc_acc_issuer or "https://kubernetes.default.svc.cluster.local")
+                # Apply placeholders - ensure template is converted to a concrete string
+                tmpl_str = str(template or "")
+                final_yaml: str = tmpl_str.replace("{{ADVERTISE_ADDRESS}}", adv_addr or "127.0.0.1") \
+                                 .replace("{{K8S_VERSION}}", k8s_ver) \
+                                 .replace("{{ETCD_SERVERS}}", etcd_servers or "https://127.0.0.1:2379") \
+                                 .replace("{{SERVICE_CLUSTER_IP_RANGE}}", svc_cluster_ip or "10.96.0.0/12") \
+                                 .replace("{{SERVICE_ACCOUNT_ISSUER}}", svc_acc_issuer or "https://kubernetes.default.svc.cluster.local")
                 
                 try:
                     # Create backup first
@@ -3472,14 +3715,14 @@ rules:
         else:
             # 3. Dynamic Patching Logic (for etcd, etc.)
             CSV_CHECKS = ["1.2.8", "1.2.11", "1.2.14", "1.2.29"]
-            expected_flags = []
+            expected_flags: List[str] = []
             
             for script in scripts:
                 cfg = self.get_remediation_config_for_check(script['id'])
                 mod_type = "csv" if script['id'] in CSV_CHECKS else "string"
                 
                 # Collect all flags to modify
-                modifications = []
+                modifications: List[str] = []
                 flag_name = cfg.get('flag_name')
                 expected_value = cfg.get('expected_value')
                 if flag_name:
@@ -3497,38 +3740,88 @@ rules:
                 
                 # Apply to the 'data' dictionary
                 try:
-                    containers = data.get('spec', {}).get('containers', [])
-                    if not containers:
-                        containers = data.get('spec', {}).get('template', {}).get('spec', {}).get('containers', [])
-                    
+                    # Ensure 'data' is a dict and extract containers with explicit type checks
+                    containers: List[Dict[str, Any]] = []
+                    # Normalize and safely extract 'spec' to satisfy static analyzers
+                    spec_obj_raw = data.get('spec')
+                    spec: Dict[str, Any] = {}
+                    if isinstance(spec_obj_raw, dict):
+                        spec = spec_obj_raw
+
+                        # Try top-level containers first
+                        raw = spec.get('containers')
+                        if isinstance(raw, list):
+                            containers = []
+                            raw_containers_list = cast(List[Any], raw)
+                            for item in raw_containers_list:
+                                if isinstance(item, dict):
+                                    containers.append(cast(Dict[str, Any], item))
+                        else:
+                            # Fallback to template.spec.containers
+                            template_obj = spec.get('template')
+                            # Use concrete Any for the candidate so static analyzers don't treat it as Unknown|None
+                            t_spec_candidate_raw: Any = None
+                            t_spec_obj: Optional[Dict[str, Any]] = None
+                            if isinstance(template_obj, dict):
+                                # Cast template_obj to a Dict[str, Any] before calling .get to provide a stable type
+                                template_obj_dict = cast(Dict[str, Any], template_obj)
+                                t_spec_candidate_raw = template_obj_dict.get('spec')
+                            # Narrow the candidate to a dict before casting
+                            if isinstance(t_spec_candidate_raw, dict):
+                                t_spec_obj = cast(Dict[str, Any], t_spec_candidate_raw)
+                            if isinstance(t_spec_obj, dict):
+                                t_spec = t_spec_obj
+                                raw = t_spec.get('containers')
+                                if isinstance(raw, list):
+                                    containers = []
+                                    raw_containers_list = cast(List[Any], raw)
+                                    for item in raw_containers_list:
+                                        if isinstance(item, dict):
+                                            containers.append(cast(Dict[str, Any], item))
+                    # Iterate only over validated container dicts
                     for container in containers:
-                        if 'command' in container:
-                            for flag_str in modifications:
-                                if '=' in flag_str:
-                                    f_name, f_val = flag_str.split('=', 1)
+                        command = container.get('command')
+                        if not isinstance(command, list):
+                            continue
+                        # Narrow the type for static analyzers: treat command as List[str]
+                        command_list: List[str] = cast(List[str], command)
+                        # Process each modification entry individually to ensure f_name is always bound
+                        for flag_str in modifications:
+                            if '=' in flag_str:
+                                f_name_raw, f_val = flag_str.split('=', 1)
+                            else:
+                                f_name_raw, f_val = flag_str, None
+                            
+                            # Coerce flag name to a safe string and skip if not possible
+                            try:
+                                f_name = str(f_name_raw)
+                            except Exception:
+                                continue
+                            
+                            prefix = f_name + "="
+                            # Update or append flag
+                            flag_index = -1
+                            for i, item in enumerate(command_list):
+                                # Coerce item to string (robust and avoids redundant isinstance checks)
+                                item_str = str(item)
+                                if item_str.startswith(prefix) or item_str == f_name:
+                                    flag_index = i
+                                    break
+                            
+                            if flag_index >= 0:
+                                if mod_type == "csv":
+                                    existing = command_list[flag_index]
+                                    current_val = existing.split("=", 1)[1] if "=" in existing else ""
+                                    # Only add if f_val is provided and not already present
+                                    if f_val is not None and f_val not in current_val.split(','):
+                                        new_val = f"{current_val},{f_val}" if current_val else str(f_val)
+                                        command_list[flag_index] = f"{f_name}={new_val}"
                                 else:
-                                    f_name, f_val = flag_str, None
-                                
-                                # Update or append flag
-                                flag_index = -1
-                                for i, item in enumerate(container['command']):
-                                    if item.startswith(f_name + "=") or item == f_name:
-                                        flag_index = i
-                                        break
-                                
-                                if flag_index >= 0:
-                                    if mod_type == "csv":
-                                        current_val = ""
-                                        if "=" in container['command'][flag_index]:
-                                            current_val = container['command'][flag_index].split("=", 1)[1]
-                                        
-                                        if f_val not in current_val.split(','):
-                                            new_val = f"{current_val},{f_val}" if current_val else f_val
-                                            container['command'][flag_index] = f"{f_name}={new_val}"
-                                    else:
-                                        container['command'][flag_index] = f"{f_name}={f_val}" if f_val is not None else f_name
-                                else:
-                                    container['command'].append(f"{f_name}={f_val}" if f_val is not None else f_name)
+                                    command_list[flag_index] = f"{f_name}={f_val}" if f_val is not None else f_name
+                            else:
+                                command_list.append(f"{f_name}={f_val}" if f_val is not None else f_name)
+                        # Ensure container reflects the (possibly) modified command list
+                        container['command'] = command_list
                 except Exception as e:
                     print(f"{Colors.RED}[BATCH ERROR] Failed to modify data for {script['id']}: {e}{Colors.ENDC}")
 
@@ -3584,16 +3877,19 @@ rules:
                     'timestamp': datetime.now().isoformat()
                 }
 
-            res = {
+            res = cast(CISResult, {
                 "id": script['id'],
                 "role": script["role"],
                 "level": script["level"],
                 "status": status,
-                "duration": 0,
+                "duration": 0.0,
                 "reason": reason,
+                "fix_hint": "",
+                "cmds": [],
+                "output": reason,
                 "path": script["path"],
                 "component": self.get_component_for_rule(script['id'])
-            }
+            })
             self.results.append(res)
             self.update_stats(res)
             print(f"   • {script['id']}: {Colors.GREEN if status in ['PASS', 'FIXED'] else Colors.RED}{status}{Colors.ENDC}")
@@ -3612,7 +3908,7 @@ rules:
             "worker": {"pass": 0, "fail": 0, "manual": 0, "skipped": 0, "error": 0, "total": 0}
         }
         
-        for check_id, data in self.audit_results.items():
+        for data in self.audit_results.values():
             role = data.get('role', 'master')
             status = data.get('status', 'UNKNOWN')
             
@@ -3630,7 +3926,7 @@ rules:
         self.stats = new_stats
         self.print_stats_summary()
 
-    def _run_remediation_with_split_strategy(self, scripts):
+    def _run_remediation_with_split_strategy(self, scripts: List[Dict[str, Any]]) -> None:
         """
         Execute remediation with split execution strategy for stability.
         
@@ -3683,7 +3979,7 @@ rules:
             print(f"\n{Colors.YELLOW}[*] Executing GROUP A (Critical/Config) - Batching Static Pods...{Colors.ENDC}")
             
             # 1. Filter out Manual checks first
-            active_group_a = []
+            active_group_a: List[Dict[str, Any]] = []
             for script in group_a:
                 is_manual = False
                 reason = ""
@@ -3713,8 +4009,8 @@ rules:
                     active_group_a.append(script)
 
             # 2. Group active checks by manifest for Static Pods
-            batch_groups = {}
-            sequential_a = []
+            batch_groups: Dict[str, List[Dict[str, Any]]] = {}
+            sequential_a: List[Dict[str, Any]] = []
             for script in active_group_a:
                 is_yaml, manifest_path = self._classify_remediation_type(script['id'])
                 if is_yaml and manifest_path and os.path.exists(manifest_path):
@@ -3746,13 +4042,14 @@ rules:
                 else:
                     result = self.run_script(script, "remediate")
                 
-                if result:
-                    self.results.append(result)
-                    self.update_stats(result)
+                typed_result = self._coerce_cis_result(result)
+                if typed_result is not None:
+                    self.results.append(typed_result)
+                    self.update_stats(typed_result)
                     progress_pct = (idx / len(sequential_a)) * 100
-                    self._print_progress(result, idx, len(sequential_a), progress_pct)
+                    self._print_progress(typed_result, idx, len(sequential_a), progress_pct)
                     
-                    if result['status'] in ['PASS', 'FIXED'] and requires_health_check:
+                    if typed_result['status'] in ['PASS', 'FIXED'] and requires_health_check:
                         print(f"{Colors.YELLOW}    [Health Check] Verifying cluster stability...{Colors.ENDC}")
                         if not self.wait_for_healthy_cluster(skip_health_check=False):
                             print(f"{Colors.RED}⛔ CRITICAL: CLUSTER UNHEALTHY - ABORTING{Colors.ENDC}")
@@ -3768,8 +4065,8 @@ rules:
             
             # Filter out MANUAL checks from GROUP B
             # กรองการตรวจสอบด้วยตนเองออกจากกลุ่ม B
-            group_b_automated = []
-            group_b_manual = []
+            group_b_automated: List[Dict[str, Any]] = []
+            group_b_manual: List[Tuple[Dict[str, Any], str]] = []
             
             for script in group_b:
                 is_manual = False
@@ -3827,15 +4124,16 @@ rules:
                             if self.stop_requested:
                                 break
                             
-                            result = future.result()
-                            if result:
-                                self.results.append(result)
-                                self.update_stats(result)
+                            result_raw = future.result()
+                            typed_result = self._coerce_cis_result(result_raw)
+                            if typed_result is not None:
+                                self.results.append(typed_result)
+                                self.update_stats(typed_result)
                                 completed += 1
                                 
                                 # Show progress for parallel execution
                                 progress_pct = (completed / len(group_b_automated)) * 100
-                                self._print_progress(result, completed, len(group_b_automated), progress_pct)
+                                self._print_progress(typed_result, completed, len(group_b_automated), progress_pct)
                     
                     except KeyboardInterrupt:
                         self.stop_requested = True
@@ -3869,16 +4167,18 @@ rules:
             "worker": {"pass": 0, "fail": 0, "manual": 0, "skipped": 0, "error": 0, "total": 0}
         }
 
-    def _prepare_report_dir(self, mode):
+    def _prepare_report_dir(self, mode: str) -> None:
         """
         Create report directory with Oracle-style structure
         สร้างไดเรกทอรีรายงานพร้อมโครงสร้างแบบ Oracle
         """
+        # Coerce mode to string to handle callers passing non-str values without unnecessary isinstance checks
+        mode = str(mode)
         run_folder = f"run_{self.timestamp}"
         self.current_report_dir = os.path.join(self.date_dir, mode, run_folder)
         os.makedirs(self.current_report_dir, exist_ok=True)
 
-    def save_snapshot(self, mode, role, level):
+    def save_snapshot(self, mode: str, role: str, level: str) -> None:
         """
         Save results for trend comparison
         บันทึกผลลัพธ์เพื่อเปรียบเทียบแนวโน้ม
@@ -3904,10 +4204,13 @@ rules:
             if self.verbose >= 2:
                 print(f"{Colors.RED}[DEBUG] Snapshot error: {e}{Colors.ENDC}")
 
-    def get_previous_snapshot(self, mode, role, level):
+    def get_previous_snapshot(self, mode: str, role: str, level: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve most recent previous snapshot
+        Retrieve most recent previous snapshot.
         ดึงข้อมูลสแนปชอตก่อนหน้าล่าสุด
+
+        Returns:
+            Optional[Dict[str, Any]]: Loaded snapshot dict, or None if not found or on error.
         """
         pattern = f"snapshot_*_{mode}_{role}_{level}.json"
         snapshots = sorted(
@@ -3925,7 +4228,7 @@ rules:
         
         return None
 
-    def calculate_score(self, stats):
+    def calculate_score(self, stats: Dict[str, Dict[str, int]]) -> float:
         """
         Calculate dual-metric compliance scores (LEGACY - deprecated)
         
@@ -3938,9 +4241,27 @@ rules:
         คำนวณคะแนนการปฏิบัติตามข้อกำหนดแบบเมตริกคู่ (ดั้งเดิม - เลิกใช้งานแล้ว)
         """
         auto_health = self.calculate_compliance_scores(stats)
-        return auto_health['automation_health']
+        # Ensure a stable float return value for static analysis and callers.
+        try:
+            # Use duck-typing: prefer a 'get' method if available rather than isinstance checks
+            getter = getattr(auto_health, 'get', None)
+            if callable(getter):
+                val = getter('automation_health', 0.0)
+            else:
+                val = 0.0
 
-    def calculate_compliance_scores(self, stats):
+            # Coerce to a safe numeric type for float() to avoid type-checker errors.
+            if isinstance(val, (int, float)):
+                return float(val)
+            try:
+                # Convert unknown objects to string then to float as a safe fallback.
+                return float(str(val))
+            except Exception:
+                return 0.0
+        except Exception:
+            return 0.0
+
+    def calculate_compliance_scores(self, stats: Dict[str, Dict[str, int]]) -> Dict[str, Any]:
         """
         Calculate dual compliance metrics for accurate CIS hardening assessment
         
@@ -4013,18 +4334,26 @@ rules:
             'total': total_all
         }
 
-    def show_trend_analysis(self, current_score, previous_snapshot):
+    def show_trend_analysis(self, current_score: float, previous_snapshot: Dict[str, Any]) -> None:
         """
         Display score trend comparison
         แสดงการเปรียบเทียบแนวโน้มคะแนน
         """
+        # Skip if previous snapshot is missing or empty (avoids redundant isinstance on a typed dict)
+        if not previous_snapshot:
+            return
+
         previous_stats = previous_snapshot.get("stats", {})
         previous_score = self.calculate_score(previous_stats)
-        trend = current_score - previous_score
-        
+        # Ensure numeric arithmetic for trend calculation
+        try:
+            trend = float(current_score) - float(previous_score)
+        except Exception:
+            trend = 0.0
+
         trend_symbol = "📈" if trend > 0 else ("📉" if trend < 0 else "➡️")
         trend_color = Colors.GREEN if trend > 0 else (Colors.RED if trend < 0 else Colors.YELLOW)
-        
+
         print(f"\n{Colors.CYAN}{'='*70}")
         print(f"TREND ANALYSIS (Score Comparison)")
         print(f"{'='*70}{Colors.ENDC}")
@@ -4033,7 +4362,7 @@ rules:
         print(f"  Change:          {trend_color}{trend_symbol} {'+' if trend > 0 else ''}{trend:.2f}%{Colors.ENDC}")
         print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}")
 
-    def save_reports(self, mode):
+    def save_reports(self, mode: str) -> None:
         """
         Save all report formats (CSV, JSON, Text, HTML)
         บันทึกรูปแบบรายงานทั้งหมด (CSV, JSON, Text, HTML)
@@ -4074,12 +4403,12 @@ rules:
             if self.verbose >= 2:
                 print(f"{Colors.RED}[DEBUG] CSV save error: {e}{Colors.ENDC}")
 
-    def export_results_to_excel(self, filename=None):
+    def export_results_to_excel(self, filename: Optional[str] = None) -> None:
         """
         Export results to Excel format with formatting and color coding.
         ส่งออกผลลัพธ์เป็นรูปแบบ Excel พร้อมการจัดรูปแบบและรหัสสี
         """
-        if not OPENPYXL_AVAILABLE:
+        if not openpyxl_available:
             print(f"{Colors.RED}[!] openpyxl is not installed. Falling back to CSV.{Colors.ENDC}")
             self._save_csv_report()
             return
@@ -4107,7 +4436,6 @@ rules:
             return
 
         try:
-            assert openpyxl is not None, "openpyxl module unexpectedly missing"
             wb = openpyxl.Workbook()
             ws = wb.active
             if ws is None:
@@ -4169,7 +4497,7 @@ rules:
             print(f"{Colors.RED}[!] Excel export error: {e}{Colors.ENDC}")
             self.log_activity("EXPORT_EXCEL_ERROR", str(e))
 
-    def _save_text_reports(self, mode):
+    def _save_text_reports(self, mode: str):
         """Save summary and detailed text reports / บันทึกรายงานข้อความสรุปและรายละเอียด"""
         if not self.current_report_dir:
             raise ValueError("Report directory not set")
@@ -4179,21 +4507,21 @@ rules:
         failed_file = os.path.join(self.current_report_dir, "failed_items.txt")
         
         # Categorize results / จำแนกผลลัพธ์
-        passed = [r for r in self.results if r['status'] in ['PASS', 'FIXED']]
-        failed = [r for r in self.results if r['status'] in ['FAIL', 'ERROR']]
-        manual = [r for r in self.results if r['status'] == 'MANUAL']
-        skipped = [r for r in self.results if r['status'] == 'SKIPPED']
+        passed: List[CISResult] = [r for r in self.results if r['status'] in ['PASS', 'FIXED']]
+        failed: List[CISResult] = [r for r in self.results if r['status'] in ['FAIL', 'ERROR']]
+        manual: List[CISResult] = [r for r in self.results if r['status'] == 'MANUAL']
+        skipped: List[CISResult] = [r for r in self.results if r['status'] == 'SKIPPED']
         
         # Summary / สรุป
         with open(summary_file, 'w') as f:
-            total = len(self.results)
-            score = (len(passed) / (len(passed) + len(failed) + len(manual)) * 100) if (len(passed) + len(failed) + len(manual)) > 0 else 0
+            considered = len(passed) + len(failed) + len(manual)
+            score = (len(passed) / considered * 100) if considered > 0 else 0.0
             
             f.write(f"{'='*60}\n")
             f.write(f"CIS BENCHMARK SUMMARY - {mode.upper()}\n")
             f.write(f"Date: {datetime.now()}\n")
             f.write(f"{'='*60}\n\n")
-            f.write(f"Total:    {total}\n")
+            f.write(f"Total:    {len(self.results)}\n")
             f.write(f"Pass:     {len(passed)}\n")
             f.write(f"Fail:     {len(failed)}\n")
             f.write(f"Manual:   {len(manual)}\n")
@@ -4225,7 +4553,7 @@ rules:
             if self.verbose >= 2:
                 print(f"{Colors.RED}[DEBUG] JSON save error: {e}{Colors.ENDC}")
 
-    def _save_html_report(self, mode):
+    def _save_html_report(self, mode: str) -> None:
         """Save HTML report with visualization / บันทึกรายงาน HTML พร้อมการแสดงภาพ"""
         if not self.current_report_dir:
             raise ValueError("Report directory not set")
@@ -4234,7 +4562,6 @@ rules:
         passed = len([r for r in self.results if r['status'] in ['PASS', 'FIXED']])
         failed = len([r for r in self.results if r['status'] in ['FAIL', 'ERROR']])
         manual = len([r for r in self.results if r['status'] == 'MANUAL'])
-        total = len(self.results)
         score = (passed / (passed + failed + manual) * 100) if (passed + failed + manual) > 0 else 0
         
         html_content = f"""<!DOCTYPE html>
@@ -4304,21 +4631,31 @@ rules:
             role_name = "CLUSTER"
         
         # Color helpers
-        def get_score_color(score):
-            if score >= 80:
+        def get_score_color(score: float) -> str:
+            # Coerce to float for defensive typing and static analysis
+            try:
+                s = float(score)
+            except Exception:
+                s = 0.0
+            if s >= 80:
                 return Colors.GREEN
-            elif score >= 50:
+            elif s >= 50:
                 return Colors.YELLOW
             return Colors.RED
         
-        def get_score_status(score):
-            if score >= 90:
+        def get_score_status(score: float) -> str:
+            # Coerce to float for defensive typing and static analysis
+            try:
+                s = float(score)
+            except Exception:
+                s = 0.0
+            if s >= 90:
                 return "Excellent"
-            if score >= 80:
+            if s >= 80:
                 return "Good"
-            if score >= 70:
+            if s >= 70:
                 return "Acceptable"
-            if score >= 50:
+            if s >= 50:
                 return "Needs Improvement"
             return "Critical"
         
@@ -4435,16 +4772,16 @@ rules:
             
             # Group by role for clarity
             # กลุ่มตามบทบาทเพื่อความชัดเจน
-            manual_by_role = {}
+            manual_by_role: Dict[str, List[Dict[str, Any]]] = {}
             for item in self.manual_pending_items:
-                role = item.get('role', 'unknown')
+                role = str(item.get('role', 'unknown'))
                 if role not in manual_by_role:
                     manual_by_role[role] = []
                 manual_by_role[role].append(item)
             
             for role in ['master', 'worker']:
                 if role in manual_by_role:
-                    items = manual_by_role[role]
+                    items: List[Dict[str, Any]] = manual_by_role[role]
                     print(f"  {Colors.BOLD}{role.upper()} NODE ({len(items)} items):{Colors.ENDC}")
                     for item in items:
                         check_id = item['id']
@@ -4478,7 +4815,7 @@ rules:
 
 
 
-    def show_verbose_result(self, res):
+    def show_verbose_result(self, res: CISResult) -> None:
         """
         Display detailed result output
         แสดงผลลัพธ์รายละเอียด
@@ -4617,7 +4954,7 @@ rules:
         
         return level, role, SCRIPT_TIMEOUT
 
-    def confirm_action(self, message):
+    def confirm_action(self, message: str) -> bool:
         """
         Ask for user confirmation
         ขอการยืนยันจากผู้ใช้
@@ -4630,7 +4967,7 @@ rules:
                 return False
             print(f"{Colors.RED}Please enter 'y' or 'n'.{Colors.ENDC}")
 
-    def show_results_menu(self, mode):
+    def show_results_menu(self, mode: str) -> None:
         """
         Show menu after scan/fix completion
         แสดงเมนูหลังจากการสแกน/แก้ไขเสร็จสมบูรณ์
