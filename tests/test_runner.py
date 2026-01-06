@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 from unittest import mock
 
 from cis_k8s_unified import CISUnifiedRunner
@@ -46,6 +47,9 @@ class ExemptionTest(unittest.TestCase):
         script = {"id": "1.1.1", "role": "master", "level": "L1", "path": "/dev/null"}
 
         result = runner.run_script(script, mode="audit")
+
+        self.assertIsNotNone(result)
+        result = cast(dict[str, Any], result)
 
         self.assertEqual(result["status"], "IGNORED")
         self.assertIn("Excluded", result["reason"])
