@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 from datetime import datetime
 from shutil import copy2
+from typing import Any, Dict
 
 
 # ============================================================================
@@ -523,10 +524,10 @@ class KubeletHardener:
     def __init__(self, config_path="/var/lib/kubelet/config.yaml"):
         self.config_path = Path(config_path)
         self.backup_dir = Path("/var/backups/cis-kubelet")
-        self.config = {}
+        self.config: Dict[str, Any] = {}
         
         # Load CIS settings from environment variables or use hardcoded defaults
-        self.cis_settings = self._load_cis_settings()
+        self.cis_settings: Dict[str, Any] = self._load_cis_settings()
     
     def _load_cis_settings(self):
         """Load CIS settings from environment variables with defaults.

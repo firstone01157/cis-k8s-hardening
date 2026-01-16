@@ -58,7 +58,7 @@ class ExemptionTest(unittest.TestCase):
 class ConfigLogicTest(unittest.TestCase):
     def test_log_only_prevents_perform_call(self):
         config = {"log_only": True}
-        task = NetworkPolicyTask(config, kubectl_cmd="kubectl")
+        task = NetworkPolicyTask(config, kubectl_cmd=["kubectl"])
 
         with mock.patch.object(NetworkPolicyTask, "apply") as mock_apply:
             task.run()

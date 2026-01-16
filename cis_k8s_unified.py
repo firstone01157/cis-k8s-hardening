@@ -24,7 +24,7 @@ import tempfile
 import requests
 import difflib
 import re
-import shlex
+import threading
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -73,6 +73,10 @@ HISTORY_DIR = os.path.join(BASE_DIR, "history")
 MAX_WORKERS = 8
 SCRIPT_TIMEOUT = 60  # seconds / วินาที
 REQUIRED_TOOLS = ["kubectl", "jq", "grep", "sed", "awk"]  # Required dependencies / การพึ่งพาที่จำเป็น
+
+# Ensure kube-flannel privileged PSS label is applied once per process
+_global_kube_flannel_pss_protected = False
+_GLOBAL_KUBE_FLANNEL_PSS_LOCK = threading.Lock()
 
 
 
@@ -456,6 +460,8 @@ class CISUnifiedRunner:
         self.level_check_totals = {"L1": 0, "L2": 0}
         self.total_level_one_two_checks = 0
         self._aggressive_remediation_confirmed = False
+        self._kube_flannel_pss_protected = False
+        self._kube_flannel_lock = threading.Lock()
         
         # Timestamp and directories / แสตมป์เวลาและไดเรกทอรี
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -541,6 +547,18 @@ class CISUnifiedRunner:
             if isinstance(checks_config_raw, dict):
                 checks_config = cast(Dict[str, Any], checks_config_raw)
                 for check_id, check_cfg in checks_config.items():
+                    # Support nested format: {"L1": {"1.1.1": {...}}, "L2": {...}}
+                    if str(check_id).upper() in {"L1", "L2"} and isinstance(check_cfg, dict):
+                        level_tag = str(check_id).upper()
+                        nested_checks = cast(Dict[str, Any], check_cfg)
+                        for nested_id, nested_cfg in nested_checks.items():
+                            if not isinstance(nested_cfg, dict):
+                                continue
+                            if "level" not in nested_cfg:
+                                nested_cfg["level"] = level_tag
+                            normalized_checks[str(nested_id)] = nested_cfg
+                        continue
+
                     if not isinstance(check_cfg, dict):
                         continue
                     normalized_checks[str(check_id)] = check_cfg
@@ -635,13 +653,30 @@ class CISUnifiedRunner:
         """Track how many checks exist at Level 1 and Level 2 for reporting."""
         totals = {"L1": 0, "L2": 0}
 
-        for check_config in self.remediation_checks_config.values():
-            level_tag = str(check_config.get("level", "")).upper()
-            if level_tag in totals:
-                totals[level_tag] += 1
+        for check_id, check_config in self.remediation_checks_config.items():
+            level_raw = str(check_config.get("level", "")).upper().strip()
+            if level_raw in totals:
+                totals[level_raw] += 1
+                continue
+            if level_raw in {"1", "LEVEL1", "LEVEL 1"}:
+                totals["L1"] += 1
+                continue
+            if level_raw in {"2", "LEVEL2", "LEVEL 2"}:
+                totals["L2"] += 1
+                continue
+
+            # Fallback: infer by check ID if level metadata is missing
+            if str(check_id).startswith("1.") or str(check_id).startswith("2.") or str(check_id).startswith("3.") or str(check_id).startswith("4."):
+                totals["L1"] += 1
+            elif str(check_id).startswith("5."):
+                totals["L2"] += 1
 
         self.level_check_totals = totals
         self.total_level_one_two_checks = totals.get("L1", 0) + totals.get("L2", 0)
+
+        if self.total_level_one_two_checks == 0 and self.remediation_checks_config:
+            # Last-resort fallback for reporting if level tags are missing
+            self.total_level_one_two_checks = len(self.remediation_checks_config)
 
         if self.verbose >= 2:
             print(f"{Colors.BLUE}[DEBUG] Level 1+2 check totals: {self.level_check_totals} ({self.total_level_one_two_checks} total){Colors.ENDC}")
@@ -802,7 +837,7 @@ class CISUnifiedRunner:
             print(f"{Colors.GREEN}[✓] openpyxl is installed (Excel reporting enabled){Colors.ENDC}")
         else:
             print(f"{Colors.YELLOW}[!] openpyxl is not installed (Excel reporting disabled){Colors.ENDC}")
-            print(f"{Colors.YELLOW}[!] Install with: pip install openpyxl{Colors.ENDC}")
+            print(f"{Colors.YELLOW}[!] Install with: pip install openpyxl, sudo apt install python3-openpyxl{Colors.ENDC}")
 
     def ensure_audit_log_dir(self):
         """
@@ -1354,11 +1389,26 @@ class CISUnifiedRunner:
         env.update(self.remediation_env_vars)
         return env
 
+    def _protect_kube_flannel_pss_once(self, env: Optional[Dict[str, str]] = None):
+        """Ensure kube-flannel keeps a privileged PSS label only once per run."""
+        global _global_kube_flannel_pss_protected
+        if self._kube_flannel_pss_protected or _global_kube_flannel_pss_protected:
+            return
+        with _GLOBAL_KUBE_FLANNEL_PSS_LOCK:
+            if self._kube_flannel_pss_protected or _global_kube_flannel_pss_protected:
+                return
+            with self._kube_flannel_lock:
+                if self._kube_flannel_pss_protected or _global_kube_flannel_pss_protected:
+                    return
+                self._protect_kube_flannel_pss(env=env)
+                self._kube_flannel_pss_protected = True
+                _global_kube_flannel_pss_protected = True
+
     def _protect_kube_flannel_pss(self, env: Optional[Dict[str, str]] = None):
         """Ensure kube-flannel keeps a privileged PSS label to avoid breaking the CNI."""
         namespace = "kube-flannel"
         label = "pod-security.kubernetes.io/enforce=privileged"
-        cmd = ["kubectl", "label", "--overwrite", "ns", namespace, label]
+        cmd = self.get_kubectl_cmd() + ["label", "--overwrite", "ns", namespace, label]
         try:
             result = subprocess.run(
                 cmd,
@@ -1384,7 +1434,7 @@ class CISUnifiedRunner:
         """Return True when kube-flannel already has a privileged PSS label."""
         try:
             result = subprocess.run(
-                ["kubectl", "get", "namespace", "kube-flannel", "-o", "json"],
+                self.get_kubectl_cmd() + ["get", "namespace", "kube-flannel", "-o", "json"],
                 capture_output=True,
                 text=True,
                 timeout=15
@@ -1603,7 +1653,7 @@ class CISUnifiedRunner:
             status, reason, fix_hint, cmds = self._parse_script_output(result, script_id, "remediate", False)
 
             if script_id.startswith("5.2."):
-                self._protect_kube_flannel_pss(env=env)
+                self._protect_kube_flannel_pss_once(env=env)
             return status, reason, fix_hint, cmds
 
     def _get_process_name_for_check(self, check_id: str) -> Optional[str]:
@@ -2729,7 +2779,7 @@ class CISUnifiedRunner:
         return False
 
     def _extract_pod_security_failure_names(self, combined_output: str) -> Set[str]:
-        pattern = re.compile(r"^-+\s*([a-z0-9][a-z0-9\.\-]*)$", re.IGNORECASE)
+        pattern = re.compile(r"^-+\s*([a-z0-9][a-z0-9\.\-]*)(?:\s|$)", re.IGNORECASE)
         failures: Set[str] = set()
         for line in combined_output.splitlines():
             stripped = line.strip()
@@ -3317,7 +3367,7 @@ class CISUnifiedRunner:
         try:
             helper = Level2Remediator(
                 self.config_data,
-                kubectl_cmd=shlex.join(self.get_kubectl_cmd()),
+                kubectl_cmd=self.get_kubectl_cmd(),
                 namespace_exempt_checker=self.is_namespace_exempt,
                 namespace_label_applier=self.label_namespace_as_exempt,
             )
@@ -4559,9 +4609,22 @@ rules:
             raise ValueError("Report directory not set")
         html_file = os.path.join(self.current_report_dir, "report.html")
         
-        passed = len([r for r in self.results if r['status'] in ['PASS', 'FIXED']])
-        failed = len([r for r in self.results if r['status'] in ['FAIL', 'ERROR']])
-        manual = len([r for r in self.results if r['status'] == 'MANUAL'])
+        # Prefer audit_results when it contains a fuller view than self.results
+        results_snapshot = list(self.results)
+        if self.audit_results and len(self.audit_results) > len(results_snapshot):
+            results_snapshot = [
+                {
+                    "id": check_id,
+                    "role": data.get("role", "unknown"),
+                    "status": data.get("status", "UNKNOWN"),
+                    "duration": 0,
+                }
+                for check_id, data in self.audit_results.items()
+            ]
+
+        passed = len([r for r in results_snapshot if r['status'] in ['PASS', 'FIXED']])
+        failed = len([r for r in results_snapshot if r['status'] in ['FAIL', 'ERROR']])
+        manual = len([r for r in results_snapshot if r['status'] == 'MANUAL'])
         score = (passed / (passed + failed + manual) * 100) if (passed + failed + manual) > 0 else 0
         
         html_content = f"""<!DOCTYPE html>
@@ -4596,7 +4659,7 @@ rules:
         
         <table>
             <tr><th>CIS ID</th><th>Role</th><th>Status</th><th>Duration</th></tr>
-            {''.join(f'<tr><td>{r["id"]}</td><td>{r["role"].upper()}</td><td>{r["status"]}</td><td>{r["duration"]}s</td></tr>' for r in self.results)}
+            {''.join(f'<tr><td>{r["id"]}</td><td>{str(r["role"]).upper()}</td><td>{r["status"]}</td><td>{r["duration"]}s</td></tr>' for r in results_snapshot)}
         </table>
     </div>
 </body>

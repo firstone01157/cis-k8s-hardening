@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -63,7 +64,7 @@ class Level2Task:
 
 
 class KubectlTask(Level2Task):
-    def __init__(self, task_id: str, config: Optional[Dict], kubectl_cmd: str):
+    def __init__(self, task_id: str, config: Optional[Dict], kubectl_cmd: List[str]):
         super().__init__(task_id, config)
         self.kubectl = kubectl_cmd
 
@@ -72,7 +73,7 @@ class KubectlTask(Level2Task):
 
 
 class NetworkPolicyTask(KubectlTask):
-    def __init__(self, config: Optional[Dict], kubectl_cmd: str):
+    def __init__(self, config: Optional[Dict], kubectl_cmd: List[str]):
         super().__init__("network_policy", config, kubectl_cmd)
         self.namespaces = self.config.get("namespaces", ["default", "secure-zone"])
         self.policy_name = self.config.get("policy_name", "cis-baseline-allow")
@@ -88,8 +89,9 @@ class NetworkPolicyTask(KubectlTask):
             "spec": {
                 "policyTypes": ["Ingress", "Egress"],
                 "podSelector": {},
-                "ingress": [{"from": [{}]}],
-                "egress": [{"to": [{}]}],
+                # Allow-all baseline: empty rule allows all traffic
+                "ingress": [{}],
+                "egress": [{}],
             },
         }
 
@@ -103,12 +105,13 @@ class NetworkPolicyTask(KubectlTask):
                 yaml.safe_dump(policy, tmp, sort_keys=False)
                 tmp_path = tmp.name
             try:
-                result = self._exec_with_chroot([self.kubectl, "apply", "-f", tmp_path])
+                result = self._exec_with_chroot(self.kubectl + ["apply", "-f", tmp_path])
                 if result.returncode != 0:
                     log.warning("[5.3.2] kubectl apply failed: %s", result.stderr.strip())
-                else:
-                    log.info("[5.3.2] Applied %s", result.stdout.strip().splitlines()[-1])
-                    applied += 1
+                    # Skip retry loop when apply failed (invalid YAML, auth, etc.)
+                    continue
+                log.info("[5.3.2] Applied %s", result.stdout.strip().splitlines()[-1])
+                applied += 1
                 self._verify_policy(namespace)
             finally:
                 os.remove(tmp_path)
@@ -137,14 +140,16 @@ class NetworkPolicyTask(KubectlTask):
 
     def _verify_policy(self, namespace: str) -> bool:
         def audit_func() -> Tuple[str, str]:
-            result = self._exec_with_chroot([
-                self.kubectl,
-                "get",
-                "networkpolicy",
-                f"{self.policy_name}-{namespace}",
-                "-n",
-                namespace,
-            ])
+            result = self._exec_with_chroot(
+                self.kubectl
+                + [
+                    "get",
+                    "networkpolicy",
+                    f"{self.policy_name}-{namespace}",
+                    "-n",
+                    namespace,
+                ]
+            )
             if result.returncode == 0:
                 return "PASS", "permissive baseline present"
             return "FAIL", result.stderr.strip() or "networkpolicy missing"
@@ -236,7 +241,8 @@ class SeccompTask(Level2Task):
     def audit(self, **kwargs) -> Level2TaskResult:
         missing = []
         for manifest in self.manifests:
-            status, _ = self._verify_manifest(manifest)
+            # Avoid noisy retry loops in log-only/audit mode
+            status, _ = self._verify_manifest(manifest, retry=False)
             if status != "PASS":
                 missing.append(manifest)
 
@@ -279,7 +285,7 @@ class SeccompTask(Level2Task):
             return True
         return False
 
-    def _verify_manifest(self, manifest_path: str) -> Tuple[str, str]:
+    def _verify_manifest(self, manifest_path: str, retry: bool = True) -> Tuple[str, str]:
         if not os.path.exists(manifest_path):
             msg = "manifest missing"
             log.warning("Manifest %s missing during verification", manifest_path)
@@ -291,6 +297,9 @@ class SeccompTask(Level2Task):
             if self._contains_runtime_default(data):
                 return "PASS", "seccomp RuntimeDefault present"
             return "FAIL", "seccomp is missing RuntimeDefault"
+
+        if not retry:
+            return audit_func()
 
         return verify_with_retry(
             audit_func,
@@ -366,15 +375,18 @@ class Level2Remediator:
     def __init__(
         self,
         config: Dict,
-        kubectl_cmd: str = "kubectl",
+        kubectl_cmd: Optional[List[str]] = None,
         namespace_exempt_checker: Optional[NamespaceChecker] = None,
         namespace_label_applier: Optional[NamespaceLabeler] = None,
     ) -> None:
         self.preferences = config.get("level2_preferences", {})
         self.namespace_exempt_checker = namespace_exempt_checker or (lambda ns: False)
         self.namespace_label_applier = namespace_label_applier
+        resolved_kubectl = kubectl_cmd or ["kubectl"]
+        if isinstance(resolved_kubectl, str):
+            resolved_kubectl = shlex.split(resolved_kubectl)
         self.tasks = [
-            NetworkPolicyTask(self.preferences.get("network_policy", {}), kubectl_cmd),
+            NetworkPolicyTask(self.preferences.get("network_policy", {}), resolved_kubectl),
             CapabilityTask(
                 self.preferences.get("capabilities", {}),
                 namespace_exempt_checker=self.namespace_exempt_checker,
