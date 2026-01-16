@@ -4468,7 +4468,23 @@ rules:
             self._save_csv_report()
             return
 
-        if not self.results:
+        # Prefer audit_results when it contains a fuller view than self.results
+        results_snapshot = list(self.results)
+        if self.audit_results and len(self.audit_results) > len(results_snapshot):
+            results_snapshot = [
+                {
+                    "id": check_id,
+                    "role": data.get("role", "unknown"),
+                    "level": data.get("level", ""),
+                    "status": data.get("status", "UNKNOWN"),
+                    "duration": 0,
+                    "reason": "",
+                    "component": "",
+                }
+                for check_id, data in self.audit_results.items()
+            ]
+
+        if not results_snapshot:
             print(f"{Colors.YELLOW}[!] No results to export. Run a scan first.{Colors.ENDC}")
             return
 
@@ -4503,15 +4519,15 @@ rules:
                 cell.fill = ExcelPatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
 
             # Add data
-            for res in self.results:
-                row = [
-                    res.get("id", ""),
-                    res.get("role", "").capitalize(),
-                    res.get("level", ""),
-                    res.get("status", ""),
-                    res.get("duration", 0),
-                    res.get("reason", ""),
-                    res.get("component", "")
+            for res in results_snapshot:
+                row: List[Any] = [
+                    str(res.get("id", "")),
+                    str(res.get("role", "")).capitalize(),
+                    str(res.get("level", "")),
+                    str(res.get("status", "")),
+                    float(res.get("duration", 0) or 0),
+                    str(res.get("reason", "")),
+                    str(res.get("component", ""))
                 ]
                 ws.append(row)
                 
